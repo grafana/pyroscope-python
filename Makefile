@@ -1,61 +1,63 @@
-
-COMMIT = $(shell git rev-parse --short HEAD)
-DOCKER_EXTRA ?=
-DOCKER_BUILDKIT=1
-BUMP ?= fix
-
-
-
-.PHONY: lib/test
-lib/test:
-	cargo  test --manifest-path Cargo.toml
-
-.PHONY: pprofrs/test
-pprofrs/test:
-	cargo  test --manifest-path Cargo.toml --features backend-pprof-rs
-
-
-.PHONY: ffikit/test
-ffikit/test:
-	cargo  test --manifest-path pyroscope_ffi/ffikit/Cargo.toml
-
-.PHONY: test
-test: pprofrs/test  lib/test ffikit/test
-
-
-.PHONY: rust/fmt
-rust/fmt:
-	cargo fmt --all
-
-
-.PHONY: rust/fmt/check
-rust/fmt/check:
-	cargo fmt --all --check
-
-
-.PHONY: ruby/version/bump
-ruby/version/bump:
-	BUMP=$(BUMP) bash ci/bump_ffi_version.sh ruby
-
-
-.PHONY: python/version/bump
-python/version/bump:
-	BUMP=$(BUMP) bash ci/bump_ffi_version.sh python
-
-
 .PHONY: ffi/python/header
 ffi/python/header:
-	cd pyroscope_ffi/python/rust && cbindgen --config cbindgen.toml --output include/pyroscope_ffi.h
-
+	cd rust && cbindgen --config cbindgen.toml --output include/pyroscope_ffi.h
 
 .PHONY: ffi/python/cffi
 ffi/python/cffi:
-	python pyroscope_ffi/python/scripts/tests/compile_ffi.py
+	python scripts/tests/compile_ffi.py
 
+.PHONY: linux/amd64
+linux/amd64:
+	docker buildx build \
+		--build-arg=PLATFORM=x86_64 \
+		--platform=linux/amd64 \
+		--output=. \
+		-f docker/wheel.Dockerfile \
+		.
 
-.PHONY: ffi/ruby/header
-ffi/ruby/header:
-	cd pyroscope_ffi/ruby/ext/rbspy && cbindgen --config cbindgen.toml --output include/rbspy.h
+.PHONY: linux/arm64
+linux/arm64:
+	docker buildx build \
+		--build-arg=PLATFORM=aarch64 \
+		--platform=linux/arm64 \
+		--output=. \
+		-f docker/wheel.Dockerfile \
+		.
 
+.PHONY: musllinux/amd64
+musllinux/amd64:
+	docker buildx build \
+		--build-arg=PLATFORM=x86_64 \
+		--platform=linux/amd64 \
+		--output=. \
+		-f docker/wheel-musllinux.Dockerfile \
+		.
 
-include ffi.mk
+.PHONY: musllinux/arm64
+musllinux/arm64:
+	docker buildx build \
+		--build-arg=PLATFORM=aarch64 \
+		--platform=linux/arm64 \
+		--output=. \
+		-f docker/wheel-musllinux.Dockerfile \
+		.
+
+.PHONY: mac/amd64
+mac/amd64:
+	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=x86_64-apple-darwin python -m build --wheel
+	wheel tags --platform-tag macosx_11_0_x86_64 --remove dist/*.whl
+
+.PHONY: mac/arm64
+mac/arm64:
+	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=aarch64-apple-darwin python -m build --wheel
+	wheel tags --platform-tag macosx_11_0_arm64 --remove dist/*.whl
+
+.PHONY: check/tag-version
+check/tag-version:
+	@TAG_VERSION=$${TAG#python-}; \
+	CARGO_VERSION=$$(sed -n 's/^version = "\(.*\)"/\1/p' rust/Cargo.toml); \
+	if [ "$$TAG_VERSION" != "$$CARGO_VERSION" ]; then \
+		echo "error: tag version ($$TAG_VERSION) does not match Cargo.toml version ($$CARGO_VERSION)"; \
+		exit 1; \
+	fi; \
+	echo "tag version ($$TAG_VERSION) matches Cargo.toml version ($$CARGO_VERSION)"

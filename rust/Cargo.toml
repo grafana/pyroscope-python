@@ -1,0 +1,24 @@
+[package]
+name = "pyroscope_python_extension"
+version = "1.0.4"
+authors = [
+    "Tolyan Korniltsev <anatoly.korniltsev@grafana.com>"
+]
+edition = "2021"
+rust-version = "1.66"
+
+[lib]
+crate-type = ["cdylib"]
+name = "pyroscope_python_extension"
+
+[dependencies]
+pyroscope = { version = "2.0.0", default-features = false, features = ["native-tls"] }
+py-spy = { git = "https://github.com/grafana/py-spy", rev = "5f1661d", default-features = false }
+pretty_env_logger = "0.5"
+log = "0.4"
+libc = "0.2"
+
+[features]
+default = ["rustls-tls"]
+rustls-tls = ["pyroscope/rustls-tls"]
+native-tls-vendored = ["pyroscope/native-tls-vendored"]

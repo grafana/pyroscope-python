@@ -21,8 +21,8 @@ ENV OPENSSL_DIR=/usr/local/openssl
 ENV OPENSSL_STATIC=1
 
 RUN useradd -m builder \
-    && mkdir -p /pyroscope-rs \
-    && chown builder:builder /pyroscope-rs
+    && mkdir -p /pyroscope-python \
+    && chown builder:builder /pyroscope-python
 
 USER builder
 RUN test "$(id -u)" = "1000" || { echo "ERROR: builder uid is $(id -u), expected 1000"; exit 1; }
@@ -34,21 +34,16 @@ RUN curl https://static.rust-lang.org/rustup/dist/$(arch)-unknown-linux-musl/rus
     && rm /tmp/rustup-init
 ENV PATH=/home/builder/.cargo/bin:$PATH
 
-WORKDIR /pyroscope-rs
+WORKDIR /pyroscope-python
 
 RUN /opt/python/cp310-cp310/bin/python -m pip install --user build
 
 ADD --chown=builder:builder pyproject.toml \
     setup.py \
-    rustfmt.toml \
-    Cargo.toml \
-    Cargo.lock \
     ./
 
-ADD --chown=builder:builder src src
-ADD --chown=builder:builder kit/ kit/
-ADD --chown=builder:builder examples/ examples/
-ADD --chown=builder:builder pyroscope_ffi/ pyroscope_ffi/
+ADD --chown=builder:builder rust/ rust/
+ADD --chown=builder:builder python/ python/
 
 RUN --mount=type=cache,target=/home/builder/.cargo/registry,uid=1000,gid=1000 \
     --mount=type=cache,target=/home/builder/.cargo/git,uid=1000,gid=1000 \
@@ -57,4 +52,4 @@ RUN --mount=type=cache,target=/home/builder/.cargo/registry,uid=1000,gid=1000 \
 RUN auditwheel repair dist/*.whl --wheel-dir dist-repaired/
 
 FROM scratch
-COPY --from=builder  /pyroscope-rs/dist-repaired dist/
+COPY --from=builder  /pyroscope-python/dist-repaired dist/

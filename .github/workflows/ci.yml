@@ -36,16 +36,16 @@ jobs:
         include:
           - name: manylinux-amd64
             runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
-            make-target: wheel/linux/amd64
+            make-target: linux/amd64
           - name: manylinux-arm64
             runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
-            make-target: wheel/linux/arm64
+            make-target: linux/arm64
           - name: musllinux-amd64
             runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
-            make-target: wheel/musllinux/amd64
+            make-target: musllinux/amd64
           - name: musllinux-arm64
             runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
-            make-target: wheel/musllinux/arm64
+            make-target: musllinux/arm64
     name: Python Linux Build - ${{ matrix.name }}
     runs-on: ${{ matrix.runs-on }}
 
@@ -115,9 +115,9 @@ jobs:
       - run: |
           docker run --rm \
             --network=host \
-            -v ${{ github.workspace }}:/pyroscope-rs \
+            -v ${{ github.workspace }}:/pyroscope-python \
             python:${{ matrix.PYTHON_VERSION }}-${{ matrix.image-suffix }} \
-            sh -c "pip install /pyroscope-rs/python/*.whl && python /pyroscope-rs/pyroscope_ffi/python/scripts/tests/test.py"
+            sh -c "pip install /pyroscope-python/python/*.whl && python /pyroscope-python/scripts/tests/test.py"
 
   sdist-build:
     name: sdist
@@ -172,7 +172,7 @@ jobs:
           python-version: 3.11
 
       - run: python -m pip install build wheel
-      - run: make wheel/mac/${{ matrix.mk-arch }}
+      - run: make mac/${{ matrix.mk-arch }}
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: ${{ github.sha }}-python-${{ matrix.target }}

@@ -1,22 +1,15 @@
-## Pyroscope Profiler
+# pyroscope-python
 
-**Pyroscope Profiler for Rust. Profile your Rust applications.**
+Pyroscope continuous profiling agent for Python applications.
 
-[![license](https://img.shields.io/badge/license-Apache2.0-blue.svg)](LICENSE) 
-[![Crate](https://img.shields.io/crates/v/pyroscope.svg)](https://crates.io/crates/pyroscope)
+Uses [py-spy](https://github.com/benfred/py-spy) for stack sampling and the [pyroscope](https://crates.io/crates/pyroscope) Rust crate to send profiles to a Pyroscope server.
 
+## Installation
 
-### Major Contributors
+```bash
+pip install pyroscope-io
+```
 
-We'd like to give a big thank you to the following contributors who have made significant contributions to this project:
+## License
 
-* [Abid Omar](https://github.com/omarabid)
-* [Anatoly Korniltsev](https://github.com/korniltsev)
-* [Bernhard Schuster](https://github.com/drahnr)
-
-
-### License
-
-Pyroscope is distributed under the Apache License (Version 2.0).
-
-See [LICENSE](LICENSE) for details.
+Apache-2.0
