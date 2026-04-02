@@ -1,10 +1,3 @@
-include Cargo.toml
-include Cargo.lock
-include pyroscope_ffi/python/rust/Cargo.toml
-include pyroscope_ffi/ruby/ext/rbspy/Cargo.toml
-recursive-include src *.rs
-recursive-include pyroscope_ffi/python/rust/src/ *.rs
-recursive-include pyroscope_ffi/ruby/ext/rbspy/src/ *.rs
-recursive-include kit/ *.rs
-recursive-include kit/ Cargo.toml
-recursive-include examples/ *.rs
+include rust/Cargo.toml
+include rust/Cargo.lock
+recursive-include rust/src/ *.rs

@@ -27,7 +27,7 @@ classifiers = [
 ]
 
 [tool.setuptools.packages]
-find = { where = ["pyroscope_ffi/python/python/"] }
+find = { where = ["python/"] }
 
 [tool.distutils.bdist_wheel]
 py_limited_api = "cp310"

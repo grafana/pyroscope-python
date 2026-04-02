@@ -25,7 +25,7 @@
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "/^docker/.*\\.Dockerfile$/"
+        "/Dockerfile/"
       ],
       "matchStrings": [
         "ARG OPENSSL_VERSION=(?<currentValue>[\\d.]+)"
