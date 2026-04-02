@@ -9,7 +9,10 @@
       "include-component-in-tag": true,
       "skip-github-release": true,
       "extra-files": [
-        "rust/Cargo.toml"
+        {
+          "type": "generic",
+          "path": "rust/Cargo.toml"
+        }
       ]
     }
   },
