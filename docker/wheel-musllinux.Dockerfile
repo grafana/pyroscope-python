@@ -10,7 +10,7 @@ RUN curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${O
     -o /tmp/openssl.tar.gz \
     && tar xzf /tmp/openssl.tar.gz -C /tmp \
     && cd /tmp/openssl-${OPENSSL_VERSION} \
-    && ./config no-shared no-tests --prefix=/usr/local/openssl \
+    && ./config no-shared no-tests --prefix=/usr/local/openssl --openssldir=/etc/ssl \
     && make -j$(nproc) \
     && make install_sw \
     && ln -sf /usr/local/openssl/lib64 /usr/local/openssl/lib || true \
