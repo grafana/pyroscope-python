@@ -19,6 +19,14 @@
         "minor"
       ],
       "enabled": false
+    },
+    {
+      "description": "Allow all updates for critical profiling dependencies",
+      "matchDepNames": [
+        "py-spy",
+        "pyroscope"
+      ],
+      "enabled": true
     }
   ],
   "customManagers": [
