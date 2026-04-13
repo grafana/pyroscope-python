@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.23@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 ARG PLATFORM=x86_64
 FROM quay.io/pypa/musllinux_1_2_${PLATFORM} AS builder
-ARG OPENSSL_VERSION=3.5.5
+ARG OPENSSL_VERSION=3.5.6
 
 RUN apk add --no-cache gcc musl-dev libffi-dev make perl linux-headers
 
