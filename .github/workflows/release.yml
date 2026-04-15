@@ -39,7 +39,7 @@ jobs:
           path: dist/*
 
       - name: Upload release artifact
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           draft: true
           files: dist/pyroscope*.whl
@@ -84,7 +84,7 @@ jobs:
           path: dist/*
 
       - name: Upload release artifact
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           draft: true
           files: dist/pyroscope*.whl
@@ -111,7 +111,7 @@ jobs:
           path: dist/*
 
       - name: Upload release artifact
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           draft: true
           files: dist/pyroscope_io-*.tar.gz
@@ -135,7 +135,7 @@ jobs:
         run: cargo test --locked -- test_cargo_version_matches_python_version
         working-directory: rust
       - id: auto-release
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           tag_name: "${{ github.ref_name }}"
           name: "Python Package: ${{ github.ref_name }}"
