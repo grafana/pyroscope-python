@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.6](https://github.com/grafana/pyroscope-python/compare/python-1.0.5...python-1.0.6) (2026-04-23)
+
+
+### Miscellaneous Chores
+
+* **deps:** bump openssl from 0.10.76 to 0.10.78 in /rust ([#49](https://github.com/grafana/pyroscope-python/issues/49)) ([051156b](https://github.com/grafana/pyroscope-python/commit/051156b46ea1c1ec2ba65b69e9a75b9e4d19a5f1))
+* **deps:** lock file maintenance ([#46](https://github.com/grafana/pyroscope-python/issues/46)) ([d67a599](https://github.com/grafana/pyroscope-python/commit/d67a5991fcdb9facbc1b5a2457bb87deee3dd9d9))
+* **deps:** update actions/upload-artifact action to v7.0.1 ([#31](https://github.com/grafana/pyroscope-python/issues/31)) ([65ecf12](https://github.com/grafana/pyroscope-python/commit/65ecf127cb88ebbcadae1e1c230d7adbb466e2d1))
+* **deps:** update googleapis/release-please-action digest to 5c625bf ([#30](https://github.com/grafana/pyroscope-python/issues/30)) ([030ec1d](https://github.com/grafana/pyroscope-python/commit/030ec1df73abbcfe3097a4062c0a5ff58f3205e0))
+* **deps:** update robinraju/release-downloader action to v1.13 ([#47](https://github.com/grafana/pyroscope-python/issues/47)) ([5cf2b7f](https://github.com/grafana/pyroscope-python/commit/5cf2b7f0d9fdbc4890e778a15d7995615f816077))
+* **deps:** update rust crate libc to v0.2.185 ([#34](https://github.com/grafana/pyroscope-python/issues/34)) ([0a007be](https://github.com/grafana/pyroscope-python/commit/0a007be9bc1bbe1e926464361bb8b621d01602f9))
+* **deps:** update softprops/action-gh-release action to v3 ([#33](https://github.com/grafana/pyroscope-python/issues/33)) ([bbdf9ac](https://github.com/grafana/pyroscope-python/commit/bbdf9acf2ca5fa8193945e81aee3c38b04eb64db))
+* switch PyPI publishing to trusted publishing (OIDC) ([#29](https://github.com/grafana/pyroscope-python/issues/29)) ([991156a](https://github.com/grafana/pyroscope-python/commit/991156aa51eab62328a55344fe9ecefe2741ff82))
+
 ## [1.0.5](https://github.com/grafana/pyroscope-python/compare/python-1.0.4...python-1.0.5) (2026-04-13)
 
 
