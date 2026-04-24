@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.7](https://github.com/grafana/pyroscope-python/compare/python-1.0.6...python-1.0.7) (2026-04-24)
+
+
+### Miscellaneous Chores
+
+* **deps:** bump rand from 0.8.5 to 0.8.6 in /rust ([#53](https://github.com/grafana/pyroscope-python/issues/53)) ([cad19aa](https://github.com/grafana/pyroscope-python/commit/cad19aacb9244a5ad3189dd08981192242ea0d6c))
+* **deps:** bump rustls-webpki from 0.103.10 to 0.103.13 in /rust ([#52](https://github.com/grafana/pyroscope-python/issues/52)) ([5f638b0](https://github.com/grafana/pyroscope-python/commit/5f638b0ddd0b1f0e5b8ad709aaf1453db8b76545))
+* **deps:** update rust crate pyroscope to v2.0.1 ([#48](https://github.com/grafana/pyroscope-python/issues/48)) ([ae46c4d](https://github.com/grafana/pyroscope-python/commit/ae46c4d675110437867496baf43100e20373962d))
+
 ## [1.0.6](https://github.com/grafana/pyroscope-python/compare/python-1.0.5...python-1.0.6) (2026-04-23)
 
 
