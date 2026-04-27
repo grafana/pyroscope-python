@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.8](https://github.com/grafana/pyroscope-python/compare/python-1.0.7...python-1.0.8) (2026-04-27)
+
+
+### Miscellaneous Chores
+
+* **deps:** lock file maintenance ([#57](https://github.com/grafana/pyroscope-python/issues/57)) ([88a1f3d](https://github.com/grafana/pyroscope-python/commit/88a1f3d1902a1a40a3208bdee69e53f22ba56c10))
+* **deps:** update googleapis/release-please-action action to v5 ([#55](https://github.com/grafana/pyroscope-python/issues/55)) ([dfe738d](https://github.com/grafana/pyroscope-python/commit/dfe738d83605f1be8f99b47722fb87c9b19618ed))
+* **deps:** update rust crate libc to v0.2.186 ([#56](https://github.com/grafana/pyroscope-python/issues/56)) ([589095e](https://github.com/grafana/pyroscope-python/commit/589095e4854e1cbe7a1793208d46d870aaab681c))
+
 ## [1.0.7](https://github.com/grafana/pyroscope-python/compare/python-1.0.6...python-1.0.7) (2026-04-24)
 
 
