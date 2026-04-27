@@ -1,15 +1,54 @@
-name: Python Release
+name: Build Release Artifacts
 
 on:
-  push:
-    tags:
-      - 'python-*'
+  workflow_call:
+    inputs:
+      tag_name:
+        required: true
+        type: string
+      sha:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        required: true
+        type: string
+        description: "Existing draft release tag, e.g. python-1.0.8"
+      sha:
+        required: true
+        type: string
+        description: "Commit SHA to build from"
+
+permissions:
+  contents: read
 
 jobs:
+  verify:
+    permissions:
+      contents: read
+    name: Verify versions
+    runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
+      - name: Verify tag matches package version
+        env:
+          TAG: ${{ inputs.tag_name }}
+        run: make check/tag-version
+      - name: Verify Cargo version matches Python version
+        run: cargo test --locked -- test_cargo_version_matches_python_version
+        working-directory: rust
+
   python-release-linux:
     permissions:
       contents: write
-    needs: [ 'python-release' ]
+    needs: [verify]
     strategy:
       fail-fast: false
       matrix:
@@ -31,22 +70,24 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ inputs.sha }}
           persist-credentials: false
       - run: make ${{ matrix.make-target }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ github.sha }}-python-${{ matrix.name }}
+          name: ${{ inputs.sha }}-python-${{ matrix.name }}
           path: dist/*
 
       - name: Upload release artifact
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
+          tag_name: ${{ inputs.tag_name }}
           draft: true
           files: dist/pyroscope*.whl
   python-release-macos:
     permissions:
       contents: write
-    needs: [ 'python-release' ]
+    needs: [verify]
     strategy:
       fail-fast: false
       matrix:
@@ -64,6 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ inputs.sha }}
           persist-credentials: false
 
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
@@ -80,24 +122,26 @@ jobs:
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ github.sha }}-python-macos-${{ matrix.target }}
+          name: ${{ inputs.sha }}-python-macos-${{ matrix.target }}
           path: dist/*
 
       - name: Upload release artifact
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
+          tag_name: ${{ inputs.tag_name }}
           draft: true
           files: dist/pyroscope*.whl
   python-release-sdist:
     permissions:
       contents: write
-    needs: [ 'python-release' ]
+    needs: [verify]
     name: sdist
     runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ inputs.sha }}
           persist-credentials: false
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
@@ -107,37 +151,12 @@ jobs:
       - run: python -m build --sdist
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ github.sha }}-python-sdist
+          name: ${{ inputs.sha }}-python-sdist
           path: dist/*
 
       - name: Upload release artifact
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
+          tag_name: ${{ inputs.tag_name }}
           draft: true
           files: dist/pyroscope_io-*.tar.gz
-  python-release:
-    permissions:
-      contents: write
-    name: Python Package
-    runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: stable
-      - name: Verify tag matches package version
-        env:
-          TAG: ${{ github.ref_name }}
-        run: make check/tag-version
-      - name: Verify Cargo version matches Python version
-        run: cargo test --locked -- test_cargo_version_matches_python_version
-        working-directory: rust
-      - id: auto-release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
-        with:
-          tag_name: "${{ github.ref_name }}"
-          name: "Python Package: ${{ github.ref_name }}"
-          draft: true
-          prerelease: false
