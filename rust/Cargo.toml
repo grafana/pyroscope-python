@@ -1,6 +1,6 @@
 [package]
 name = "pyroscope_python_extension"
-version = "1.0.7" # x-release-please-version
+version = "1.0.8" # x-release-please-version
 authors = [
     "Tolyan Korniltsev <anatoly.korniltsev@grafana.com>"
 ]
