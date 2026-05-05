@@ -1,43 +1,36 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "security:only-security-updates"
   ],
   "packageRules": [
     {
-      "matchDepNames": [
+      "description": "Always update these to latest, all update types. Overrides the wildcard enabled:false from security:only-security-updates.",
+      "matchPackageNames": [
+        "pyroscope",
+        "py-spy",
         "openssl/openssl"
       ],
+      "enabled": true
+    },
+    {
+      "description": "Split openssl/openssl patch updates into their own stream so they survive when minor/major are disabled below.",
+      "matchPackageNames": ["openssl/openssl"],
       "separateMinorPatch": true
     },
     {
-      "matchDepNames": [
-        "openssl/openssl"
-      ],
-      "matchUpdateTypes": [
-        "major",
-        "minor"
-      ],
+      "description": "Restrict openssl/openssl to patch-level updates only. Vulnerability alerts still bypass this and can produce minor/major bumps when needed for CVE fixes.",
+      "matchPackageNames": ["openssl/openssl"],
+      "matchUpdateTypes": ["major", "minor"],
       "enabled": false
-    },
-    {
-      "description": "Allow all updates for critical profiling dependencies",
-      "matchDepNames": [
-        "py-spy",
-        "pyroscope"
-      ],
-      "enabled": true
     }
   ],
   "customManagers": [
     {
+      "description": "Track the OpenSSL C library version pinned via ARG OPENSSL_VERSION in the Dockerfile, resolved against openssl/openssl GitHub releases.",
       "customType": "regex",
-      "managerFilePatterns": [
-        "/Dockerfile/"
-      ],
-      "matchStrings": [
-        "ARG OPENSSL_VERSION=(?<currentValue>[\\d.]+)"
-      ],
+      "managerFilePatterns": ["/Dockerfile/"],
+      "matchStrings": ["ARG OPENSSL_VERSION=(?<currentValue>[\\d.]+)"],
       "depNameTemplate": "openssl/openssl",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^openssl-(?<version>.*)$"
