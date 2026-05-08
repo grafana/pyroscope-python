@@ -1,6 +1,6 @@
 [project]
 name = "pyroscope-io"
-version = "1.0.7" # x-release-please-version
+version = "1.0.8" # x-release-please-version
 description = "Pyroscope Python integration"
 authors = [
     {name = "Tolya Korniltsev",email = "anatoly.korniltsev@grafana.com"}
