@@ -1,4 +1,3 @@
-import warnings
 import logging
 import json
 from enum import Enum
@@ -15,7 +14,6 @@ class LineNo(Enum):
     NoLine = lib.NoLine
 
 def configure(
-        app_name=None,
         application_name=None,
         server_address="http://localhost:4040",
         basic_auth_username="",
@@ -23,7 +21,6 @@ def configure(
         enable_logging=False,
         sample_rate=100,
         oncpu=True,
-        native=None,
         gil_only=True,
         report_pid=False,
         report_thread_id=False,
@@ -33,14 +30,6 @@ def configure(
         http_headers=None,
         line_no=LineNo.LastInstruction,
 ):
-
-    if app_name is not None:
-        warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
-        application_name = app_name
-
-    if native is not None:
-        warnings.warn("native is deprecated and not supported", DeprecationWarning)
-
     LOGGER.disabled = not enable_logging
     if enable_logging:
         log_level = LOGGER.getEffectiveLevel()
@@ -96,16 +85,3 @@ def tag_wrapper(tags):
     finally:
         for key, value in tags.items():
             lib.remove_thread_tag(key.encode("UTF-8"), value.encode("UTF-8"))
-
-def stop():
-    warnings.warn("deprecated, no longer applicable", DeprecationWarning)
-def change_name(name):
-    warnings.warn("deprecated, no longer applicable", DeprecationWarning)
-def tag(tags):
-    warnings.warn("deprecated, use tag_wrapper function", DeprecationWarning)
-def remove_tags(*keys):
-    warnings.warn("deprecated, no longer applicable", DeprecationWarning)
-def build_summary():
-    warnings.warn("deprecated, no longer applicable", DeprecationWarning)
-def test_logger():
-    warnings.warn("deprecated, no longer applicable", DeprecationWarning)
