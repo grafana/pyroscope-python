@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.9](https://github.com/grafana/pyroscope-python/compare/python-1.0.8...python-1.0.9) (2026-05-28)
+
+
+### Miscellaneous Chores
+
+* bump py-spy, support 3.14 ([#67](https://github.com/grafana/pyroscope-python/issues/67)) ([fabb19b](https://github.com/grafana/pyroscope-python/commit/fabb19bc2aa99897a098228434c1eeedb5f82a1b))
+* **deps:** bump openssl from 0.10.79 to 0.10.80 in /rust ([#71](https://github.com/grafana/pyroscope-python/issues/71)) ([f2c8c9c](https://github.com/grafana/pyroscope-python/commit/f2c8c9ca58df1037c53b9855d8ce3d545df85521))
+* **deps:** do not use py-spy fork ([#75](https://github.com/grafana/pyroscope-python/issues/75)) ([000c1cb](https://github.com/grafana/pyroscope-python/commit/000c1cbe85010f78cc55039b09fd8de212770a75))
+
+
+### Continuous Integration
+
+* add Python 3.14 to Linux test matrix ([#68](https://github.com/grafana/pyroscope-python/issues/68)) ([9ac435b](https://github.com/grafana/pyroscope-python/commit/9ac435b494d33ddca409299963a34282109c49c4))
+* remove pr-title-check workflow ([#73](https://github.com/grafana/pyroscope-python/issues/73)) ([9c7fcc1](https://github.com/grafana/pyroscope-python/commit/9c7fcc16c85efd2ab0984489c81e49d4c0519fc7))
+
 ## [1.0.8](https://github.com/grafana/pyroscope-python/compare/python-1.0.7...python-1.0.8) (2026-05-08)
 
 
