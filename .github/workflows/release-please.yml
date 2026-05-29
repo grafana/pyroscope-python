@@ -14,12 +14,162 @@ jobs:
       pull-requests: write
     outputs:
       pr: ${{ steps.rp.outputs.pr }}
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+      sha: ${{ steps.rp.outputs.sha }}
     steps:
       - id: rp
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  python-release-linux:
+    permissions:
+      contents: write
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: manylinux-amd64
+            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
+            make-target: linux/amd64
+          - name: manylinux-arm64
+            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
+            make-target: linux/arm64
+          - name: musllinux-amd64
+            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
+            make-target: musllinux/amd64
+          - name: musllinux-arm64
+            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
+            make-target: musllinux/arm64
+    name: Release python linux - ${{ matrix.name }}
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.release-please.outputs.sha }}
+          persist-credentials: false
+      - run: make ${{ matrix.make-target }}
+      - name: Upload release artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/pyroscope*.whl --clobber
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.release-please.outputs.sha }}-python-${{ matrix.name }}
+          path: dist/*
+
+  python-release-macos:
+    permissions:
+      contents: write
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - macos-version: "14"
+            target: x86_64-apple-darwin
+            mk-arch: amd64
+          - macos-version: "14"
+            target: aarch64-apple-darwin
+            mk-arch: arm64
+
+    name: macOS - ${{ matrix.target }}
+    runs-on: macos-${{ matrix.macos-version }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.release-please.outputs.sha }}
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.96.0
+          target: ${{ matrix.target }}
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: 3.11
+
+      - run: pip install build wheel
+      - run: make mac/${{ matrix.mk-arch }}
+
+      - name: Upload release artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/pyroscope*.whl --clobber
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.release-please.outputs.sha }}-python-macos-${{ matrix.target }}
+          path: dist/*
+
+  python-release-sdist:
+    permissions:
+      contents: write
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    name: sdist
+    runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.release-please.outputs.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.10"
+      - run: python -m pip install build
+      - run: python -m build --sdist
+      - name: Upload release artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/pyroscope_io-*.tar.gz --clobber
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ needs.release-please.outputs.sha }}-python-sdist
+          path: dist/*
+
+  publish-pypi:
+    permissions:
+      id-token: write
+    name: Publish to PyPI
+    needs:
+      - release-please
+      - python-release-linux
+      - python-release-macos
+      - python-release-sdist
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: ${{ needs.release-please.outputs.sha }}-python-*
+          merge-multiple: true
+          path: dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+
+  publish-github-release:
+    permissions:
+      contents: write
+    name: Publish GitHub release
+    needs:
+      - release-please
+      - publish-pypi
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
+    steps:
+      - name: Publish draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ needs.release-please.outputs.tag_name }}" --draft=false
 
   update-lockfile:
     needs: release-please
@@ -33,7 +183,7 @@ jobs:
           ref: release-please--branches--main--components--python
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
-          toolchain: stable
+          toolchain: 1.96.0
       - name: Update Cargo.lock
         run: cargo update --workspace
         working-directory: rust
