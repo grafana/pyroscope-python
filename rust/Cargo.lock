@@ -1382,7 +1382,7 @@ dependencies = [
 
 [[package]]
 name = "pyroscope_python_extension"
-version = "1.0.10"
+version = "1.0.11"
 dependencies = [
  "libc",
  "log",
