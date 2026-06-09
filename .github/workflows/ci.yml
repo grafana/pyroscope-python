@@ -103,15 +103,19 @@ jobs:
           - variant: manylinux-amd64
             runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
             image-suffix: slim
+            wheel-target: linux/amd64
           - variant: manylinux-arm64
             runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
             image-suffix: slim
+            wheel-target: linux/arm64
           - variant: musllinux-amd64
             runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
             image-suffix: alpine
+            wheel-target: musllinux/amd64
           - variant: musllinux-arm64
             runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
             image-suffix: alpine
+            wheel-target: musllinux/arm64
         exclude:
           # python:3.10/3.11-alpine arm64 tests hang indefinitely
           # tracked in https://github.com/grafana/pyroscope-rs/issues/365
@@ -119,17 +123,13 @@ jobs:
             PYTHON_VERSION: "3.10"
           - variant: musllinux-arm64
             PYTHON_VERSION: "3.11"
-    needs: ["python-linux-build", "python-linux-integration-test-discover"]
+    needs: ["python-linux-integration-test-discover"]
     name: Python Linux Test - ${{ matrix.test }} - ${{ matrix.variant }} - ${{ matrix.PYTHON_VERSION }}
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
-        with:
-          name: "${{ matrix.variant }}.whl"
-          path: "${{github.workspace}}/python"
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version: stable
@@ -139,7 +139,7 @@ jobs:
         env:
           PYTHON_VERSION: ${{ matrix.PYTHON_VERSION }}
           PYTHON_IMAGE_SUFFIX: ${{ matrix.image-suffix }}
-          PYROSCOPE_PYTHON_WHEEL_DIR: ${{ github.workspace }}/python
+          PYROSCOPE_WHEEL_TARGET: ${{ matrix.wheel-target }}
 
   sdist-build:
     name: sdist

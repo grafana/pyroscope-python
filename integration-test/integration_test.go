@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +23,12 @@ import (
 )
 
 const profileTypeID = "process_cpu:cpu:nanoseconds:cpu:nanoseconds"
+
+var wheelBuild struct {
+	sync.Once
+	dir string
+	err error
+}
 
 type profileConfig struct {
 	onCPU   bool
@@ -45,13 +53,13 @@ func TestPythonProfilerOffCPUWithoutGILOnly(t *testing.T) {
 
 func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 	t.Helper()
-	requireWheel(t)
+	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
 	pyroscopeURL := startPyroscope(t, net)
 	appName := fmt.Sprintf("pyroscopers.python.test.%d", time.Now().UnixNano())
 	canary := randomHex(t, 16)
-	workload := startWorkload(t, net, appName, canary, cfg)
+	workload := startWorkload(t, net, appName, canary, cfg, wheelDir)
 	t.Cleanup(func() {
 		workload.Stop(t, 30*time.Second)
 	})
@@ -90,12 +98,12 @@ func startPyroscope(t *testing.T, net *dockertest.Network) string {
 		ExposedPorts:   []string{"4040/tcp"},
 		Network:        net.Name,
 		NetworkAliases: []string{"pyroscope"},
-		WaitFor:        dockertest.WaitForHTTP("/ready", "4040/tcp", 60*time.Second),
+		WaitFor:        dockertest.WaitForHTTP("/ready", "4040/tcp", 2*time.Minute),
 	})
 	return fmt.Sprintf("http://%s", c.HostPort(t, "4040/tcp"))
 }
 
-func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string, cfg profileConfig) *dockertest.Container {
+func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string, cfg profileConfig, wheelDir string) *dockertest.Container {
 	t.Helper()
 	return dockertest.StartContainer(t, dockertest.ContainerRequest{
 		Image:   pythonImage(),
@@ -112,7 +120,7 @@ func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string
 		},
 		Volumes: []string{
 			repoRoot() + ":/pyroscope-python:ro",
-			wheelDir() + ":/pyroscope-wheels:ro",
+			wheelDir + ":/pyroscope-wheels:ro",
 		},
 		Cmd: []string{
 			"sh",
@@ -154,21 +162,85 @@ func queryProfile(pyroscopeURL string, labelSelector string) (string, error) {
 	return buf.String(), nil
 }
 
-func requireWheel(t *testing.T) {
+func ensureWheel(t *testing.T) string {
 	t.Helper()
-	matches, err := filepath.Glob(filepath.Join(wheelDir(), "*.whl"))
-	require.NoError(t, err)
-	if len(matches) > 0 {
-		return
+
+	wheelBuild.Do(func() {
+		wheelBuild.dir, wheelBuild.err = prepareWheel(t)
+	})
+	if wheelBuild.err != nil {
+		t.Fatal(wheelBuild.err)
 	}
-	if os.Getenv("CI") != "" {
-		t.Fatalf("no wheel found in %s", wheelDir())
-	}
-	t.Skipf("no wheel found in %s; build one or set PYROSCOPE_PYTHON_WHEEL_DIR", wheelDir())
+	return wheelBuild.dir
 }
 
-func wheelDir() string {
-	return absPath(envOrDefault("PYROSCOPE_PYTHON_WHEEL_DIR", filepath.Join(repoRoot(), "python")))
+func prepareWheel(t *testing.T) (string, error) {
+	t.Helper()
+
+	if dir := os.Getenv("PYROSCOPE_PYTHON_WHEEL_DIR"); dir != "" {
+		dir = absPath(dir)
+		if hasWheel(dir) {
+			return dir, nil
+		}
+		t.Logf("no matching wheel found in %s; building one", dir)
+	}
+
+	target := wheelBuildTarget()
+	t.Logf("building integration test wheel with make %s", target)
+	cmd := exec.Command("make", target)
+	cmd.Dir = repoRoot()
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("build wheel with make %s: %w", target, err)
+	}
+
+	dir := filepath.Join(repoRoot(), "dist")
+	if !hasWheel(dir) {
+		return "", fmt.Errorf("no matching wheel found in %s after make %s", dir, target)
+	}
+	return dir, nil
+}
+
+func hasWheel(dir string) bool {
+	matches, err := filepath.Glob(filepath.Join(dir, wheelPattern()))
+	return err == nil && len(matches) > 0
+}
+
+func wheelPattern() string {
+	target := wheelBuildTarget()
+	platform := "manylinux"
+	if strings.HasPrefix(target, "musllinux/") {
+		platform = "musllinux"
+	}
+	return fmt.Sprintf("*%s*%s*.whl", platform, wheelArch(target))
+}
+
+func wheelBuildTarget() string {
+	if target := os.Getenv("PYROSCOPE_WHEEL_TARGET"); target != "" {
+		return target
+	}
+	target := "linux"
+	if strings.Contains(pythonImageSuffix(), "alpine") {
+		target = "musllinux"
+	}
+	return target + "/" + makeArch()
+}
+
+func wheelArch(target string) string {
+	if strings.HasSuffix(target, "/arm64") {
+		return "aarch64"
+	}
+	return "x86_64"
+}
+
+func makeArch() string {
+	switch runtime.GOARCH {
+	case "arm64":
+		return "arm64"
+	default:
+		return "amd64"
+	}
 }
 
 func pythonImage() string {
@@ -178,8 +250,12 @@ func pythonImage() string {
 	return fmt.Sprintf(
 		"python:%s-%s",
 		envOrDefault("PYTHON_VERSION", "3.11"),
-		envOrDefault("PYTHON_IMAGE_SUFFIX", "slim"),
+		pythonImageSuffix(),
 	)
+}
+
+func pythonImageSuffix() string {
+	return envOrDefault("PYTHON_IMAGE_SUFFIX", "slim")
 }
 
 func repoRoot() string {
