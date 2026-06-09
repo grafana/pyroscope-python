@@ -68,10 +68,29 @@ jobs:
           name: "${{ matrix.name }}.whl"
           path: dist/*
 
+  python-linux-integration-test-discover:
+    name: Python Linux Integration Test Discover
+    runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
+    outputs:
+      tests: ${{ steps.tests.outputs.tests }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: stable
+          cache-dependency-path: integration-test/go.mod
+      - name: Generate test matrix
+        id: tests
+        run: echo "tests=$(make ci-matrix)" >> "$GITHUB_OUTPUT"
+        working-directory: integration-test
+
   python-linux-test:
     strategy:
       fail-fast: false
       matrix:
+        test: ${{ fromJSON(needs.python-linux-integration-test-discover.outputs.tests) }}
         PYTHON_VERSION: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         variant:
           [
@@ -100,8 +119,8 @@ jobs:
             PYTHON_VERSION: "3.10"
           - variant: musllinux-arm64
             PYTHON_VERSION: "3.11"
-    needs: ["python-linux-build"]
-    name: Python Linux Test - ${{ matrix.variant }} - ${{ matrix.PYTHON_VERSION }}
+    needs: ["python-linux-build", "python-linux-integration-test-discover"]
+    name: Python Linux Test - ${{ matrix.test }} - ${{ matrix.variant }} - ${{ matrix.PYTHON_VERSION }}
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -111,13 +130,16 @@ jobs:
         with:
           name: "${{ matrix.variant }}.whl"
           path: "${{github.workspace}}/python"
-      - run: docker run -d -p4040:4040 grafana/pyroscope
-      - run: |
-          docker run --rm \
-            --network=host \
-            -v ${{ github.workspace }}:/pyroscope-python \
-            python:${{ matrix.PYTHON_VERSION }}-${{ matrix.image-suffix }} \
-            sh -c "pip install /pyroscope-python/python/*.whl && python /pyroscope-python/scripts/tests/test.py"
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: stable
+          cache-dependency-path: integration-test/go.mod
+      - run: go test -v -timeout 10m -count=1 -run '^${{ matrix.test }}$' .
+        working-directory: integration-test
+        env:
+          PYTHON_VERSION: ${{ matrix.PYTHON_VERSION }}
+          PYTHON_IMAGE_SUFFIX: ${{ matrix.image-suffix }}
+          PYROSCOPE_PYTHON_WHEEL_DIR: ${{ github.workspace }}/python
 
   sdist-build:
     name: sdist
