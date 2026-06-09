@@ -1,6 +1,6 @@
-mod backend;
+mod pyspy_backend;
 
-use crate::backend::Pyspy;
+use crate::pyspy_backend::Pyspy;
 use pyroscope::backend::{BackendConfig, BackendImpl, Tag};
 use pyroscope::pyroscope::PyroscopeAgentBuilder;
 use std::ffi::CStr;
