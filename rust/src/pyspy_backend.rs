@@ -1,4 +1,3 @@
-use py_spy::sampler::Sampler;
 use crate::{
     backend::{
         Backend, BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame,
@@ -6,6 +5,7 @@ use crate::{
     },
     error::{PyroscopeError, Result},
 };
+use py_spy::sampler::Sampler;
 use std::{
     ops::Deref,
     sync::{
