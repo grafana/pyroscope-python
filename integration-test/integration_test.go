@@ -177,14 +177,6 @@ func ensureWheel(t *testing.T) string {
 func prepareWheel(t *testing.T) (string, error) {
 	t.Helper()
 
-	if dir := os.Getenv("PYROSCOPE_PYTHON_WHEEL_DIR"); dir != "" {
-		dir = absPath(dir)
-		if hasWheel(dir) {
-			return dir, nil
-		}
-		t.Logf("no matching wheel found in %s; building one", dir)
-	}
-
 	target := wheelBuildTarget()
 	t.Logf("building integration test wheel with make %s", target)
 	cmd := exec.Command("make", target)
