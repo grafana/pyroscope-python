@@ -76,15 +76,12 @@ mod get_current_time_secs_tests {
     }
 }
 
-/// A representation of a time range. The time range is represented by a start
-/// time, an end time, a current time and remaining time in seconds. The
-/// remaining time is the duration in seconds until the end time.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct TimeRange {
+    // unix time seconds
+    // todo remove comment, use types
     pub from: u64,
     pub until: u64,
-    pub current: u64,
-    pub rem: u64,
 }
 
 /// Return a range of timestamps in the form [start, end).
@@ -92,15 +89,13 @@ pub struct TimeRange {
 pub fn get_time_range(timestamp: u64) -> Result<TimeRange> {
     // if timestamp is 0, then get the current time
     if timestamp == 0 {
-        return get_time_range(get_current_time_secs()?);
+        return get_time_range(get_current_time_secs()?); //todo remove this
     }
 
     // Determine the start and end of the range
     Ok(TimeRange {
         from: timestamp / 10 * 10,
         until: timestamp / 10 * 10 + 10,
-        current: timestamp,
-        rem: 10 - (timestamp % 10),
     })
 }
 
@@ -115,8 +110,6 @@ mod get_time_range_tests {
             TimeRange {
                 from: 1644194470,
                 until: 1644194480,
-                current: 1644194479,
-                rem: 1,
             }
         );
         assert_eq!(
@@ -124,8 +117,6 @@ mod get_time_range_tests {
             TimeRange {
                 from: 1644194470,
                 until: 1644194480,
-                current: 1644194470,
-                rem: 10,
             }
         );
         assert_eq!(
@@ -133,8 +124,6 @@ mod get_time_range_tests {
             TimeRange {
                 from: 1644194470,
                 until: 1644194480,
-                current: 1644194476,
-                rem: 4,
             }
         );
     }
