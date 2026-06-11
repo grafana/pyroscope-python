@@ -92,8 +92,8 @@ impl PProfBuilder {
         ];
         self.profile.period = heap_sample_rate as i64;
         self.profile.period_type = Some(ValueType {
-            r#type: strings.add("cpu").pprof(),
-            unit: strings.add("nanoseconds").pprof(),
+            r#type: strings.add("space").pprof(),
+            unit: strings.add("bytes").pprof(),
         });
     }
 
