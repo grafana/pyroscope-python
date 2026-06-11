@@ -8,29 +8,12 @@ use std::{
     thread::JoinHandle,
 };
 
-use crate::{
-    backend::{BackendReady, BackendUninitialized, Report, Tag},
-    error::Result,
-    session::{Session, SessionManager, SessionSignal},
-    timer::{Timer, TimerSignal},
-    utils::get_time_range,
-    PyroscopeError,
-};
+use crate::{backend::{BackendReady, BackendUninitialized, Tag}, error::Result, session::{Session, SessionManager, SessionSignal}, timer::{Timer, TimerSignal}, utils::get_time_range, PyroscopeError};
 
-use crate::backend::{BackendImpl, ThreadTag};
+use crate::backend::{BackendImpl, ReportBatch, ThreadTag};
 
 const LOG_TAG: &str = "Pyroscope::Agent";
-const PPROFRS_SPY_NAME: &str = "pyroscope-rs";
-const PPROFRS_SPY_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Pyroscope Agent Configuration. This is the configuration that is passed to the agent.
-///
-/// # Example
-/// ```
-/// use pyroscope::pyroscope::PyroscopeConfig;
-/// let config = PyroscopeConfig::new("http://localhost:8080", "my-app", 100, "pyspy", "0.8.16");
-/// ```
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PyroscopeConfig {
     /// Pyroscope Server Address
     pub url: String,
@@ -45,10 +28,9 @@ pub struct PyroscopeConfig {
     /// Spy Version
     pub spy_version: String,
     pub basic_auth: Option<BasicAuth>,
-    /// Function to apply
-    pub func: Option<fn(Report) -> Report>,
     pub tenant_id: Option<String>,
     pub http_headers: HashMap<String, String>,
+    // pub mem_config: crate::mem::Config,
 }
 
 #[derive(Clone, Debug)]
@@ -57,37 +39,16 @@ pub struct BasicAuth {
     pub password: String,
 }
 
-impl Default for PyroscopeConfig {
-    fn default() -> Self {
-        Self {
-            url: "http://localhost:4040".to_string(),
-            application_name: "undefined".to_string(),
-            tags: HashMap::new(),
-            sample_rate: 100u32,
-            spy_name: PPROFRS_SPY_NAME.to_string(),
-            spy_version: PPROFRS_SPY_VERSION.to_string(),
-            basic_auth: None,
-            func: None,
-            tenant_id: None,
-            http_headers: HashMap::new(),
-        }
-    }
-}
 
 impl PyroscopeConfig {
-    /// Create a new PyroscopeConfig object.
-    ///
-    /// # Example
-    /// ```
-    /// use pyroscope::pyroscope::PyroscopeConfig;
-    /// let config = PyroscopeConfig::new("http://localhost:8080", "my-app", 100, "pyspy", "0.8.16");
-    /// ```
+
     pub fn new(
         url: impl AsRef<str>,
         application_name: impl AsRef<str>,
         sample_rate: u32,
         spy_name: impl AsRef<str>,
         spy_version: impl AsRef<str>,
+        // mem_config: mem::Config,
     ) -> Self {
         Self {
             url: url.as_ref().to_owned(),
@@ -97,9 +58,9 @@ impl PyroscopeConfig {
             spy_name: spy_name.as_ref().to_owned(),
             spy_version: spy_version.as_ref().to_owned(),
             basic_auth: None,
-            func: None,
             tenant_id: None,
             http_headers: HashMap::new(),
+            // mem_config,
         }
     }
 
@@ -118,13 +79,6 @@ impl PyroscopeConfig {
         }
     }
 
-    /// Set the Function.
-    pub fn func(self, func: fn(Report) -> Report) -> Self {
-        Self {
-            func: Some(func),
-            ..self
-        }
-    }
 
     /// Set the tags.
     ///
@@ -188,130 +142,16 @@ pub struct PyroscopeAgentBuilder {
 }
 
 impl PyroscopeAgentBuilder {
-    /// Create a new PyroscopeAgentBuilder object.
-    ///
-    /// # Example
-    /// ```no_run
-    /// use pyroscope::pyroscope::PyroscopeAgentBuilder;
-    /// use pyroscope::backend::{pprof_backend, PprofConfig, BackendConfig};
-    ///
-    /// let builder = PyroscopeAgentBuilder::new(
-    ///     "http://localhost:8080", "my-app", 100, "pyroscope-rs", "0.1.0",
-    ///     pprof_backend(PprofConfig::default(), BackendConfig::default()),
-    /// );
-    /// ```
     pub fn new(
-        url: impl AsRef<str>,
-        application_name: impl AsRef<str>,
-        sample_rate: u32,
-        spy_name: impl AsRef<str>,
-        spy_version: impl AsRef<str>,
+        config: PyroscopeConfig,
         backend: BackendImpl<BackendUninitialized>,
     ) -> Self {
         Self {
             backend,
-            config: PyroscopeConfig::new(url, application_name, sample_rate, spy_name, spy_version),
+            config,
         }
     }
 
-    /// Override the Pyroscope Server URL.
-    ///
-    /// # Example
-    /// ```no_run
-    /// use pyroscope::pyroscope::PyroscopeAgentBuilder;
-    /// use pyroscope::backend::{pprof_backend, PprofConfig, BackendConfig};
-    ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let agent = PyroscopeAgentBuilder::new(
-    ///     "http://localhost:4040", "my-app", 100, "pyroscope-rs", "0.1.0",
-    ///     pprof_backend(PprofConfig::default(), BackendConfig::default()),
-    /// )
-    /// .url("http://localhost:8080")
-    /// .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn url(self, url: impl AsRef<str>) -> Self {
-        Self {
-            config: self.config.url(url),
-            ..self
-        }
-    }
-
-    pub fn basic_auth(self, username: impl AsRef<str>, password: impl AsRef<str>) -> Self {
-        Self {
-            config: self
-                .config
-                .basic_auth(username.as_ref().to_owned(), password.as_ref().to_owned()),
-            ..self
-        }
-    }
-
-    /// Set the Function.
-    /// This is optional. If not set, the agent will not apply any function.
-    /// # Example
-    /// ```no_run
-    /// use pyroscope::pyroscope::PyroscopeAgentBuilder;
-    /// use pyroscope::backend::{pprof_backend, PprofConfig, BackendConfig};
-    ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let agent = PyroscopeAgentBuilder::new(
-    ///     "http://localhost:8080", "my-app", 100, "pyroscope-rs", "0.1.0",
-    ///     pprof_backend(PprofConfig::default(), BackendConfig::default()),
-    /// )
-    /// .func(|report| report)
-    /// .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn func(self, func: fn(Report) -> Report) -> Self {
-        Self {
-            config: self.config.func(func),
-            ..self
-        }
-    }
-
-    /// Set tags. Default is empty.
-    ///
-    /// # Example
-    /// ```no_run
-    /// use pyroscope::pyroscope::PyroscopeAgentBuilder;
-    /// use pyroscope::backend::{pprof_backend, PprofConfig, BackendConfig};
-    ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let agent = PyroscopeAgentBuilder::new(
-    ///     "http://localhost:8080", "my-app", 100, "pyroscope-rs", "0.1.0",
-    ///     pprof_backend(PprofConfig::default(), BackendConfig::default()),
-    /// )
-    /// .tags(vec![("env", "dev")])
-    /// .build()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn tags(self, tags: Vec<(&str, &str)>) -> Self {
-        Self {
-            config: self.config.tags(tags),
-            ..self
-        }
-    }
-
-    pub fn tenant_id(self, tenant_id: String) -> Self {
-        Self {
-            config: self.config.tenant_id(tenant_id),
-            ..self
-        }
-    }
-
-    pub fn http_headers(self, http_headers: HashMap<String, String>) -> Self {
-        Self {
-            config: self.config.http_headers(http_headers),
-            ..self
-        }
-    }
-
-    /// Initialize the backend, timer and return a PyroscopeAgent with Ready
-    /// state. While you can call this method, you should call it through the
-    /// `PyroscopeAgent.build()` method.
     pub fn build(self) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
         let config = self.config;
 
@@ -503,6 +343,22 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
             while let Ok(signal) = rx.recv() {
                 match signal {
                     TimerSignal::NextSnapshot(until) => {
+
+                        // get_time_range should be used with "from". We balance this by reducing
+                        // 10s from the returned range.
+                        let mut time_range = get_time_range(until)?;
+                        time_range.from -= 10;
+                        time_range.until -= 10;
+
+                        let mut batch  = Vec::with_capacity(2);
+
+                        // if let Some(pprof) = mem::dump_pprof(config.mem_config.heap_sample_size, &time_range) {
+                        //     batch.push(ReportBatch{
+                        //         profile_type: "memory".to_string(),
+                        //         data: ReportData::RawPprof(pprof),
+                        //     })
+                        // }
+
                         log::trace!(target: LOG_TAG, "Sending session {until}");
 
                         // Generate report from backend
@@ -516,15 +372,18 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
                             })?
                             .report()?;
 
+                        batch.push(report);
+
                         // Send new Session to SessionManager
                         stx.send(SessionSignal::Session(Box::new(Session::new(
-                            until,
+                            time_range,
                             config.clone(),
-                            report,
-                        )?)))?
+                            batch,
+                        ))))?
                     }
                     TimerSignal::Terminate => {
                         log::trace!(target: LOG_TAG, "Session Killed");
+                        // mem::stop();
 
                         // Notify the Stop function
                         let (lock, cvar) = &*pair;

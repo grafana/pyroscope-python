@@ -7,11 +7,11 @@ use std::{
 
 use crate::encode::gen::push::{PushRequest, RawProfileSeries, RawSample};
 use crate::encode::gen::types::LabelPair;
+use crate::utils::TimeRange;
 use crate::{
-    backend::{Report, ReportBatch, ReportData},
+    backend::{ReportBatch, ReportData},
     encode::pprof,
     pyroscope::PyroscopeConfig,
-    utils::get_time_range,
     Result,
 };
 use libflate::gzip::Encoder;
@@ -89,92 +89,63 @@ impl SessionManager {
 
 pub struct Session {
     pub config: PyroscopeConfig,
-    pub batch: ReportBatch,
-    // unix time todo remove comment, use types
-    pub from: u64,
-    // unix time todo remove comment, use types
-    pub until: u64,
+    pub batch: Vec<ReportBatch>,
+    time_range: TimeRange,
 }
 
 impl Session {
-    /// Create a new Session
-    /// # Example
-    /// ```ignore
-    /// let config = PyroscopeConfig::new("https://localhost:8080", "my-app", 100, "pyspy", "0.8.16");
-    /// let report = vec![1, 2, 3];
-    /// let until = 154065120;
-    /// let session = Session::new(until, config, report)?;
-    /// ```
-    pub fn new(until: u64, config: PyroscopeConfig, batch: ReportBatch) -> Result<Self> {
-        log::info!(target: LOG_TAG, "Creating Session");
-
-        // get_time_range should be used with "from". We balance this by reducing
-        // 10s from the returned range.
-        let time_range = get_time_range(until)?;
-
-        Ok(Self {
+    pub fn new(
+        time_range: TimeRange,
+        config: PyroscopeConfig,
+        batch: Vec<ReportBatch>,
+    ) -> Self {
+        Self {
             config,
             batch,
-            from: time_range.from - 10,
-            until: time_range.until - 10,
-        })
+            time_range,
+        }
     }
 
     fn push(self, client: &reqwest::blocking::Client) -> Result<()> {
-        log::info!(target: LOG_TAG, "Sending Session: {} - {}", self.from, self.until);
+        log::info!(target: LOG_TAG, "Sending Session: {} - {}", self.time_range.from, self.time_range.until);
 
-        let ReportBatch { profile_type, data } = self.batch;
-
-        let raw_profile = match data {
-            ReportData::RawPprof(pprof_bytes) => {
-                if self.config.func.is_some() {
-                    log::warn!(target: LOG_TAG, "report transform function is not supported with raw pprof backends (e.g. jemalloc)");
-                }
-                pprof_bytes
-            }
-            ReportData::Reports(reports) => {
-                let transformed: Vec<Report>;
-                let encode_input = match self.config.func {
-                    None => &reports,
-                    Some(f) => {
-                        transformed = reports.iter().map(|r| f(r.to_owned())).collect();
-                        &transformed
-                    }
-                };
-                pprof::encode(
-                    encode_input,
-                    self.config.sample_rate,
-                    self.from * 1_000_000_000,
-                    (self.until - self.from) * 1_000_000_000,
-                )
-                .encode_to_vec()
-            }
+        let mut req = PushRequest {
+            series: Vec::with_capacity(self.batch.len()),
         };
+        for batch in self.batch {
+            let ReportBatch { profile_type, data } = batch;
 
-        let mut labels: Vec<LabelPair> = Vec::with_capacity(2 + self.config.tags.len());
-        labels.push(LabelPair {
-            name: "service_name".to_string(),
-            value: self.config.application_name.clone(),
-        });
-        labels.push(LabelPair {
-            name: "__name__".to_string(),
-            value: profile_type,
-        });
-        for tag in self.config.tags {
+            let raw_profile = match data {
+                ReportData::RawPprof(pprof_bytes) => pprof_bytes,
+                ReportData::Reports(reports) => {
+                    pprof::encode(reports, self.config.sample_rate, self.time_range.clone()).encode_to_vec()
+                }
+            };
+
+            let mut labels: Vec<LabelPair> = Vec::with_capacity(2 + self.config.tags.len());
             labels.push(LabelPair {
-                name: tag.0,
-                value: tag.1,
-            })
-        }
-        let req = PushRequest {
-            series: vec![RawProfileSeries {
+                name: "service_name".to_string(),
+                value: self.config.application_name.clone(),
+            });
+            labels.push(LabelPair {
+                name: "__name__".to_string(),
+                value: profile_type,
+            });
+            for (k, v) in &self.config.tags {
+                labels.push(LabelPair {
+                    name: k.clone(),
+                    value: v.clone(),
+                })
+            }
+            let series = RawProfileSeries {
                 labels,
                 samples: vec![RawSample {
                     raw_profile,
                     id: Uuid::new_v4().to_string(),
                 }],
-            }],
-        };
+            };
+            req.series.push(series);
+        }
 
         let req = Self::gzip(&req.encode_to_vec())?;
 
