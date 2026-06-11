@@ -150,18 +150,15 @@ impl From<py_spy::Frame> for StackFrameWrapper {
     fn from(frame: py_spy::Frame) -> Self {
         // Format name as "module.function" when module is available,
         // otherwise just use the function name.
-        let formatted_name = match &frame.module {
+        let formatted_name = match frame.module {
             Some(module) => format!("{}.{}", module, frame.name),
-            None => frame.name.clone(),
+            None => frame.name,
         };
 
         StackFrameWrapper(StackFrame {
-            module: frame.module.clone(),
-            name: Some(formatted_name),
-            filename: Some(frame.filename.clone()),
-            relative_path: None,
-            absolute_path: Some(frame.filename.clone()),
-            line: Some(frame.line as u32),
+            name: formatted_name,
+            filename: frame.filename,
+            line: frame.line as u32,
         })
     }
 }
@@ -234,15 +231,14 @@ mod tests {
 
         assert_eq!(
             stack_frame.name,
-            Some("SequenceMatcher.find_longest_match".to_string())
+            "SequenceMatcher.find_longest_match".to_string()
         );
-        assert_eq!(stack_frame.module, Some("SequenceMatcher".to_string()));
         // filename preserves the full absolute path
         assert_eq!(
             stack_frame.filename,
-            Some("/usr/lib/python3.12/difflib.py".to_string())
+            "/usr/lib/python3.12/difflib.py".to_string()
         );
-        assert_eq!(stack_frame.line, Some(42));
+        assert_eq!(stack_frame.line, 42);
     }
 
     #[test]
@@ -253,14 +249,10 @@ mod tests {
         let wrapper: StackFrameWrapper = frame.into();
         let stack_frame: StackFrame = wrapper.into();
 
-        assert_eq!(stack_frame.name, Some("my_function".to_string()));
-        assert_eq!(stack_frame.module, None);
+        assert_eq!(stack_frame.name, "my_function".to_string());
         // filename preserves the full absolute path
-        assert_eq!(
-            stack_frame.filename,
-            Some("/home/user/app/main.py".to_string())
-        );
-        assert_eq!(stack_frame.line, Some(10));
+        assert_eq!(stack_frame.filename, "/home/user/app/main.py".to_string());
+        assert_eq!(stack_frame.line, 10);
     }
 
     #[test]
@@ -271,12 +263,7 @@ mod tests {
         let wrapper: StackFrameWrapper = frame.into();
         let stack_frame: StackFrame = wrapper.into();
 
-        assert_eq!(
-            stack_frame.absolute_path,
-            Some("/path/to/file.py".to_string())
-        );
-        assert_eq!(stack_frame.filename, Some("/path/to/file.py".to_string()));
-        assert_eq!(stack_frame.relative_path, None);
+        assert_eq!(stack_frame.filename, "/path/to/file.py".to_string());
     }
 
     #[test]
@@ -294,7 +281,7 @@ mod tests {
             let wrapper: StackFrameWrapper = frame.into();
             let stack_frame: StackFrame = wrapper.into();
 
-            let name = stack_frame.name.unwrap();
+            let name = stack_frame.name;
             assert!(
                 !name.contains('/'),
                 "Function name '{}' should not contain '/' path separator! Input: func={}, file={}, module={:?}",

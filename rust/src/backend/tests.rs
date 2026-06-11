@@ -6,49 +6,6 @@ use crate::backend::{
 use std::collections::{HashMap, HashSet};
 
 #[test]
-fn test_stack_frame_display() {
-    let frame = StackFrame::new(
-        Some("module".to_string()),
-        Some("name".to_string()),
-        Some("filename".to_string()),
-        Some("relative_path".to_string()),
-        Some("absolute_path".to_string()),
-        Some(1),
-    );
-
-    assert_eq!(format!("{frame}"), "filename:1 - name");
-}
-
-#[test]
-fn test_stack_trace_display() {
-    let frames = vec![
-        StackFrame::new(
-            Some("module".to_string()),
-            Some("name".to_string()),
-            Some("filename".to_string()),
-            Some("relative_path".to_string()),
-            Some("absolute_path".to_string()),
-            Some(1),
-        ),
-        StackFrame::new(
-            Some("module".to_string()),
-            Some("name".to_string()),
-            Some("filename".to_string()),
-            Some("relative_path".to_string()),
-            Some("absolute_path".to_string()),
-            Some(2),
-        ),
-    ];
-
-    let stack_trace = StackTrace::new(&BackendConfig::default(), None, None, None, frames);
-
-    assert_eq!(
-        format!("{stack_trace}"),
-        "filename:2 - name;filename:1 - name"
-    );
-}
-
-#[test]
 fn test_report_record() {
     let mut report = Report::new(HashMap::new());
 
@@ -253,14 +210,11 @@ fn test_stacktrace_add() {
         Some(1),
         Some(test_thread_id(55)),
         Some("thread_name".to_string()),
-        vec![crate::backend::StackFrame::new(
-            Some("file1".to_string()),
-            Some("function1".to_string()),
-            Some("file1".to_string()),
-            Some("file1".to_string()),
-            Some("file1".to_string()),
-            Some(1),
-        )],
+        vec![StackFrame {
+            name: "function1".to_string(),
+            filename: "file1".to_string(),
+            line: 1,
+        }],
     );
 
     // assert initial metadata of the stacktrace
@@ -297,14 +251,11 @@ fn test_stackbuffer_record() {
         None,
         None,
         None,
-        vec![StackFrame::new(
-            None,
-            Some("test_record".to_string()),
-            None,
-            None,
-            None,
-            None,
-        )],
+        vec![StackFrame {
+            name: "test_record".to_string(),
+            filename: "".to_string(),
+            line: 0,
+        }],
     );
     // First record
     buffer.record(stack_trace.clone()).unwrap();
@@ -325,14 +276,11 @@ fn test_stackbuffer_record_with_count() {
         None,
         None,
         None,
-        vec![StackFrame::new(
-            None,
-            Some("test_record".to_string()),
-            None,
-            None,
-            None,
-            None,
-        )],
+        vec![StackFrame {
+            name: "test_record".to_string(),
+            filename: "".to_string(),
+            line: 0,
+        }],
     );
     // First record
     buffer.record_with_count(stack_trace.clone(), 1).unwrap();
@@ -353,14 +301,11 @@ fn test_stackbuffer_clear() {
         None,
         None,
         None,
-        vec![StackFrame::new(
-            None,
-            Some("test_record".to_string()),
-            None,
-            None,
-            None,
-            None,
-        )],
+        vec![StackFrame {
+            name: "test_record".to_string(),
+            filename: "".to_string(),
+            line: 0,
+        }],
     );
     // First record
     buffer.record(stack_trace.clone()).unwrap();

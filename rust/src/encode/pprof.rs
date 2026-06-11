@@ -109,12 +109,9 @@ impl PProfBuilder {
             label: vec![],
         };
         for sf in stacktrace.frames {
-            let (Some(name), Some(filename)) = (&sf.name, &sf.filename) else {
-                continue;
-            };
-            let name = strings.add(name); //todo move
-            let filename = strings.add(filename); //todo move
-            let line = sf.line.unwrap_or(0) as i64;
+            let name = strings.add(&sf.name); //todo move
+            let filename = strings.add(&sf.filename); //todo move
+            let line = sf.line as i64;
             let function_id = self.add_function_mirror(FunctionMirror { name, filename });
             let location_id = self.add_location_mirror(LocationMirror { function_id, line });
             sample.location_id.push(location_id);
