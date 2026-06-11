@@ -1,11 +1,11 @@
-use py_spy::sampler::Sampler;
-use pyroscope::{
+use crate::{
     backend::{
         Backend, BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame,
         StackTrace, ThreadTag, ThreadTagsSet,
     },
     error::{PyroscopeError, Result},
 };
+use py_spy::sampler::Sampler;
 use std::{
     ops::Deref,
     sync::{
