@@ -1,4 +1,5 @@
 mod pyspy_backend;
+// mod mem;
 
 // Re-exports structs
 pub use crate::pyroscope::PyroscopeAgent;
@@ -138,13 +139,18 @@ pub unsafe extern "C" fn initialize_agent(
 
     let pyspy = BackendImpl::new(Box::new(Pyspy::new(config, backend_config)));
 
-    let mut agent_builder = PyroscopeAgentBuilder::new(
+    let mut agent_builder = pyroscope::PyroscopeConfig::new(
         server_address,
         application_name,
         sample_rate,
         PYSPY_NAME,
         PYSPY_VERSION,
-        pyspy,
+        // mem::Config {
+        //     enabled: mem_enabled,
+        //     enable_mem_domain: mem_enable_mem_domain,
+        //     max_nframe: mem_max_nframe,
+        //     heap_sample_size: mem_heap_sample_size,
+        // },
     )
     .tags(tags);
 
@@ -171,7 +177,8 @@ pub unsafe extern "C" fn initialize_agent(
         },
     }
 
-    ffikit::run(agent_builder).is_ok()
+    // mem::start(&pyroscope_config.mem_config);
+    ffikit::run(PyroscopeAgentBuilder::new(agent_builder, pyspy)).is_ok()
 }
 
 #[no_mangle]
