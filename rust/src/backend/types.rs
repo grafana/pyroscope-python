@@ -191,22 +191,6 @@ pub struct StackTrace {
     pub metadata: Metadata,
 }
 
-impl std::fmt::Display for StackTrace {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            &self
-                .frames
-                .iter()
-                .rev()
-                .map(|frame| format!("{frame}"))
-                .collect::<Vec<_>>()
-                .join(";")
-        )
-    }
-}
-
 impl StackTrace {
     /// Create a new StackTrace
     pub fn new(
@@ -255,49 +239,7 @@ impl StackTrace {
 /// A representation of a stack frame.
 #[derive(Debug, Default, PartialEq, Eq, Hash, Clone)]
 pub struct StackFrame {
-    /// Module name
-    pub module: Option<String>,
-    /// Function name
-    pub name: Option<String>,
-    /// File name
-    pub filename: Option<String>,
-    /// File relative path
-    pub relative_path: Option<String>,
-    /// File absolute path
-    pub absolute_path: Option<String>,
-    /// Line number
-    pub line: Option<u32>,
-}
-
-impl StackFrame {
-    /// Create a new StackFrame.
-    pub fn new(
-        module: Option<String>,
-        name: Option<String>,
-        filename: Option<String>,
-        relative_path: Option<String>,
-        absolute_path: Option<String>,
-        line: Option<u32>,
-    ) -> Self {
-        Self {
-            module,
-            name,
-            filename,
-            relative_path,
-            absolute_path,
-            line,
-        }
-    }
-}
-
-impl std::fmt::Display for StackFrame {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}:{} - {}",
-            self.filename.as_ref().unwrap_or(&"".to_string()),
-            self.line.unwrap_or(0),
-            self.name.as_ref().unwrap_or(&"".to_string())
-        )
-    }
+    pub name: String,
+    pub filename: String,
+    pub line: u32,
 }
