@@ -1204,7 +1204,7 @@ dependencies = [
 
 [[package]]
 name = "pyroscope_python_extension"
-version = "1.0.11"
+version = "1.0.12"
 dependencies = [
  "hashbrown 0.17.1",
  "lazy_static",
