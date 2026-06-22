@@ -1,6 +1,7 @@
 import warnings
 import logging
 import json
+import sys
 from enum import Enum
 
 from ._native import lib
@@ -57,6 +58,8 @@ def configure(
         report_pid,
         report_thread_id,
         report_thread_name,
+        runtime_name().encode("UTF-8"),
+        runtime_version().encode("UTF-8"),
         tags_to_string(tags).encode("UTF-8"),
         (tenant_id or "").encode("UTF-8"),
         http_headers_to_json(http_headers).encode("UTF-8"),
@@ -81,6 +84,15 @@ def tags_to_string(tags):
     if tags is None:
         return ""
     return ",".join(["{}={}".format(key, value) for key, value in tags.items()])
+
+def runtime_name():
+    return sys.implementation.name
+
+def runtime_version():
+    vinfo = sys.implementation.version
+    if vinfo.releaselevel == "final" and not vinfo.serial:
+        vinfo = vinfo[:3]
+    return ".".join(map(str, vinfo))
 
 def http_headers_to_json(headers):
     if headers is None:

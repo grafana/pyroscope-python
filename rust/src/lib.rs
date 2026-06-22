@@ -69,6 +69,8 @@ pub unsafe extern "C" fn initialize_agent(
     report_pid: bool,
     report_thread_id: bool,
     report_thread_name: bool,
+    runtime_name: *const c_char,
+    runtime_version: *const c_char,
     tags: *const c_char,
     tenant_id: *const c_char,
     http_headers_json: *const c_char,
@@ -90,6 +92,16 @@ pub unsafe extern "C" fn initialize_agent(
         .to_string();
 
     let basic_auth_password = unsafe { CStr::from_ptr(basic_auth_password) }
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let runtime_name = unsafe { CStr::from_ptr(runtime_name) }
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let runtime_version = unsafe { CStr::from_ptr(runtime_version) }
         .to_str()
         .unwrap()
         .to_string();
@@ -152,7 +164,8 @@ pub unsafe extern "C" fn initialize_agent(
         //     heap_sample_size: mem_heap_sample_size,
         // },
     )
-    .tags(tags);
+    .tags(tags)
+    .runtime(runtime_name, runtime_version);
 
     if !basic_auth_username.is_empty() && !basic_auth_password.is_empty() {
         agent_builder = agent_builder.basic_auth(basic_auth_username, basic_auth_password);

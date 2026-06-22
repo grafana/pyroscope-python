@@ -34,6 +34,10 @@ pub struct PyroscopeConfig {
     pub spy_name: String,
     /// Spy Version
     pub spy_version: String,
+    /// Runtime Name
+    pub runtime_name: String,
+    /// Runtime Version
+    pub runtime_version: String,
     pub basic_auth: Option<BasicAuth>,
     pub tenant_id: Option<String>,
     pub http_headers: HashMap<String, String>,
@@ -62,6 +66,8 @@ impl PyroscopeConfig {
             sample_rate,
             spy_name: spy_name.as_ref().to_owned(),
             spy_version: spy_version.as_ref().to_owned(),
+            runtime_name: String::new(),
+            runtime_version: String::new(),
             basic_auth: None,
             tenant_id: None,
             http_headers: HashMap::new(),
@@ -103,6 +109,14 @@ impl PyroscopeConfig {
 
         Self {
             tags: tags_hashmap,
+            ..self
+        }
+    }
+
+    pub fn runtime(self, runtime_name: String, runtime_version: String) -> Self {
+        Self {
+            runtime_name,
+            runtime_version,
             ..self
         }
     }
