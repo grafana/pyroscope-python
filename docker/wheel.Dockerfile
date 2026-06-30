@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.23@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 ARG PLATFORM=x86_64
 FROM quay.io/pypa/manylinux2014_${PLATFORM} AS builder
-ARG OPENSSL_VERSION=3.5.6
+ARG OPENSSL_VERSION=3.5.7
 
 RUN yum -y install gcc libffi-devel perl-core glibc-devel make
 
@@ -27,7 +27,7 @@ RUN useradd -m builder \
 USER builder
 RUN test "$(id -u)" = "1000" || { echo "ERROR: builder uid is $(id -u), expected 1000"; exit 1; }
 
-ENV RUST_VERSION=1.96
+ENV RUST_VERSION=1.96.0
 RUN curl https://static.rust-lang.org/rustup/dist/$(arch)-unknown-linux-musl/rustup-init -o /tmp/rustup-init \
     && chmod +x /tmp/rustup-init \
     && /tmp/rustup-init -y --default-toolchain=${RUST_VERSION} --default-host=$(arch)-unknown-linux-gnu \

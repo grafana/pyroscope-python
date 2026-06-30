@@ -1,8 +1,24 @@
-mod backend;
+mod pyspy_backend;
+// mod mem;
 
-use crate::backend::Pyspy;
-use pyroscope::backend::{BackendConfig, BackendImpl, Tag};
-use pyroscope::pyroscope::PyroscopeAgentBuilder;
+// Re-exports structs
+pub use crate::pyroscope::PyroscopeAgent;
+pub use error::{PyroscopeError, Result};
+
+pub mod backend;
+pub mod encode;
+pub mod error;
+pub mod pyroscope;
+pub mod session;
+pub mod timer;
+
+mod utils;
+pub use utils::ThreadId;
+pub mod ffikit;
+
+use crate::backend::{BackendConfig, BackendImpl, Tag};
+use crate::pyroscope::PyroscopeAgentBuilder;
+use crate::pyspy_backend::Pyspy;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 const LOG_TAG: &str = "Pyroscope::pyspy::ffi";
@@ -10,7 +26,7 @@ const LOG_TAG: &str = "Pyroscope::pyspy::ffi";
 const PYSPY_NAME: &str = "pyspy";
 const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn initialize_logging(logging_level: u32) -> bool {
     // Force rustc to display the log messages in the console.
     match logging_level {
@@ -39,7 +55,7 @@ pub extern "C" fn initialize_logging(logging_level: u32) -> bool {
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// # Safety
 /// All pointer arguments must be valid, non-null, null-terminated C strings.
 pub unsafe extern "C" fn initialize_agent(
@@ -123,13 +139,18 @@ pub unsafe extern "C" fn initialize_agent(
 
     let pyspy = BackendImpl::new(Box::new(Pyspy::new(config, backend_config)));
 
-    let mut agent_builder = PyroscopeAgentBuilder::new(
+    let mut agent_builder = pyroscope::PyroscopeConfig::new(
         server_address,
         application_name,
         sample_rate,
         PYSPY_NAME,
         PYSPY_VERSION,
-        pyspy,
+        // mem::Config {
+        //     enabled: mem_enabled,
+        //     enable_mem_domain: mem_enable_mem_domain,
+        //     max_nframe: mem_max_nframe,
+        //     heap_sample_size: mem_heap_sample_size,
+        // },
     )
     .tags(tags);
 
@@ -140,31 +161,32 @@ pub unsafe extern "C" fn initialize_agent(
         agent_builder = agent_builder.tenant_id(tenant_id);
     }
 
-    let http_headers = pyroscope::pyroscope::parse_http_headers_json(http_headers_json);
+    let http_headers = pyroscope::parse_http_headers_json(http_headers_json);
     match http_headers {
         Ok(http_headers) => {
             agent_builder = agent_builder.http_headers(http_headers);
         }
         Err(e) => match e {
-            pyroscope::PyroscopeError::Json(e) => {
+            PyroscopeError::Json(e) => {
                 log::error!(target: LOG_TAG, "parse_http_headers_json error {}", e);
             }
-            pyroscope::PyroscopeError::AdHoc(e) => {
+            PyroscopeError::AdHoc(e) => {
                 log::error!(target: LOG_TAG, "parse_http_headers_json {}", e);
             }
             _ => {}
         },
     }
 
-    pyroscope::ffikit::run(agent_builder).is_ok()
+    // mem::start(&pyroscope_config.mem_config);
+    ffikit::run(PyroscopeAgentBuilder::new(agent_builder, pyspy)).is_ok()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn drop_agent() -> bool {
-    pyroscope::ffikit::send(pyroscope::ffikit::Signal::Kill).is_ok()
+    ffikit::send(ffikit::Signal::Kill).is_ok()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// # Safety
 /// `key` and `value` must be valid, non-null, null-terminated C strings.
 pub unsafe extern "C" fn add_thread_tag(key: *const c_char, value: *const c_char) -> bool {
@@ -174,14 +196,14 @@ pub unsafe extern "C" fn add_thread_tag(key: *const c_char, value: *const c_char
         .unwrap()
         .to_owned();
 
-    pyroscope::ffikit::send(pyroscope::ffikit::Signal::AddThreadTag(
+    ffikit::send(ffikit::Signal::AddThreadTag(
         self_thread_id(),
         Tag { key, value },
     ))
     .is_ok()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// # Safety
 /// `key` and `value` must be valid, non-null, null-terminated C strings.
 pub unsafe extern "C" fn remove_thread_tag(key: *const c_char, value: *const c_char) -> bool {
@@ -191,7 +213,7 @@ pub unsafe extern "C" fn remove_thread_tag(key: *const c_char, value: *const c_c
         .unwrap()
         .to_owned();
 
-    pyroscope::ffikit::send(pyroscope::ffikit::Signal::RemoveThreadTag(
+    ffikit::send(ffikit::Signal::RemoveThreadTag(
         self_thread_id(),
         Tag { key, value },
     ))
@@ -234,9 +256,9 @@ impl From<LineNo> for py_spy::config::LineNo {
     }
 }
 
-pub fn self_thread_id() -> pyroscope::ThreadId {
+pub fn self_thread_id() -> ThreadId {
     // https://github.com/python/cpython/blob/main/Python/thread_pthread.h#L304
-    pyroscope::ThreadId::pthread_self()
+    ThreadId::pthread_self()
 }
 
 #[cfg(test)]
