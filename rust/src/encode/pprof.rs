@@ -1,6 +1,6 @@
-use crate::backend::types::Report;
 use crate::backend::StackTrace;
-use crate::encode::gen::google::{Function, Label, Line, Location, Profile, Sample, ValueType};
+use crate::backend::types::Report;
+use crate::encode::r#gen::google::{Function, Label, Line, Location, Profile, Sample, ValueType};
 use crate::encode::pprof::ffi::FFIInternedString;
 use crate::encode::pprof::ffi::{FFIFrame, FFIHeapSampleValues};
 use crate::utils::TimeRange;

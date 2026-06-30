@@ -4,8 +4,8 @@ version = "1.0.12" # x-release-please-version
 authors = [
     "Tolyan Korniltsev <anatoly.korniltsev@grafana.com>"
 ]
-edition = "2021"
-rust-version = "1.66"
+edition = "2024"
+rust-version = "1.96.0"
 
 [lib]
 crate-type = ["cdylib"]

@@ -1,7 +1,7 @@
 use super::BackendConfig;
 use crate::error::Result;
 use std::{
-    collections::{hash_map::DefaultHasher, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
 };
 
@@ -202,22 +202,22 @@ impl StackTrace {
     ) -> Self {
         let mut metadata = Metadata::default();
 
-        if config.report_pid {
-            if let Some(pid) = pid {
-                metadata.add_tag(Tag::new("pid".to_owned(), pid.to_string()));
-            }
+        if config.report_pid
+            && let Some(pid) = pid
+        {
+            metadata.add_tag(Tag::new("pid".to_owned(), pid.to_string()));
         }
 
-        if config.report_thread_id {
-            if let Some(thread_id) = &thread_id {
-                metadata.add_tag(Tag::new("thread_id".to_owned(), thread_id.to_string()));
-            }
+        if config.report_thread_id
+            && let Some(thread_id) = &thread_id
+        {
+            metadata.add_tag(Tag::new("thread_id".to_owned(), thread_id.to_string()));
         }
 
-        if config.report_thread_name {
-            if let Some(thread_name) = thread_name.clone() {
-                metadata.add_tag(Tag::new("thread_name".to_owned(), thread_name));
-            }
+        if config.report_thread_name
+            && let Some(thread_name) = thread_name.clone()
+        {
+            metadata.add_tag(Tag::new("thread_name".to_owned(), thread_name));
         }
 
         Self {
