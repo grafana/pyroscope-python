@@ -123,13 +123,17 @@ jobs:
             PYTHON_VERSION: "3.10"
           - variant: musllinux-arm64
             PYTHON_VERSION: "3.11"
-    needs: ["python-linux-integration-test-discover"]
+    needs: ["python-linux-integration-test-discover", "python-linux-build"]
     name: Python Linux Test - ${{ matrix.test }} - ${{ matrix.variant }} - ${{ matrix.PYTHON_VERSION }}
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          name: "${{ matrix.variant }}.whl"
+          path: dist
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version: stable

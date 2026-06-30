@@ -8,11 +8,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -23,12 +21,6 @@ import (
 )
 
 const profileTypeID = "process_cpu:cpu:nanoseconds:cpu:nanoseconds"
-
-var wheelBuild struct {
-	sync.Once
-	dir string
-	err error
-}
 
 type profileConfig struct {
 	onCPU   bool
@@ -106,8 +98,9 @@ func startPyroscope(t *testing.T, net *dockertest.Network) string {
 func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string, cfg profileConfig, wheelDir string) *dockertest.Container {
 	t.Helper()
 	return dockertest.StartContainer(t, dockertest.ContainerRequest{
-		Image:   pythonImage(),
-		Network: net.Name,
+		Image:    pythonImage(),
+		Platform: wheelDockerPlatform(),
+		Network:  net.Name,
 		Env: map[string]string{
 			"PYTHONUNBUFFERED":              "1",
 			"PYTHONDONTWRITEBYTECODE":       "1",
@@ -165,38 +158,32 @@ func queryProfile(pyroscopeURL string, labelSelector string) (string, error) {
 func ensureWheel(t *testing.T) string {
 	t.Helper()
 
-	wheelBuild.Do(func() {
-		wheelBuild.dir, wheelBuild.err = prepareWheel(t)
-	})
-	if wheelBuild.err != nil {
-		t.Fatal(wheelBuild.err)
-	}
-	return wheelBuild.dir
-}
-
-func prepareWheel(t *testing.T) (string, error) {
-	t.Helper()
-
+	dir := wheelDir()
 	target := wheelBuildTarget()
-	t.Logf("building integration test wheel with make %s", target)
-	cmd := exec.Command("make", target)
-	cmd.Dir = repoRoot()
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("build wheel with make %s: %w", target, err)
+	pattern := wheelPattern()
+	matches, err := filepath.Glob(filepath.Join(dir, pattern))
+	if err != nil {
+		t.Fatalf("invalid integration test wheel pattern %q: %v", pattern, err)
 	}
-
-	dir := filepath.Join(repoRoot(), "dist")
-	if !hasWheel(dir) {
-		return "", fmt.Errorf("no matching wheel found in %s after make %s", dir, target)
+	if len(matches) == 0 {
+		t.Fatalf(
+			"missing prebuilt integration test wheel in %s; expected %q for target %q. Build it before running tests with `make -C %s %s`, or set PYROSCOPE_WHEEL_DIR to a directory containing the wheel.",
+			dir,
+			pattern,
+			target,
+			repoRoot(),
+			target,
+		)
 	}
-	return dir, nil
+	t.Logf("using integration test wheel %s", strings.Join(matches, ", "))
+	return dir
 }
 
-func hasWheel(dir string) bool {
-	matches, err := filepath.Glob(filepath.Join(dir, wheelPattern()))
-	return err == nil && len(matches) > 0
+func wheelDir() string {
+	if dir := os.Getenv("PYROSCOPE_WHEEL_DIR"); dir != "" {
+		return absPath(dir)
+	}
+	return filepath.Join(repoRoot(), "dist")
 }
 
 func wheelPattern() string {
@@ -217,6 +204,14 @@ func wheelBuildTarget() string {
 		target = "musllinux"
 	}
 	return target + "/" + makeArch()
+}
+
+func wheelDockerPlatform() string {
+	parts := strings.Split(wheelBuildTarget(), "/")
+	if len(parts) != 2 {
+		return ""
+	}
+	return "linux/" + parts[1]
 }
 
 func wheelArch(target string) string {
