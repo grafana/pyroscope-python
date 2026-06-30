@@ -9,8 +9,8 @@ use py_spy::sampler::Sampler;
 use std::{
     ops::Deref,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
     },
     thread::JoinHandle,
 };
@@ -285,7 +285,10 @@ mod tests {
             assert!(
                 !name.contains('/'),
                 "Function name '{}' should not contain '/' path separator! Input: func={}, file={}, module={:?}",
-                name, func_name, filename, module
+                name,
+                func_name,
+                filename,
+                module
             );
         }
     }
