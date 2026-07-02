@@ -1,9 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{
-        Arc, Condvar, Mutex,
-        mpsc::{self, Sender},
-    },
+    sync::mpsc::{self, Sender},
     thread::JoinHandle,
 };
 
@@ -158,13 +155,9 @@ impl PyroscopeAgentBuilder {
             session_manager,
             tx: None,
             handle: None,
-            running: Arc::new((
-                #[allow(clippy::mutex_atomic)]
-                Mutex::new(false),
-                Condvar::new(),
-            )),
             ruleset: self.ruleset,
-        }.start()
+        }
+        .start()
     }
 }
 
@@ -178,8 +171,6 @@ pub struct PyroscopeAgent {
     tx: Option<Sender<TimerSignal>>,
     /// Handle to the thread that runs the Pyroscope Agent
     handle: Option<JoinHandle<Result<()>>>,
-    /// A structure to signal thread termination
-    running: Arc<(Mutex<bool>, Condvar)>,
     /// Profiler backend
     pub backend: Pyspy,
     /// Configuration Object
@@ -249,13 +240,6 @@ impl PyroscopeAgent {
         let reporter = self.backend.reporter();
         // Call start()
 
-        // set running to true
-        let pair = Arc::clone(&self.running);
-        let (lock, _cvar) = &*pair;
-        let mut running = lock.lock()?;
-        *running = true;
-        drop(running);
-
         // Create a channel to listen for timer signals
         let (tx, rx) = mpsc::channel();
         self.timer.attach_listener(tx.clone())?;
@@ -304,13 +288,6 @@ impl PyroscopeAgent {
                         log::trace!(target: LOG_TAG, "Session Killed");
                         // mem::stop();
 
-                        // Notify the Stop function
-                        let (lock, cvar) = &*pair;
-                        let mut running = lock.lock()?;
-                        *running = false;
-                        cvar.notify_one();
-
-                        // Kill the internal thread
                         return Ok(());
                     }
                 }
@@ -335,10 +312,6 @@ impl PyroscopeAgent {
             log::error!("PyroscopeAgent - Missing sender")
         }
 
-        // Wait for the Thread to finish
-        let pair = Arc::clone(&self.running);
-        let (lock, cvar) = &*pair;
-        let _guard = cvar.wait_while(lock.lock()?, |running| *running)?;
         self.shutdown();
         Ok(())
     }
