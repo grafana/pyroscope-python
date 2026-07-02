@@ -17,9 +17,8 @@ pub mod ffikit;
 
 use std::collections::HashMap;
 
-use crate::backend::{BackendConfig, BackendImpl, Tag, ThreadTagsSet};
+use crate::backend::{BackendConfig, Tag, ThreadTagsSet};
 use crate::pyroscope::PyroscopeAgentBuilder;
-use crate::pyspy_backend::Pyspy;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
@@ -105,12 +104,6 @@ fn initialize_agent(
 
     let dynamic_tags = ThreadTagsSet::new();
 
-    let pyspy = BackendImpl::new(Box::new(Pyspy::new(
-        config,
-        backend_config,
-        dynamic_tags.clone(),
-    )));
-
     let mut agent_builder = pyroscope::PyroscopeConfig::new(
         server_address,
         application_name,
@@ -138,7 +131,8 @@ fn initialize_agent(
     // mem::start(&pyroscope_config.mem_config);
     ffikit::run(PyroscopeAgentBuilder::new(
         agent_builder,
-        pyspy,
+        config,
+        backend_config,
         dynamic_tags,
     ))
     .is_ok()
