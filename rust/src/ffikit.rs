@@ -1,6 +1,6 @@
 use crate::backend::Tag;
 use crate::error::{PyroscopeError, Result};
-use crate::pyroscope::{PyroscopeAgentBuilder, PyroscopeAgentRunning};
+use crate::pyroscope::{PyroscopeAgentBuilder};
 use crate::{PyroscopeAgent, ThreadId};
 use std::sync::Mutex;
 
@@ -11,7 +11,7 @@ pub enum Signal {
     RemoveThreadTag(ThreadId, Tag),
 }
 
-static RUNNING_AGENT: Mutex<Option<PyroscopeAgent<PyroscopeAgentRunning>>> = Mutex::new(None);
+static RUNNING_AGENT: Mutex<Option<PyroscopeAgent>> = Mutex::new(None);
 
 pub fn run(agent: PyroscopeAgentBuilder) -> Result<()> {
     let mut guard = RUNNING_AGENT.lock()?;
@@ -19,7 +19,7 @@ pub fn run(agent: PyroscopeAgentBuilder) -> Result<()> {
         return Err(PyroscopeError::AgentAlreadyRunning);
     }
 
-    let agent = agent.build()?.start()?;
+    let agent = agent.build()?;
 
     *guard = Some(agent);
 
