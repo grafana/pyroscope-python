@@ -1,7 +1,7 @@
 use crate::{
     backend::{
         Backend, BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame,
-        StackTrace, ThreadTag, ThreadTagsSet,
+        StackTrace, ThreadTagsSet,
     },
     error::{PyroscopeError, Result},
 };
@@ -33,31 +33,23 @@ impl std::fmt::Debug for Pyspy {
 }
 
 impl Pyspy {
-    pub fn new(config: py_spy::config::Config, backend_config: BackendConfig) -> Self {
+    pub fn new(
+        config: py_spy::config::Config,
+        backend_config: BackendConfig,
+        ruleset: ThreadTagsSet,
+    ) -> Self {
         Pyspy {
             buffer: Arc::new(Mutex::new(StackBuffer::default())),
             config,
             backend_config,
             sampler_thread: None,
             running: Arc::new(AtomicBool::new(false)),
-            ruleset: ThreadTagsSet::new(),
+            ruleset,
         }
     }
 }
 
 impl Backend for Pyspy {
-    fn add_tag(&self, rule: ThreadTag) -> Result<()> {
-        self.ruleset.add(rule)?;
-
-        Ok(())
-    }
-
-    fn remove_tag(&self, rule: ThreadTag) -> Result<()> {
-        self.ruleset.remove(rule)?;
-
-        Ok(())
-    }
-
     fn initialize(&mut self) -> Result<()> {
         if self.config.pid.is_none() {
             return Err(PyroscopeError::new("Pyspy: No Process ID Specified"));
