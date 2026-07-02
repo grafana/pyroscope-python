@@ -362,7 +362,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
 
 impl PyroscopeAgent<PyroscopeAgentRunning> {
 
-    pub fn stop(mut self) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
+    pub fn stop(mut self) -> Result<()> {
         log::debug!(target: LOG_TAG, "Stopping");
         // get tx and send termination signal
         if let Some(sender) = self.tx.take() {
@@ -378,8 +378,8 @@ impl PyroscopeAgent<PyroscopeAgentRunning> {
         let pair = Arc::clone(&self.running);
         let (lock, cvar) = &*pair;
         let _guard = cvar.wait_while(lock.lock()?, |running| *running)?;
-        // todo shutdown
-        Ok(self.transition())
+        self.shutdown();
+        Ok(())
     }
 
     #[allow(clippy::type_complexity)]
