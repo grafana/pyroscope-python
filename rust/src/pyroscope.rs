@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    marker::PhantomData,
     sync::{
         Arc, Condvar, Mutex,
         mpsc::{self, Sender},
@@ -145,7 +144,7 @@ impl PyroscopeAgentBuilder {
         }
     }
 
-    pub fn build(self) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
+    pub fn build(self) -> Result<PyroscopeAgent> {
         let config = self.config;
 
         // Set Global Tags
@@ -165,8 +164,7 @@ impl PyroscopeAgentBuilder {
         let session_manager = SessionManager::new()?;
         log::trace!(target: LOG_TAG, "SessionManager initialized");
 
-        // Return PyroscopeAgent
-        Ok(PyroscopeAgent {
+        PyroscopeAgent {
             backend,
             config,
             timer,
@@ -178,35 +176,14 @@ impl PyroscopeAgentBuilder {
                 Mutex::new(false),
                 Condvar::new(),
             )),
-            _state: PhantomData,
             ruleset: self.ruleset,
-        })
+        }
+        .start()
     }
 }
 
-/// This trait is used to encode the state of the agent.
-pub trait PyroscopeAgentState {}
-
-/// Marker struct for an Uninitialized state.
-#[derive(Debug)]
-pub struct PyroscopeAgentBare;
-
-/// Marker struct for a Ready state.
-#[derive(Debug)]
-pub struct PyroscopeAgentReady;
-
-/// Marker struct for a Running state.
-#[derive(Debug)]
-pub struct PyroscopeAgentRunning;
-
-impl PyroscopeAgentState for PyroscopeAgentBare {}
-
-impl PyroscopeAgentState for PyroscopeAgentReady {}
-
-impl PyroscopeAgentState for PyroscopeAgentRunning {}
-
 /// PyroscopeAgent is the main object of the library. It is used to start and stop the profiler, schedule the timer, and send the profiler data to the server.
-pub struct PyroscopeAgent<S: PyroscopeAgentState> {
+pub struct PyroscopeAgent {
     /// Instance of the Timer
     timer: Timer,
     /// Instance of the SessionManager
@@ -221,30 +198,11 @@ pub struct PyroscopeAgent<S: PyroscopeAgentState> {
     pub backend: Pyspy,
     /// Configuration Object
     pub config: PyroscopeConfig,
-    /// PyroscopeAgent State
-    _state: PhantomData<S>,
 
     ruleset: ThreadTagsSet,
 }
 
-impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
-    /// Transition the PyroscopeAgent to a new state.
-    fn transition<D: PyroscopeAgentState>(self) -> PyroscopeAgent<D> {
-        PyroscopeAgent {
-            timer: self.timer,
-            session_manager: self.session_manager,
-            tx: self.tx,
-            handle: self.handle,
-            running: self.running,
-            backend: self.backend,
-            config: self.config,
-            _state: PhantomData,
-            ruleset: self.ruleset,
-        }
-    }
-}
-
-impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
+impl PyroscopeAgent {
     /// Properly shutdown the agent.
     pub fn shutdown(mut self) {
         log::debug!(target: LOG_TAG, "PyroscopeAgent::drop()");
@@ -297,7 +255,7 @@ impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
     }
 }
 
-impl PyroscopeAgent<PyroscopeAgentReady> {
+impl PyroscopeAgent {
     /// Start profiling and sending data. The agent will keep running until stopped. The agent will send data to the server every 10s seconds.
     ///
     /// # Example
@@ -310,7 +268,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn start(mut self) -> Result<PyroscopeAgent<PyroscopeAgentRunning>> {
+    fn start(mut self) -> Result<PyroscopeAgent> {
         log::debug!(target: LOG_TAG, "Starting");
 
         let reporter = self.backend.reporter();
@@ -384,11 +342,11 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
             Ok(())
         }));
 
-        Ok(self.transition())
+        Ok(self)
     }
 }
 
-impl PyroscopeAgent<PyroscopeAgentRunning> {
+impl PyroscopeAgent {
     /// Stop the agent. The agent will stop profiling and send a last report to the server.
     ///
     /// # Example
