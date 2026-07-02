@@ -1,6 +1,6 @@
 use crate::{
     backend::{
-        Backend, BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame,
+        BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame,
         StackTrace, ThreadTagsSet,
     },
     error::{PyroscopeError, Result},
@@ -26,10 +26,8 @@ pub struct Pyspy {
     ruleset: ThreadTagsSet,
 }
 
-impl std::fmt::Debug for Pyspy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Pyspy Backend")
-    }
+pub struct Reporter {
+    buffer: Arc<Mutex<StackBuffer>>,
 }
 
 impl Pyspy {
@@ -48,6 +46,12 @@ impl Pyspy {
         };
         res.initialize()?;
         Ok(res)
+    }
+
+    pub fn reporter(&self) -> Reporter {
+        Reporter{
+            buffer: self.buffer.clone(),
+        }
     }
 }
 
@@ -102,9 +106,8 @@ impl Pyspy {
 
         Ok(())
     }
-}
-impl Backend for Pyspy {
-    fn shutdown(self: Box<Self>) -> Result<()> {
+
+    pub fn shutdown(self) -> Result<()> {
         log::trace!(target: LOG_TAG, "Shutting down sampler thread");
 
         self.running.store(false, Ordering::Relaxed);
@@ -116,8 +119,10 @@ impl Backend for Pyspy {
 
         Ok(())
     }
+}
 
-    fn report(&mut self) -> Result<ReportBatch> {
+impl Reporter {
+    pub fn report(&self) -> Result<ReportBatch> {
         let report: StackBuffer = self.buffer.lock()?.deref().to_owned();
         let reports: Vec<Report> = report.into();
 

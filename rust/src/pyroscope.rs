@@ -10,14 +10,14 @@ use std::{
 
 use crate::{
     PyroscopeError,
-    backend::{BackendReady, Tag},
+    backend::Tag,
     error::Result,
     session::{Session, SessionManager, SessionSignal},
     timer::{Timer, TimerSignal},
     utils::get_time_range,
 };
 
-use crate::backend::{BackendConfig, BackendImpl, ThreadTag, ThreadTagsSet};
+use crate::backend::{BackendConfig, ThreadTag, ThreadTagsSet};
 use crate::pyspy_backend::Pyspy;
 
 const LOG_TAG: &str = "Pyroscope::Agent";
@@ -140,14 +140,8 @@ impl PyroscopeAgentBuilder {
     pub fn build(self) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
         let config = self.config;
 
-        let backend = Pyspy::new(
-            self.pyspy_config,
-            self.backend_config,
-            self.ruleset.clone(),
-        )?;
-        let backend = BackendImpl::new(Box::new(backend));
+        let backend = Pyspy::new(self.pyspy_config, self.backend_config, self.ruleset.clone())?;
 
-        let backend_ready = backend.initialize();
         log::trace!(target: LOG_TAG, "Backend initialized");
 
         // Start the Timer
@@ -160,7 +154,7 @@ impl PyroscopeAgentBuilder {
 
         // Return PyroscopeAgent
         Ok(PyroscopeAgent {
-            backend: backend_ready,
+            backend,
             config,
             timer,
             session_manager,
@@ -211,7 +205,7 @@ pub struct PyroscopeAgent<S: PyroscopeAgentState> {
     /// A structure to signal thread termination
     running: Arc<(Mutex<bool>, Condvar)>,
     /// Profiler backend
-    pub backend: BackendImpl<BackendReady>,
+    pub backend: Pyspy,
     /// Configuration Object
     pub config: PyroscopeConfig,
     /// PyroscopeAgent State
@@ -295,7 +289,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
         log::debug!(target: LOG_TAG, "Starting");
 
         // Create a clone of Backend
-        let backend = Arc::clone(&self.backend.backend);
+        let reporter = self.backend.reporter();
         // Call start()
 
         // set running to true
@@ -338,16 +332,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
 
                         log::trace!(target: LOG_TAG, "Sending session {until}");
 
-                        // Generate report from backend
-                        let report = backend
-                            .lock()?
-                            .as_mut()
-                            .ok_or_else(|| {
-                                PyroscopeError::AdHoc(
-                                    "PyroscopeAgent - Failed to unwrap backend".to_string(),
-                                )
-                            })?
-                            .report()?;
+                        let report = reporter.report()?;
 
                         batch.push(report);
 
@@ -381,7 +366,6 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
 }
 
 impl PyroscopeAgent<PyroscopeAgentRunning> {
-
     pub fn stop(mut self) -> Result<()> {
         log::debug!(target: LOG_TAG, "Stopping");
         // get tx and send termination signal
