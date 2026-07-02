@@ -84,14 +84,6 @@ impl PyroscopeConfig {
         }
     }
 
-    /// Set the tags.
-    ///
-    /// # Example
-    /// ```
-    /// use pyroscope::pyroscope::PyroscopeConfig;
-    /// let config = PyroscopeConfig::new("http://localhost:8080", "my-app", 100, "pyroscope-rs", "0.1.0")
-    ///    .tags(vec![("env", "dev")]);
-    /// ```
     pub fn tags(self, tags: Vec<(&str, &str)>) -> Self {
         // Convert &[(&str, &str)] to HashMap(String, String)
         let tags_hashmap: HashMap<String, String> = tags
@@ -122,22 +114,6 @@ impl PyroscopeConfig {
     }
 }
 
-/// PyroscopeAgent Builder
-///
-/// # Example
-/// ```no_run
-/// use pyroscope::pyroscope::PyroscopeAgentBuilder;
-/// use pyroscope::backend::{pprof_backend, PprofConfig, BackendConfig};
-///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let agent = PyroscopeAgentBuilder::new(
-///     "http://localhost:8080", "my-app", 100, "pyroscope-rs", "0.1.0",
-///     pprof_backend(PprofConfig::default(), BackendConfig::default()),
-/// )
-/// .build()?;
-/// # Ok(())
-/// # }
-/// ```
 pub struct PyroscopeAgentBuilder {
     /// Profiler backend
     backend: BackendImpl<BackendUninitialized>,
@@ -152,11 +128,6 @@ impl PyroscopeAgentBuilder {
 
     pub fn build(self) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
         let config = self.config;
-
-        // Set Global Tags
-        // for (key, value) in config.tags.iter() {
-        // todo!("implement")
-        // }
 
         // Initialize the Backend
         let backend_ready = self.backend.initialize()?;
@@ -299,18 +270,7 @@ impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
 }
 
 impl PyroscopeAgent<PyroscopeAgentReady> {
-    /// Start profiling and sending data. The agent will keep running until stopped. The agent will send data to the server every 10s seconds.
-    ///
-    /// # Example
-    /// ```no_run
-    /// # use pyroscope::pyroscope::PyroscopeAgentBuilder;
-    /// # use pyroscope::backend::{pprof_backend, PprofConfig, BackendConfig};
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let agent = PyroscopeAgentBuilder::new("http://localhost:4040", "my-app", 100, "pyroscope-rs", "0.1.0", pprof_backend(PprofConfig::default(), BackendConfig::default())).build()?;
-    /// let agent_running = agent.start()?;
-    /// # Ok(())
-    /// # }
-    /// ```
+
     pub fn start(mut self) -> Result<PyroscopeAgent<PyroscopeAgentRunning>> {
         log::debug!(target: LOG_TAG, "Starting");
 
@@ -401,19 +361,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
 }
 
 impl PyroscopeAgent<PyroscopeAgentRunning> {
-    /// Stop the agent. The agent will stop profiling and send a last report to the server.
-    ///
-    /// # Example
-    /// ```no_run
-    /// # use pyroscope::pyroscope::PyroscopeAgentBuilder;
-    /// # use pyroscope::backend::{pprof_backend, PprofConfig, BackendConfig};
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let agent = PyroscopeAgentBuilder::new("http://localhost:4040", "my-app", 100, "pyroscope-rs", "0.1.0", pprof_backend(PprofConfig::default(), BackendConfig::default())).build()?;
-    /// # let agent_running = agent.start()?;
-    /// let agent_ready = agent_running.stop()?;
-    /// # Ok(())
-    /// # }
-    /// ```
+
     pub fn stop(mut self) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
         log::debug!(target: LOG_TAG, "Stopping");
         // get tx and send termination signal
@@ -430,33 +378,10 @@ impl PyroscopeAgent<PyroscopeAgentRunning> {
         let pair = Arc::clone(&self.running);
         let (lock, cvar) = &*pair;
         let _guard = cvar.wait_while(lock.lock()?, |running| *running)?;
-
+        // todo shutdown
         Ok(self.transition())
     }
 
-    /// Return a tuple of functions to add and remove tags to the agent across
-    /// thread boundaries. This function can be called multiple times.
-    ///
-    /// # Example
-    /// ```no_run
-    /// # use pyroscope::pyroscope::PyroscopeAgentBuilder;
-    /// # use pyroscope::backend::{pprof_backend, PprofConfig, BackendConfig};
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let agent = PyroscopeAgentBuilder::new("http://localhost:4040", "my-app", 100, "pyroscope-rs", "0.1.0", pprof_backend(PprofConfig::default(), BackendConfig::default())).build()?;
-    /// # let agent_running = agent.start()?;
-    /// let (add_tag, remove_tag) = agent_running.tag_wrapper();
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// The functions can be later called from any thread.
-    ///
-    /// # Example
-    /// ```ignore
-    /// add_tag("key".to_string(), "value".to_string());
-    /// // some computation
-    /// remove_tag("key".to_string(), "value".to_string());
-    /// ```
     #[allow(clippy::type_complexity)]
     pub fn tag_wrapper(
         &self,

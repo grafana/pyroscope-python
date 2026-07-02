@@ -114,10 +114,12 @@ impl Session {
             let raw_profile = match data {
                 ReportData::RawPprof(pprof_bytes) => pprof_bytes,
                 ReportData::Reports(reports) => {
+                    log::debug!(target: LOG_TAG, " reports {}", reports.len());
                     pprof::encode(reports, self.config.sample_rate, self.time_range.clone())
                         .encode_to_vec()
                 }
             };
+            log::debug!(target: LOG_TAG, " raw {}", raw_profile.len());
 
             let mut labels: Vec<LabelPair> = Vec::with_capacity(2 + self.config.tags.len());
             labels.push(LabelPair {

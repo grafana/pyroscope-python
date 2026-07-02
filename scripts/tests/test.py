@@ -5,7 +5,7 @@ import threading
 import logging
 import time
 import traceback
-import sys
+import argparse
 import multiprocessing
 
 import pyroscope
@@ -121,10 +121,37 @@ def do_one_test(on_cpu, gil_only):
 
 
 if __name__ == '__main__':
-    do_multiprocessing = True
-    logger.setLevel(logging.INFO)
-    multiprocessing.log_to_stderr(logging.INFO)
-    if do_multiprocessing:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--multiprocessing',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help='run all on_cpu/gil_only combinations in parallel (default: true)',
+    )
+    parser.add_argument(
+        '--on-cpu',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help='enable on-CPU profiling (single-test mode only)',
+    )
+    parser.add_argument(
+        '--gil-only',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help='profile GIL-only (single-test mode only)',
+    )
+    parser.add_argument(
+        '--log-level',
+        default='INFO',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        help='logging level (default: INFO)',
+    )
+    args = parser.parse_args()
+
+    log_level = getattr(logging, args.log_level)
+    logger.setLevel(log_level)
+    multiprocessing.log_to_stderr(log_level)
+    if args.multiprocessing:
         procs = []
         res = []
         for on_cpu in [True, False]:
@@ -142,6 +169,4 @@ if __name__ == '__main__':
                 logging.info("test failed %s", str(t))
                 exit(1)
     else:
-        on_cpu = sys.argv[1] == "true"
-        gil_only = sys.argv[2] == "true"
-        do_one_test(on_cpu, gil_only)
+        do_one_test(args.on_cpu, args.gil_only)
