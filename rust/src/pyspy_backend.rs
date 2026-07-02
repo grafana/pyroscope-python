@@ -17,14 +17,13 @@ use std::{
 
 const LOG_TAG: &str = "Pyroscope::Pyspy";
 
-#[derive(Default)]
 pub struct Pyspy {
     buffer: Arc<Mutex<StackBuffer>>,
     config: py_spy::config::Config,
     backend_config: BackendConfig,
     sampler_thread: Option<JoinHandle<Result<()>>>,
     running: Arc<AtomicBool>,
-    ruleset: Arc<Mutex<ThreadTagsSet>>,
+    ruleset: ThreadTagsSet,
 }
 
 impl std::fmt::Debug for Pyspy {
@@ -41,20 +40,20 @@ impl Pyspy {
             backend_config,
             sampler_thread: None,
             running: Arc::new(AtomicBool::new(false)),
-            ruleset: Arc::new(Mutex::new(ThreadTagsSet::default())),
+            ruleset: ThreadTagsSet::new(),
         }
     }
 }
 
 impl Backend for Pyspy {
     fn add_tag(&self, rule: ThreadTag) -> Result<()> {
-        self.ruleset.lock()?.add(rule)?;
+        self.ruleset.add(rule)?;
 
         Ok(())
     }
 
     fn remove_tag(&self, rule: ThreadTag) -> Result<()> {
-        self.ruleset.lock()?.remove(rule)?;
+        self.ruleset.remove(rule)?;
 
         Ok(())
     }
@@ -98,7 +97,7 @@ impl Backend for Pyspy {
                     let own_trace: StackTrace =
                         Into::<StackTraceWrapper>::into((trace.clone(), &backend_config)).into();
 
-                    let stacktrace = own_trace.add_tag_rules(&*ruleset.lock()?);
+                    let stacktrace = own_trace.add_tag_rules(&ruleset);
 
                     buffer.lock()?.record(stacktrace)?;
                 }
