@@ -17,7 +17,7 @@ use crate::{
     utils::get_time_range,
 };
 
-use crate::backend::{BackendImpl, ThreadTag};
+use crate::backend::{BackendImpl, ThreadTag, ThreadTagsSet};
 
 const LOG_TAG: &str = "Pyroscope::Agent";
 #[derive(Clone)]
@@ -119,11 +119,20 @@ pub struct PyroscopeAgentBuilder {
     backend: BackendImpl<BackendUninitialized>,
     /// Configuration Object
     config: PyroscopeConfig,
+    ruleset: ThreadTagsSet,
 }
 
 impl PyroscopeAgentBuilder {
-    pub fn new(config: PyroscopeConfig, backend: BackendImpl<BackendUninitialized>) -> Self {
-        Self { backend, config }
+    pub fn new(
+        config: PyroscopeConfig,
+        backend: BackendImpl<BackendUninitialized>,
+        ruleset: ThreadTagsSet,
+    ) -> Self {
+        Self {
+            backend,
+            config,
+            ruleset,
+        }
     }
 
     pub fn build(self) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
@@ -155,6 +164,7 @@ impl PyroscopeAgentBuilder {
                 Condvar::new(),
             )),
             _state: PhantomData,
+            ruleset: self.ruleset,
         })
     }
 }
@@ -198,6 +208,8 @@ pub struct PyroscopeAgent<S: PyroscopeAgentState> {
     pub config: PyroscopeConfig,
     /// PyroscopeAgent State
     _state: PhantomData<S>,
+
+    ruleset: ThreadTagsSet,
 }
 
 impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
@@ -212,6 +224,7 @@ impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
             backend: self.backend,
             config: self.config,
             _state: PhantomData,
+            ruleset: self.ruleset,
         }
     }
 }
@@ -386,7 +399,7 @@ impl PyroscopeAgent<PyroscopeAgentRunning> {
     /// recommended to use the `tag_wrapper` function.
     pub fn add_thread_tag(&self, thread_id: crate::utils::ThreadId, tag: Tag) -> Result<()> {
         let rule = ThreadTag::new(thread_id, tag);
-        self.backend.add_tag(rule)?;
+        self.ruleset.add(rule)?;
 
         Ok(())
     }
@@ -395,7 +408,7 @@ impl PyroscopeAgent<PyroscopeAgentRunning> {
     /// recommended to use the `tag_wrapper` function.
     pub fn remove_thread_tag(&self, thread_id: crate::utils::ThreadId, tag: Tag) -> Result<()> {
         let rule = ThreadTag::new(thread_id, tag);
-        self.backend.remove_tag(rule)?;
+        self.ruleset.remove(rule)?;
 
         Ok(())
     }

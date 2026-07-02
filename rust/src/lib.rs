@@ -16,7 +16,7 @@ mod utils;
 pub use utils::ThreadId;
 pub mod ffikit;
 
-use crate::backend::{BackendConfig, BackendImpl, Tag};
+use crate::backend::{BackendConfig, BackendImpl, Tag, ThreadTagsSet};
 use crate::pyroscope::PyroscopeAgentBuilder;
 use crate::pyspy_backend::Pyspy;
 use std::ffi::CStr;
@@ -136,8 +136,13 @@ pub unsafe extern "C" fn initialize_agent(
 
     let tags_ref = tags_string.as_str();
     let tags = string_to_tags(tags_ref);
+    let dynamic_tags = ThreadTagsSet::new();
 
-    let pyspy = BackendImpl::new(Box::new(Pyspy::new(config, backend_config)));
+    let pyspy = BackendImpl::new(Box::new(Pyspy::new(
+        config,
+        backend_config,
+        dynamic_tags.clone(),
+    )));
 
     let mut agent_builder = pyroscope::PyroscopeConfig::new(
         server_address,
@@ -178,7 +183,12 @@ pub unsafe extern "C" fn initialize_agent(
     }
 
     // mem::start(&pyroscope_config.mem_config);
-    ffikit::run(PyroscopeAgentBuilder::new(agent_builder, pyspy)).is_ok()
+    ffikit::run(PyroscopeAgentBuilder::new(
+        agent_builder,
+        pyspy,
+        dynamic_tags,
+    ))
+    .is_ok()
 }
 
 #[unsafe(no_mangle)]
