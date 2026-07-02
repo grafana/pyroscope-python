@@ -10,14 +10,15 @@ use std::{
 
 use crate::{
     PyroscopeError,
-    backend::{BackendReady, BackendUninitialized, Tag},
+    backend::{BackendReady, Tag},
     error::Result,
     session::{Session, SessionManager, SessionSignal},
     timer::{Timer, TimerSignal},
     utils::get_time_range,
 };
 
-use crate::backend::{BackendImpl, ThreadTag, ThreadTagsSet};
+use crate::backend::{BackendConfig, BackendImpl, ThreadTag, ThreadTagsSet};
+use crate::pyspy_backend::Pyspy;
 
 const LOG_TAG: &str = "Pyroscope::Agent";
 #[derive(Clone)]
@@ -115,22 +116,23 @@ impl PyroscopeConfig {
 }
 
 pub struct PyroscopeAgentBuilder {
-    /// Profiler backend
-    backend: BackendImpl<BackendUninitialized>,
-    /// Configuration Object
     config: PyroscopeConfig,
+    pyspy_config: py_spy::config::Config,
+    backend_config: BackendConfig,
     ruleset: ThreadTagsSet,
 }
 
 impl PyroscopeAgentBuilder {
     pub fn new(
         config: PyroscopeConfig,
-        backend: BackendImpl<BackendUninitialized>,
+        pyspy_config: py_spy::config::Config,
+        backend_config: BackendConfig,
         ruleset: ThreadTagsSet,
     ) -> Self {
         Self {
-            backend,
             config,
+            pyspy_config,
+            backend_config,
             ruleset,
         }
     }
@@ -138,8 +140,14 @@ impl PyroscopeAgentBuilder {
     pub fn build(self) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
         let config = self.config;
 
+        let backend = BackendImpl::new(Box::new(Pyspy::new(
+            self.pyspy_config,
+            self.backend_config,
+            self.ruleset.clone(),
+        )));
+
         // Initialize the Backend
-        let backend_ready = self.backend.initialize()?;
+        let backend_ready = backend.initialize()?;
         log::trace!(target: LOG_TAG, "Backend initialized");
 
         // Start the Timer
@@ -283,7 +291,6 @@ impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
 }
 
 impl PyroscopeAgent<PyroscopeAgentReady> {
-
     pub fn start(mut self) -> Result<PyroscopeAgent<PyroscopeAgentRunning>> {
         log::debug!(target: LOG_TAG, "Starting");
 
