@@ -382,52 +382,6 @@ impl PyroscopeAgent<PyroscopeAgentRunning> {
         Ok(())
     }
 
-    #[allow(clippy::type_complexity)]
-    pub fn tag_wrapper(
-        &self,
-    ) -> (
-        impl Fn(String, String) -> Result<()>,
-        impl Fn(String, String) -> Result<()>,
-    ) {
-        let backend_add = self.backend.backend.clone();
-        let backend_remove = self.backend.backend.clone();
-
-        (
-            move |key, value| {
-                // https://github.com/tikv/pprof-rs/blob/01cff82dbe6fe110a707bf2b38d8ebb1d14a18f8/src/profiler.rs#L405
-                let thread_id = crate::utils::ThreadId::pthread_self();
-                let rule = ThreadTag::new(thread_id, Tag::new(key, value));
-                let backend = backend_add.lock()?;
-                backend
-                    .as_ref()
-                    .ok_or_else(|| {
-                        PyroscopeError::AdHoc(
-                            "PyroscopeAgent - Failed to unwrap backend".to_string(),
-                        )
-                    })?
-                    .add_tag(rule)?;
-
-                Ok(())
-            },
-            move |key, value| {
-                // https://github.com/tikv/pprof-rs/blob/01cff82dbe6fe110a707bf2b38d8ebb1d14a18f8/src/profiler.rs#L405
-                let thread_id = crate::utils::ThreadId::pthread_self();
-                let rule = ThreadTag::new(thread_id, Tag::new(key, value));
-                let backend = backend_remove.lock()?;
-                backend
-                    .as_ref()
-                    .ok_or_else(|| {
-                        PyroscopeError::AdHoc(
-                            "PyroscopeAgent - Failed to unwrap backend".to_string(),
-                        )
-                    })?
-                    .remove_tag(rule)?;
-
-                Ok(())
-            },
-        )
-    }
-
     /// Add a thread Tag rule to the backend Ruleset. For tagging, it's
     /// recommended to use the `tag_wrapper` function.
     pub fn add_thread_tag(&self, thread_id: crate::utils::ThreadId, tag: Tag) -> Result<()> {
