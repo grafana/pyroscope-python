@@ -1,7 +1,7 @@
 use crate::{
     backend::{
-        Backend, BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame,
-        StackTrace, ThreadTagsSet,
+        BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame, StackTrace,
+        ThreadTagsSet,
     },
     error::{PyroscopeError, Result},
 };
@@ -26,10 +26,8 @@ pub struct Pyspy {
     ruleset: ThreadTagsSet,
 }
 
-impl std::fmt::Debug for Pyspy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Pyspy Backend")
-    }
+pub struct Reporter {
+    buffer: Arc<Mutex<StackBuffer>>,
 }
 
 impl Pyspy {
@@ -37,19 +35,27 @@ impl Pyspy {
         config: py_spy::config::Config,
         backend_config: BackendConfig,
         ruleset: ThreadTagsSet,
-    ) -> Self {
-        Pyspy {
+    ) -> Result<Self> {
+        let mut res = Pyspy {
             buffer: Arc::new(Mutex::new(StackBuffer::default())),
             config,
             backend_config,
             sampler_thread: None,
             running: Arc::new(AtomicBool::new(false)),
             ruleset,
+        };
+        res.initialize()?;
+        Ok(res)
+    }
+
+    pub fn reporter(&self) -> Reporter {
+        Reporter {
+            buffer: self.buffer.clone(),
         }
     }
 }
 
-impl Backend for Pyspy {
+impl Pyspy {
     fn initialize(&mut self) -> Result<()> {
         if self.config.pid.is_none() {
             return Err(PyroscopeError::new("Pyspy: No Process ID Specified"));
@@ -101,7 +107,7 @@ impl Backend for Pyspy {
         Ok(())
     }
 
-    fn shutdown(self: Box<Self>) -> Result<()> {
+    pub fn shutdown(self) -> Result<()> {
         log::trace!(target: LOG_TAG, "Shutting down sampler thread");
 
         self.running.store(false, Ordering::Relaxed);
@@ -113,8 +119,10 @@ impl Backend for Pyspy {
 
         Ok(())
     }
+}
 
-    fn report(&mut self) -> Result<ReportBatch> {
+impl Reporter {
+    pub fn report(&self) -> Result<ReportBatch> {
         let report: StackBuffer = self.buffer.lock()?.deref().to_owned();
         let reports: Vec<Report> = report.into();
 

@@ -10,14 +10,15 @@ use std::{
 
 use crate::{
     PyroscopeError,
-    backend::{BackendReady, BackendUninitialized, Tag},
+    backend::Tag,
     error::Result,
     session::{Session, SessionManager, SessionSignal},
     timer::{Timer, TimerSignal},
     utils::get_time_range,
 };
 
-use crate::backend::{BackendImpl, ThreadTag, ThreadTagsSet};
+use crate::backend::{BackendConfig, ThreadTag, ThreadTagsSet};
+use crate::pyspy_backend::Pyspy;
 
 const LOG_TAG: &str = "Pyroscope::Agent";
 #[derive(Clone)]
@@ -122,39 +123,24 @@ impl PyroscopeConfig {
     }
 }
 
-/// PyroscopeAgent Builder
-///
-/// # Example
-/// ```no_run
-/// use pyroscope::pyroscope::PyroscopeAgentBuilder;
-/// use pyroscope::backend::{pprof_backend, PprofConfig, BackendConfig};
-///
-/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// let agent = PyroscopeAgentBuilder::new(
-///     "http://localhost:8080", "my-app", 100, "pyroscope-rs", "0.1.0",
-///     pprof_backend(PprofConfig::default(), BackendConfig::default()),
-/// )
-/// .build()?;
-/// # Ok(())
-/// # }
-/// ```
 pub struct PyroscopeAgentBuilder {
-    /// Profiler backend
-    backend: BackendImpl<BackendUninitialized>,
-    /// Configuration Object
     config: PyroscopeConfig,
+    pyspy_config: py_spy::config::Config,
+    backend_config: BackendConfig,
     ruleset: ThreadTagsSet,
 }
 
 impl PyroscopeAgentBuilder {
     pub fn new(
         config: PyroscopeConfig,
-        backend: BackendImpl<BackendUninitialized>,
+        pyspy_config: py_spy::config::Config,
+        backend_config: BackendConfig,
         ruleset: ThreadTagsSet,
     ) -> Self {
         Self {
-            backend,
             config,
+            pyspy_config,
+            backend_config,
             ruleset,
         }
     }
@@ -167,8 +153,8 @@ impl PyroscopeAgentBuilder {
         // todo!("implement")
         // }
 
-        // Initialize the Backend
-        let backend_ready = self.backend.initialize()?;
+        let backend = Pyspy::new(self.pyspy_config, self.backend_config, self.ruleset.clone())?;
+
         log::trace!(target: LOG_TAG, "Backend initialized");
 
         // Start the Timer
@@ -181,7 +167,7 @@ impl PyroscopeAgentBuilder {
 
         // Return PyroscopeAgent
         Ok(PyroscopeAgent {
-            backend: backend_ready,
+            backend,
             config,
             timer,
             session_manager,
@@ -232,7 +218,7 @@ pub struct PyroscopeAgent<S: PyroscopeAgentState> {
     /// A structure to signal thread termination
     running: Arc<(Mutex<bool>, Condvar)>,
     /// Profiler backend
-    pub backend: BackendImpl<BackendReady>,
+    pub backend: Pyspy,
     /// Configuration Object
     pub config: PyroscopeConfig,
     /// PyroscopeAgent State
@@ -327,9 +313,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
     pub fn start(mut self) -> Result<PyroscopeAgent<PyroscopeAgentRunning>> {
         log::debug!(target: LOG_TAG, "Starting");
 
-        // Create a clone of Backend
-        let backend = Arc::clone(&self.backend.backend);
-        // Call start()
+        let reporter = self.backend.reporter();
 
         // set running to true
         let pair = Arc::clone(&self.running);
@@ -371,16 +355,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
 
                         log::trace!(target: LOG_TAG, "Sending session {until}");
 
-                        // Generate report from backend
-                        let report = backend
-                            .lock()?
-                            .as_mut()
-                            .ok_or_else(|| {
-                                PyroscopeError::AdHoc(
-                                    "PyroscopeAgent - Failed to unwrap backend".to_string(),
-                                )
-                            })?
-                            .report()?;
+                        let report = reporter.report()?;
 
                         batch.push(report);
 
