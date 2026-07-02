@@ -37,20 +37,21 @@ impl Pyspy {
         config: py_spy::config::Config,
         backend_config: BackendConfig,
         ruleset: ThreadTagsSet,
-    ) -> Self {
-        Pyspy {
+    ) -> Result<Self> {
+        let mut res = Pyspy {
             buffer: Arc::new(Mutex::new(StackBuffer::default())),
             config,
             backend_config,
             sampler_thread: None,
             running: Arc::new(AtomicBool::new(false)),
             ruleset,
-        }
+        };
+        res.initialize()?;
+        Ok(res)
     }
 }
 
-impl Backend for Pyspy {
-
+impl Pyspy {
     fn initialize(&mut self) -> Result<()> {
         if self.config.pid.is_none() {
             return Err(PyroscopeError::new("Pyspy: No Process ID Specified"));
@@ -101,7 +102,8 @@ impl Backend for Pyspy {
 
         Ok(())
     }
-
+}
+impl Backend for Pyspy {
     fn shutdown(self: Box<Self>) -> Result<()> {
         log::trace!(target: LOG_TAG, "Shutting down sampler thread");
 

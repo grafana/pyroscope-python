@@ -140,14 +140,14 @@ impl PyroscopeAgentBuilder {
     pub fn build(self) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
         let config = self.config;
 
-        let backend = BackendImpl::new(Box::new(Pyspy::new(
+        let backend = Pyspy::new(
             self.pyspy_config,
             self.backend_config,
             self.ruleset.clone(),
-        )));
+        )?;
+        let backend = BackendImpl::new(Box::new(backend));
 
-        // Initialize the Backend
-        let backend_ready = backend.initialize()?;
+        let backend_ready = backend.initialize();
         log::trace!(target: LOG_TAG, "Backend initialized");
 
         // Start the Timer

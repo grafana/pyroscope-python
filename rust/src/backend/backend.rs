@@ -18,9 +18,6 @@ pub struct BackendConfig {
 
 /// Backend Trait
 pub trait Backend: Send {
-    /// Initialize the backend.
-    fn initialize(&mut self) -> Result<()>;
-    /// Drop the backend.
     fn shutdown(self: Box<Self>) -> Result<()>;
     /// Generate profiling report
     fn report(&mut self) -> Result<ReportBatch>;
@@ -73,21 +70,14 @@ impl BackendImpl<BackendBare> {
 
 impl BackendImpl<BackendUninitialized> {
     /// Initialize the backend
-    pub fn initialize(self) -> Result<BackendImpl<BackendReady>> {
-        let backend = self.backend.clone();
-
-        // Initialize the backend
-        backend
-            .lock()?
-            .as_mut()
-            .ok_or(PyroscopeError::BackendImpl)?
-            .initialize()?;
-
-        // Transition to BackendReady
-        Ok(BackendImpl {
-            backend,
+    pub fn initialize(self) -> BackendImpl<BackendReady> {
+        // no-op, pyspy is initialized during creation,
+        // BackendImpl is to be removed once PyroscopeAgent
+        // uses Pyspy directly without BackendImpl -> Backend indirection
+        BackendImpl {
+            backend: self.backend,
             _state: std::marker::PhantomData,
-        })
+        }
     }
 }
 
