@@ -31,6 +31,11 @@ pub enum PyroscopeError {
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+
+    #[error("Agent not running")]
+    AgentNotRunning,
+    #[error("Agent already running")]
+    AgentAlreadyRunning,
 }
 
 impl PyroscopeError {
