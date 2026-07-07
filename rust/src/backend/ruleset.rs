@@ -63,10 +63,10 @@ impl StackTrace {
 
         if let Ok(rules) = other.rules.lock() {
             rules.iter().for_each(|rule| {
-                if let Some(stack_thread_id) = &self.thread_id {
-                    if rule.tid == *stack_thread_id {
-                        metadata.add_tag(rule.tag.clone());
-                    }
+                if let Some(stack_thread_id) = &self.thread_id
+                    && rule.tid == *stack_thread_id
+                {
+                    metadata.add_tag(rule.tag.clone());
                 }
             })
         }

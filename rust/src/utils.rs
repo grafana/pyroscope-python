@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::{error::Result, PyroscopeError};
+use crate::{PyroscopeError, error::Result};
 
 /// Error Wrapper for libc return. Only check for errors.
 pub fn check_err<T: Ord + Default>(num: T) -> Result<T> {
@@ -101,7 +101,7 @@ pub fn get_time_range(timestamp: u64) -> Result<TimeRange> {
 
 #[cfg(test)]
 mod get_time_range_tests {
-    use crate::utils::{get_time_range, TimeRange};
+    use crate::utils::{TimeRange, get_time_range};
 
     #[test]
     fn get_time_range_verify() {

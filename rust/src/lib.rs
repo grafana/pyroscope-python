@@ -26,7 +26,7 @@ const LOG_TAG: &str = "Pyroscope::pyspy::ffi";
 const PYSPY_NAME: &str = "pyspy";
 const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn initialize_logging(logging_level: u32) -> bool {
     // Force rustc to display the log messages in the console.
     match logging_level {
@@ -55,7 +55,7 @@ pub extern "C" fn initialize_logging(logging_level: u32) -> bool {
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// # Safety
 /// All pointer arguments must be valid, non-null, null-terminated C strings.
 pub unsafe extern "C" fn initialize_agent(
@@ -194,12 +194,12 @@ pub unsafe extern "C" fn initialize_agent(
     ffikit::run(PyroscopeAgentBuilder::new(agent_builder, pyspy)).is_ok()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn drop_agent() -> bool {
     ffikit::send(ffikit::Signal::Kill).is_ok()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// # Safety
 /// `key` and `value` must be valid, non-null, null-terminated C strings.
 pub unsafe extern "C" fn add_thread_tag(key: *const c_char, value: *const c_char) -> bool {
@@ -216,7 +216,7 @@ pub unsafe extern "C" fn add_thread_tag(key: *const c_char, value: *const c_char
     .is_ok()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 /// # Safety
 /// `key` and `value` must be valid, non-null, null-terminated C strings.
 pub unsafe extern "C" fn remove_thread_tag(key: *const c_char, value: *const c_char) -> bool {
