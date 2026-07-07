@@ -414,7 +414,7 @@ impl PyroscopeAgent<PyroscopeAgentRunning> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn stop(mut self) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
+    pub fn stop(mut self) -> Result<()> {
         log::debug!(target: LOG_TAG, "Stopping");
         // get tx and send termination signal
         if let Some(sender) = self.tx.take() {
@@ -430,8 +430,8 @@ impl PyroscopeAgent<PyroscopeAgentRunning> {
         let pair = Arc::clone(&self.running);
         let (lock, cvar) = &*pair;
         let _guard = cvar.wait_while(lock.lock()?, |running| *running)?;
-
-        Ok(self.transition())
+        self.shutdown();
+        Ok(())
     }
 
     /// Return a tuple of functions to add and remove tags to the agent across
