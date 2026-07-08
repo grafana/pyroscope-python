@@ -16,7 +16,7 @@ mod utils;
 pub use utils::ThreadId;
 pub mod ffikit;
 
-use crate::backend::{BackendConfig, BackendImpl, Tag};
+use crate::backend::{BackendConfig, BackendImpl, Tag, ThreadTagsSet};
 use crate::pyroscope::PyroscopeAgentBuilder;
 use crate::pyspy_backend::Pyspy;
 use pyo3::prelude::*;
@@ -105,8 +105,13 @@ fn initialize_agent(
 
     let tags_ref = tags.as_str();
     let tags = string_to_tags(tags_ref);
+    let dynamic_tags = ThreadTagsSet::new();
 
-    let pyspy = BackendImpl::new(Box::new(Pyspy::new(config, backend_config)));
+    let pyspy = BackendImpl::new(Box::new(Pyspy::new(
+        config,
+        backend_config,
+        dynamic_tags.clone(),
+    )));
 
     let mut agent_builder = pyroscope::PyroscopeConfig::new(
         server_address,
@@ -148,30 +153,27 @@ fn initialize_agent(
     }
 
     // mem::start(&pyroscope_config.mem_config);
-    ffikit::run(PyroscopeAgentBuilder::new(agent_builder, pyspy)).is_ok()
+    ffikit::run(PyroscopeAgentBuilder::new(
+        agent_builder,
+        pyspy,
+        dynamic_tags,
+    ))
+    .is_ok()
 }
 
 #[pyfunction]
 fn drop_agent() -> bool {
-    ffikit::send(ffikit::Signal::Kill).is_ok()
+    ffikit::stop().is_ok()
 }
 
 #[pyfunction]
 fn add_thread_tag(key: String, value: String) -> bool {
-    ffikit::send(ffikit::Signal::AddThreadTag(
-        self_thread_id(),
-        Tag { key, value },
-    ))
-    .is_ok()
+    ffikit::add_thread_tag(self_thread_id(), Tag { key, value }).is_ok()
 }
 
 #[pyfunction]
 fn remove_thread_tag(key: String, value: String) -> bool {
-    ffikit::send(ffikit::Signal::RemoveThreadTag(
-        self_thread_id(),
-        Tag { key, value },
-    ))
-    .is_ok()
+    ffikit::remove_thread_tag(self_thread_id(), Tag { key, value }).is_ok()
 }
 
 fn string_to_tags(tags: &str) -> Vec<(&str, &str)> {

@@ -1270,7 +1270,6 @@ name = "pyroscope_python_extension"
 version = "1.1.0"
 dependencies = [
  "hashbrown 0.17.1",
- "lazy_static",
  "libc",
  "libflate",
  "log",
