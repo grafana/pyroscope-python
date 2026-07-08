@@ -1,5 +1,3 @@
-python/pyroscope/__pycache__/
-python/pyroscope_io.egg-info/
 build/
 dist/
 
@@ -16,4 +14,4 @@ flamegraph.svg
 perf.data
 perf.data.*
 /cpp/cmake-build-*/
-python/pyroscope_io.egg-info/
+/python/pyroscope_io.egg-info/

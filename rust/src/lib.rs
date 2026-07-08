@@ -19,15 +19,19 @@ pub mod ffikit;
 use crate::backend::{BackendConfig, BackendImpl, Tag};
 use crate::pyroscope::PyroscopeAgentBuilder;
 use crate::pyspy_backend::Pyspy;
-use std::ffi::CStr;
-use std::os::raw::c_char;
-const LOG_TAG: &str = "Pyroscope::pyspy::ffi";
+use pyo3::prelude::*;
+use pyo3::wrap_pyfunction;
+const LOG_TAG: &str = "Pyroscope::pyspy::pyo3";
 
 const PYSPY_NAME: &str = "pyspy";
 const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[unsafe(no_mangle)]
-pub extern "C" fn initialize_logging(logging_level: u32) -> bool {
+const LAST_INSTRUCTION: u32 = LineNo::LastInstruction as u32;
+const FIRST: u32 = LineNo::First as u32;
+const NO_LINE: u32 = LineNo::NoLine as u32;
+
+#[pyfunction]
+fn initialize_logging(logging_level: u32) -> bool {
     // Force rustc to display the log messages in the console.
     match logging_level {
         50 => {
@@ -55,73 +59,26 @@ pub extern "C" fn initialize_logging(logging_level: u32) -> bool {
     true
 }
 
-#[unsafe(no_mangle)]
-/// # Safety
-/// All pointer arguments must be valid, non-null, null-terminated C strings.
-pub unsafe extern "C" fn initialize_agent(
-    application_name: *const c_char,
-    server_address: *const c_char,
-    basic_auth_username: *const c_char,
-    basic_auth_password: *const c_char,
+#[allow(clippy::too_many_arguments)]
+#[pyfunction]
+fn initialize_agent(
+    application_name: String,
+    server_address: String,
+    basic_auth_username: String,
+    basic_auth_password: String,
     sample_rate: u32,
     oncpu: bool,
     gil_only: bool,
     report_pid: bool,
     report_thread_id: bool,
     report_thread_name: bool,
-    runtime_name: *const c_char,
-    runtime_version: *const c_char,
-    tags: *const c_char,
-    tenant_id: *const c_char,
-    http_headers_json: *const c_char,
-    line_no: LineNo,
+    runtime_name: String,
+    runtime_version: String,
+    tags: String,
+    tenant_id: String,
+    http_headers_json: String,
+    line_no: u32,
 ) -> bool {
-    let application_name = unsafe { CStr::from_ptr(application_name) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let server_address = unsafe { CStr::from_ptr(server_address) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let basic_auth_username = unsafe { CStr::from_ptr(basic_auth_username) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let basic_auth_password = unsafe { CStr::from_ptr(basic_auth_password) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let runtime_name = unsafe { CStr::from_ptr(runtime_name) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let runtime_version = unsafe { CStr::from_ptr(runtime_version) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    // tags
-    let tags_string = unsafe { CStr::from_ptr(tags) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let tenant_id = unsafe { CStr::from_ptr(tenant_id) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let http_headers_json = unsafe { CStr::from_ptr(http_headers_json) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
     let pid = std::process::id();
 
     let backend_config = BackendConfig {
@@ -141,12 +98,12 @@ pub unsafe extern "C" fn initialize_agent(
         include_thread_ids: true,
         subprocesses: false,
         gil_only,
-        lineno: line_no.into(),
+        lineno: LineNo::from(line_no).into(),
         duration: py_spy::config::RecordDuration::Unlimited,
         ..py_spy::Config::default()
     };
 
-    let tags_ref = tags_string.as_str();
+    let tags_ref = tags.as_str();
     let tags = string_to_tags(tags_ref);
 
     let pyspy = BackendImpl::new(Box::new(Pyspy::new(config, backend_config)));
@@ -194,21 +151,13 @@ pub unsafe extern "C" fn initialize_agent(
     ffikit::run(PyroscopeAgentBuilder::new(agent_builder, pyspy)).is_ok()
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn drop_agent() -> bool {
+#[pyfunction]
+fn drop_agent() -> bool {
     ffikit::send(ffikit::Signal::Kill).is_ok()
 }
 
-#[unsafe(no_mangle)]
-/// # Safety
-/// `key` and `value` must be valid, non-null, null-terminated C strings.
-pub unsafe extern "C" fn add_thread_tag(key: *const c_char, value: *const c_char) -> bool {
-    let key = unsafe { CStr::from_ptr(key) }.to_str().unwrap().to_owned();
-    let value = unsafe { CStr::from_ptr(value) }
-        .to_str()
-        .unwrap()
-        .to_owned();
-
+#[pyfunction]
+fn add_thread_tag(key: String, value: String) -> bool {
     ffikit::send(ffikit::Signal::AddThreadTag(
         self_thread_id(),
         Tag { key, value },
@@ -216,16 +165,8 @@ pub unsafe extern "C" fn add_thread_tag(key: *const c_char, value: *const c_char
     .is_ok()
 }
 
-#[unsafe(no_mangle)]
-/// # Safety
-/// `key` and `value` must be valid, non-null, null-terminated C strings.
-pub unsafe extern "C" fn remove_thread_tag(key: *const c_char, value: *const c_char) -> bool {
-    let key = unsafe { CStr::from_ptr(key) }.to_str().unwrap().to_owned();
-    let value = unsafe { CStr::from_ptr(value) }
-        .to_str()
-        .unwrap()
-        .to_owned();
-
+#[pyfunction]
+fn remove_thread_tag(key: String, value: String) -> bool {
     ffikit::send(ffikit::Signal::RemoveThreadTag(
         self_thread_id(),
         Tag { key, value },
@@ -259,6 +200,16 @@ pub enum LineNo {
     NoLine = 2,
 }
 
+impl From<u32> for LineNo {
+    fn from(val: u32) -> Self {
+        match val {
+            FIRST => LineNo::First,
+            NO_LINE => LineNo::NoLine,
+            _ => LineNo::LastInstruction,
+        }
+    }
+}
+
 impl From<LineNo> for py_spy::config::LineNo {
     fn from(val: LineNo) -> Self {
         match val {
@@ -267,6 +218,19 @@ impl From<LineNo> for py_spy::config::LineNo {
             LineNo::NoLine => py_spy::config::LineNo::NoLine,
         }
     }
+}
+
+#[pymodule]
+fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("LastInstruction", LAST_INSTRUCTION)?;
+    m.add("First", FIRST)?;
+    m.add("NoLine", NO_LINE)?;
+    m.add_function(wrap_pyfunction!(initialize_logging, m)?)?;
+    m.add_function(wrap_pyfunction!(initialize_agent, m)?)?;
+    m.add_function(wrap_pyfunction!(drop_agent, m)?)?;
+    m.add_function(wrap_pyfunction!(add_thread_tag, m)?)?;
+    m.add_function(wrap_pyfunction!(remove_thread_tag, m)?)?;
+    Ok(())
 }
 
 pub fn self_thread_id() -> ThreadId {

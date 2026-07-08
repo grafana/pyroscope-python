@@ -4,9 +4,9 @@ from setuptools_rust import Binding, RustExtension
 setup(
     rust_extensions=[
         RustExtension(
-            "pyroscope_python_extension.pyroscope_python_extension",
+            "pyroscope._native",
             path="rust/Cargo.toml",
-            binding=Binding.NoBinding,
+            binding=Binding.PyO3,
             cargo_manifest_args=["--locked"],
         )
     ],

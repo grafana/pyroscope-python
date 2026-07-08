@@ -26,7 +26,7 @@ jobs:
           python-version: 3.11
       - run: cargo install cbindgen --locked --version 0.29.2
       - run: python -m pip install cffi
-      - run: make ffi/python/header ffi/python/cffi
+      - run: make ffi/python/header
       - run: git diff --exit-code
 
   python-linux-build:
@@ -58,10 +58,12 @@ jobs:
 
       - name: Check wheel tags
         run: |
-          whl=$(ls dist/*.whl)
-          echo "Wheel: $whl"
-          unzip -p "$whl" '*.dist-info/WHEEL'
-          unzip -p "$whl" '*.dist-info/WHEEL' | grep -qE 'Tag:.*(manylinux|musllinux)' || { echo "ERROR: expected manylinux or musllinux tag not found"; exit 1; }
+          set -euxo pipefail
+          for whl in dist/*.whl; do
+              echo "Wheel: $whl"
+              unzip -p "$whl" '*.dist-info/WHEEL'
+              unzip -p "$whl" '*.dist-info/WHEEL' | grep -qE 'Tag:.*(manylinux|musllinux)' || { echo "ERROR: expected manylinux or musllinux tag not found"; exit 1; }
+          done
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -117,7 +119,7 @@ jobs:
             --network=host \
             -v ${{ github.workspace }}:/pyroscope-python \
             python:${{ matrix.PYTHON_VERSION }}-${{ matrix.image-suffix }} \
-            sh -c "pip install /pyroscope-python/python/*.whl && python /pyroscope-python/scripts/tests/test.py"
+            sh -c "pip install --no-index --find-links /pyroscope-python/python pyroscope-io && python /pyroscope-python/scripts/tests/test.py"
 
   sdist-build:
     name: sdist

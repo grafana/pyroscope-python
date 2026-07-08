@@ -10,47 +10,31 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-typedef enum {
-  LastInstruction = 0,
-  First = 1,
-  NoLine = 2,
-} LineNo;
+typedef struct {
+  uint32_t index;
+} FFIInternedString;
 
-bool initialize_logging(uint32_t logging_level);
+typedef struct {
+  const char *data;
+  uintptr_t len;
+} FFIStringView;
 
-/*
- # Safety
- All pointer arguments must be valid, non-null, null-terminated C strings.
- */
-bool initialize_agent(const char *application_name,
-                      const char *server_address,
-                      const char *basic_auth_username,
-                      const char *basic_auth_password,
-                      uint32_t sample_rate,
-                      bool oncpu,
-                      bool gil_only,
-                      bool report_pid,
-                      bool report_thread_id,
-                      bool report_thread_name,
-                      const char *runtime_name,
-                      const char *runtime_version,
-                      const char *tags,
-                      const char *tenant_id,
-                      const char *http_headers_json,
-                      LineNo line_no);
+typedef struct {
+  FFIInternedString function_name;
+  FFIInternedString file_name;
+  int line;
+} FFIFrame;
 
-bool drop_agent(void);
+typedef struct {
+  uintptr_t heap_space;
+  uintptr_t alloc_space;
+  uintptr_t alloc_count;
+} FFIHeapSampleValues;
 
-/*
- # Safety
- `key` and `value` must be valid, non-null, null-terminated C strings.
- */
-bool add_thread_tag(const char *key, const char *value);
-
-/*
- # Safety
- `key` and `value` must be valid, non-null, null-terminated C strings.
- */
-bool remove_thread_tag(const char *key, const char *value);
+typedef struct {
+  const FFIFrame *frames;
+  uintptr_t len;
+  FFIHeapSampleValues values;
+} FFISample;
 
 #endif  /* PYROSCOPE_FFI_H_ */
