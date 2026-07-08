@@ -15,7 +15,7 @@ impl ThreadTag {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Clone, Default)]
 pub struct ThreadTagsSet {
     pub rules: Arc<Mutex<HashSet<ThreadTag>>>,
 }
