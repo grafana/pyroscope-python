@@ -206,7 +206,7 @@ pub unsafe extern "C" fn initialize_agent(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn drop_agent() -> bool {
-    ffikit::send(ffikit::Signal::Kill).is_ok()
+    ffikit::stop().is_ok()
 }
 
 #[unsafe(no_mangle)]
@@ -219,11 +219,7 @@ pub unsafe extern "C" fn add_thread_tag(key: *const c_char, value: *const c_char
         .unwrap()
         .to_owned();
 
-    ffikit::send(ffikit::Signal::AddThreadTag(
-        self_thread_id(),
-        Tag { key, value },
-    ))
-    .is_ok()
+    ffikit::add_thread_tag(self_thread_id(), Tag { key, value }).is_ok()
 }
 
 #[unsafe(no_mangle)]
@@ -236,11 +232,7 @@ pub unsafe extern "C" fn remove_thread_tag(key: *const c_char, value: *const c_c
         .unwrap()
         .to_owned();
 
-    ffikit::send(ffikit::Signal::RemoveThreadTag(
-        self_thread_id(),
-        Tag { key, value },
-    ))
-    .is_ok()
+    ffikit::remove_thread_tag(self_thread_id(), Tag { key, value }).is_ok()
 }
 
 fn string_to_tags(tags: &str) -> Vec<(&str, &str)> {

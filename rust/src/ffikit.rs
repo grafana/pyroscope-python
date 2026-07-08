@@ -2,11 +2,7 @@ use crate::backend::Tag;
 use crate::error::{PyroscopeError, Result};
 use crate::pyroscope::{PyroscopeAgentBuilder, PyroscopeAgentRunning};
 use crate::{PyroscopeAgent, ThreadId};
-use lazy_static::lazy_static;
-use std::sync::{
-    Mutex,
-    mpsc::{self, Receiver, Sender},
-};
+use std::sync::Mutex;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Signal {
@@ -15,62 +11,41 @@ pub enum Signal {
     RemoveThreadTag(ThreadId, Tag),
 }
 
-const TAG: &str = "pyroscope::ffikit";
+static RUNNING_AGENT: Mutex<Option<PyroscopeAgent<PyroscopeAgentRunning>>> = Mutex::new(None);
 
-lazy_static! {
-    static ref SENDER: Mutex<Option<Sender<Signal>>> = Mutex::new(None);
-}
 pub fn run(agent: PyroscopeAgentBuilder) -> Result<()> {
-    let mut sender_holder = SENDER.lock()?;
-    if (*sender_holder).is_some() {
-        return Err(PyroscopeError::new("FFI channel already initialized"));
+    let mut guard = RUNNING_AGENT.lock()?;
+    if (*guard).is_some() {
+        return Err(PyroscopeError::AgentAlreadyRunning);
     }
 
-    let agent = agent.build()?;
+    let agent = agent.build()?.start()?;
 
-    let agent = agent.start()?;
-
-    let (sender, receiver): (Sender<Signal>, Receiver<Signal>) = mpsc::channel();
-
-    *sender_holder = Some(sender);
-
-    std::thread::spawn(move || {
-        while let Ok(signal) = receiver.recv() {
-            match signal {
-                Signal::Kill => {
-                    if let Err(err) = stop(agent) {
-                        log::error!(target: TAG, "failed to stop agent {err}");
-                    }
-                    break;
-                }
-                Signal::AddThreadTag(thread_id, tag) => {
-                    if let Err(err) = agent.add_thread_tag(thread_id, tag) {
-                        log::error!(target: TAG, "failed to add tag {err}");
-                    }
-                }
-                Signal::RemoveThreadTag(thread_id, tag) => {
-                    if let Err(err) = agent.remove_thread_tag(thread_id, tag) {
-                        log::error!(target: TAG, "failed to remove tag {err}");
-                    }
-                }
-            }
-        }
-    });
+    *guard = Some(agent);
 
     Ok(())
 }
 
-pub fn send(signal: Signal) -> Result<()> {
-    if let Some(sender) = &*SENDER.lock()? {
-        sender.send(signal)?;
+pub fn add_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
+    if let Some(agent) = &*RUNNING_AGENT.lock()? {
+        agent.add_thread_tag(tid, tag)
     } else {
-        return Err(PyroscopeError::new("FFI channel not initialized"));
+        Err(PyroscopeError::AgentNotRunning)
     }
-    Ok(())
 }
 
-fn stop(agent: PyroscopeAgent<PyroscopeAgentRunning>) -> Result<()> {
-    agent.stop()?;
-    *SENDER.lock()? = None;
-    Ok(())
+pub fn remove_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
+    if let Some(agent) = &*RUNNING_AGENT.lock()? {
+        agent.remove_thread_tag(tid, tag)
+    } else {
+        Err(PyroscopeError::AgentNotRunning)
+    }
+}
+
+pub fn stop() -> Result<()> {
+    if let Some(agent) = RUNNING_AGENT.lock()?.take() {
+        agent.stop()
+    } else {
+        Err(PyroscopeError::AgentNotRunning)
+    }
 }
