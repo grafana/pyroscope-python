@@ -2,6 +2,7 @@ use crate::backend::Tag;
 use crate::error::{PyroscopeError, Result};
 use crate::pyroscope::{PyroscopeAgentBuilder, PyroscopeAgentRunning};
 use crate::{PyroscopeAgent, ThreadId};
+use pyo3::prelude::*;
 use std::sync::Mutex;
 
 static RUNNING_AGENT: Mutex<Option<PyroscopeAgent<PyroscopeAgentRunning>>> = Mutex::new(None);
@@ -35,9 +36,12 @@ pub fn remove_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
     }
 }
 
-pub fn stop() -> Result<()> {
-    if let Some(agent) = RUNNING_AGENT.lock()?.take() {
-        agent.stop()
+pub fn stop(py: Python<'_>) -> Result<()> {
+    let agent = RUNNING_AGENT.lock()?.take();
+    if let Some(agent) = agent {
+        let res = py.detach(|| agent.stop());
+        crate::memory::stop(py);
+        res
     } else {
         Err(PyroscopeError::AgentNotRunning)
     }

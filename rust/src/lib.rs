@@ -1,5 +1,5 @@
+mod memory;
 mod pyspy_backend;
-// mod mem;
 
 // Re-exports structs
 pub use crate::pyroscope::PyroscopeAgent;
@@ -54,7 +54,6 @@ fn initialize_logging(logging_level: u32) -> bool {
         }
     }
 
-    // Initialize the logger.
     pretty_env_logger::init_timed();
     true
 }
@@ -62,6 +61,7 @@ fn initialize_logging(logging_level: u32) -> bool {
 #[allow(clippy::too_many_arguments)]
 #[pyfunction]
 fn initialize_agent(
+    py: Python<'_>,
     application_name: String,
     server_address: String,
     basic_auth_username: String,
@@ -78,6 +78,10 @@ fn initialize_agent(
     tenant_id: String,
     http_headers: HashMap<String, String>,
     line_no: u32,
+    mem_enabled: bool,
+    mem_max_nframe: u16,
+    mem_heap_sample_size: u64,
+    mem_enable_mem_domain: bool,
 ) -> bool {
     let pid = std::process::id();
 
@@ -117,12 +121,12 @@ fn initialize_agent(
         sample_rate,
         PYSPY_NAME,
         PYSPY_VERSION,
-        // mem::Config {
-        //     enabled: mem_enabled,
-        //     enable_mem_domain: mem_enable_mem_domain,
-        //     max_nframe: mem_max_nframe,
-        //     heap_sample_size: mem_heap_sample_size,
-        // },
+        memory::Config {
+            enabled: mem_enabled,
+            enable_mem_domain: mem_enable_mem_domain,
+            max_nframe: mem_max_nframe,
+            heap_sample_size: mem_heap_sample_size,
+        },
     )
     .tags(tags)
     .runtime(runtime_name, runtime_version);
@@ -135,18 +139,29 @@ fn initialize_agent(
     }
     agent_builder = agent_builder.http_headers(http_headers);
 
-    // mem::start(&pyroscope_config.mem_config);
-    ffikit::run(PyroscopeAgentBuilder::new(
+    memory::start(py, &agent_builder.mem_config);
+    if let Some(err) = PyErr::take(py) {
+        log::error!(target: "pyroscope-python", "failed to start memory profiler: {}", err);
+        return false;
+    }
+    let result = ffikit::run(PyroscopeAgentBuilder::new(
         agent_builder,
         pyspy,
         dynamic_tags,
-    ))
-    .is_ok()
+    ));
+    match result {
+        Ok(_) => true,
+        Err(e) => {
+            log::error!(target: "pyroscope-python", "failed to start agent: {}", e);
+            memory::stop(py);
+            false
+        }
+    }
 }
 
 #[pyfunction]
-fn drop_agent() -> bool {
-    ffikit::stop().is_ok()
+fn drop_agent(py: Python<'_>) -> bool {
+    ffikit::stop(py).is_ok()
 }
 
 #[pyfunction]

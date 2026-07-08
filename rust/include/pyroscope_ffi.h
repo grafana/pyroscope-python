@@ -37,4 +37,8 @@ typedef struct {
   FFIHeapSampleValues values;
 } FFISample;
 
+FFIInternedString pyroscope_memprof_string_table_intern_string(FFIStringView s);
+
+void pyroscope_memprof_push_sample(FFISample sample);
+
 #endif  /* PYROSCOPE_FFI_H_ */
