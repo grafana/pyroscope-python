@@ -7,11 +7,26 @@ import pyroscope
 WARNING_TEXT = "Forking after Pyroscope starts is unsupported"
 
 
-def fork_and_capture_pyroscope_warnings():
+def exercise_memory_allocations():
+    allocations = [
+        {"index": index, "payload": f"allocation-{index}"}
+        for index in range(50_000)
+    ]
+    if len(allocations) != 50_000:
+        raise AssertionError("failed to create memory-profiler test allocations")
+    return allocations
+
+
+def fork_and_capture_pyroscope_warnings(exercise_child_memory=False):
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         pid = os.fork()
         if pid == 0:
+            if exercise_child_memory:
+                try:
+                    exercise_memory_allocations()
+                except BaseException:
+                    os._exit(1)
             os._exit(0)
 
         _, status = os.waitpid(pid, 0)
@@ -48,7 +63,9 @@ def main():
     pyroscope.configure(application_name="pyroscope.fork-warning-test")
     try:
         fork_and_configure_in_child()
-        active_warnings = fork_and_capture_pyroscope_warnings()
+        active_warnings = fork_and_capture_pyroscope_warnings(
+            exercise_child_memory=True
+        )
         if len(active_warnings) != 1:
             raise AssertionError(
                 "expected exactly one Pyroscope fork warning while the agent "
@@ -58,6 +75,7 @@ def main():
             raise AssertionError(
                 "expected the Pyroscope fork warning to be a DeprecationWarning"
             )
+        exercise_memory_allocations()
     finally:
         pyroscope.shutdown()
 

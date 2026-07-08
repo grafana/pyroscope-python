@@ -1,5 +1,5 @@
+mod memory;
 mod pyspy_backend;
-// mod mem;
 
 // Re-exports structs
 pub use crate::pyroscope::PyroscopeAgent;
@@ -42,6 +42,8 @@ fn at_fork_after_in_parent(py: Python<'_>) -> PyResult<()> {
 
 #[pyfunction]
 fn at_fork_after_in_child(py: Python<'_>) -> PyResult<()> {
+    memory::postfork_child();
+    memory::stop(py);
     ffikit::at_fork_after_in_child(py);
     AGENT_RUNNING.store(false, Ordering::Release);
     Ok(())
@@ -66,7 +68,7 @@ fn warn_about_fork(py: Python<'_>) -> PyResult<()> {
     PyErr::warn(py, &py.get_type::<PyDeprecationWarning>(), &message, 2)
 }
 
-fn register_fork_warning(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn register_fork_handlers(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let py = m.py();
     let register_at_fork = py.import("os")?.getattr("register_at_fork")?;
 
@@ -107,7 +109,6 @@ fn initialize_logging(logging_level: u32) -> bool {
         }
     }
 
-    // Initialize the logger.
     pretty_env_logger::init_timed();
     true
 }
@@ -115,6 +116,7 @@ fn initialize_logging(logging_level: u32) -> bool {
 #[allow(clippy::too_many_arguments)]
 #[pyfunction]
 fn initialize_agent(
+    py: Python<'_>,
     application_name: String,
     server_address: String,
     basic_auth_username: String,
@@ -131,6 +133,10 @@ fn initialize_agent(
     tenant_id: String,
     http_headers: HashMap<String, String>,
     line_no: LineNo,
+    mem_enabled: bool,
+    mem_max_nframe: u16,
+    mem_heap_sample_size: u64,
+    mem_enable_mem_domain: bool,
 ) -> bool {
     let pid = std::process::id();
 
@@ -170,12 +176,12 @@ fn initialize_agent(
         sample_rate,
         PYSPY_NAME,
         PYSPY_VERSION,
-        // mem::Config {
-        //     enabled: mem_enabled,
-        //     enable_mem_domain: mem_enable_mem_domain,
-        //     max_nframe: mem_max_nframe,
-        //     heap_sample_size: mem_heap_sample_size,
-        // },
+        memory::Config {
+            enabled: mem_enabled,
+            enable_mem_domain: mem_enable_mem_domain,
+            max_nframe: mem_max_nframe,
+            heap_sample_size: mem_heap_sample_size,
+        },
     )
     .tags(tags)
     .runtime(runtime_name, runtime_version);
@@ -188,22 +194,32 @@ fn initialize_agent(
     }
     agent_builder = agent_builder.http_headers(http_headers);
 
-    // mem::start(&pyroscope_config.mem_config);
-    let started = ffikit::run(PyroscopeAgentBuilder::new(
+    memory::start(py, &agent_builder.mem_config);
+    if let Some(err) = PyErr::take(py) {
+        log::error!(target: "pyroscope-python", "failed to start memory profiler: {}", err);
+        return false;
+    }
+    let result = ffikit::run(PyroscopeAgentBuilder::new(
         agent_builder,
         pyspy,
         dynamic_tags,
-    ))
-    .is_ok();
-    if started {
-        AGENT_RUNNING.store(true, Ordering::Release);
+    ));
+    match result {
+        Ok(_) => {
+            AGENT_RUNNING.store(true, Ordering::Release);
+            true
+        }
+        Err(e) => {
+            log::error!(target: "pyroscope-python", "failed to start agent: {}", e);
+            memory::stop(py);
+            false
+        }
     }
-    started
 }
 
 #[pyfunction]
-fn drop_agent() -> bool {
-    let dropped = ffikit::stop().is_ok();
+fn drop_agent(py: Python<'_>) -> bool {
+    let dropped = ffikit::stop(py).is_ok();
     if dropped {
         AGENT_RUNNING.store(false, Ordering::Release);
     }
@@ -246,7 +262,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(drop_agent, m)?)?;
     m.add_function(wrap_pyfunction!(add_thread_tag, m)?)?;
     m.add_function(wrap_pyfunction!(remove_thread_tag, m)?)?;
-    register_fork_warning(m)?;
+    register_fork_handlers(m)?;
     Ok(())
 }
 

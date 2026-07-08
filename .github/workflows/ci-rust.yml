@@ -41,7 +41,9 @@ jobs:
           components: clippy
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- --deny warnings
+        run: |
+          export PYROSCOPE__Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
+          cargo clippy --all-targets --all-features -- --deny warnings
         working-directory: rust
 
   test:
@@ -65,5 +67,7 @@ jobs:
           toolchain: 1.96.0
 
       - name: Run tests
-        run: cargo test --locked
+        run: |
+          export PYROSCOPE__Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
+          cargo test --locked --all-features
         working-directory: rust
