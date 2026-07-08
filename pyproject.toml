@@ -29,10 +29,6 @@ classifiers = [
 [tool.setuptools.packages]
 find = { where = ["python/"] }
 
-[tool.distutils.bdist_wheel]
-py_limited_api = "cp310"
-
-
 [build-system]
 requires = [
     "setuptools (>=82.0.0,<83.0.0)",

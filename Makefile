@@ -4,7 +4,7 @@ ffi/python/header:
 
 .PHONY: ffi/python/cffi
 ffi/python/cffi:
-	python scripts/tests/compile_ffi.py
+	python3 scripts/tests/compile_ffi.py
 
 .PHONY: linux/amd64
 linux/amd64:
@@ -44,12 +44,12 @@ musllinux/arm64:
 
 .PHONY: mac/amd64
 mac/amd64:
-	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=x86_64-apple-darwin python -m build --wheel
+	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=x86_64-apple-darwin python3 -m build --wheel
 	wheel tags --platform-tag macosx_11_0_x86_64 --remove dist/*.whl
 
 .PHONY: mac/arm64
 mac/arm64:
-	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=aarch64-apple-darwin python -m build --wheel
+	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=aarch64-apple-darwin python3 -m build --wheel
 	wheel tags --platform-tag macosx_11_0_arm64 --remove dist/*.whl
 
 .PHONY: check/tag-version

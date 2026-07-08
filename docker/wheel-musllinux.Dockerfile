@@ -36,20 +36,17 @@ ENV PATH=/home/builder/.cargo/bin:$PATH
 
 WORKDIR /pyroscope-python
 
-RUN /opt/python/cp310-cp310/bin/python -m pip install --user build
-
 ADD --chown=builder:builder pyproject.toml \
     setup.py \
     ./
 
 ADD --chown=builder:builder rust/ rust/
 ADD --chown=builder:builder python/ python/
+ADD --chown=builder:builder docker/wheels.sh wheels.sh
 
 RUN --mount=type=cache,target=/home/builder/.cargo/registry,uid=1000,gid=1000 \
     --mount=type=cache,target=/home/builder/.cargo/git,uid=1000,gid=1000 \
-    /opt/python/cp310-cp310/bin/python -m build --wheel
-
-RUN auditwheel repair dist/*.whl --wheel-dir dist-repaired/
+    bash wheels.sh
 
 FROM scratch
 COPY --from=builder  /pyroscope-python/dist-repaired dist/
