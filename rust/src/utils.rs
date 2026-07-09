@@ -1,29 +1,6 @@
+use crate::error::Result;
 use std::fmt;
-
-use crate::{PyroscopeError, error::Result};
-
-/// Error Wrapper for libc return. Only check for errors.
-pub fn check_err<T: Ord + Default>(num: T) -> Result<T> {
-    if num < T::default() {
-        return Err(PyroscopeError::from(std::io::Error::last_os_error()));
-    }
-    Ok(num)
-}
-
-#[cfg(test)]
-mod check_err_tests {
-    use crate::utils::check_err;
-
-    #[test]
-    fn check_err_success() {
-        assert_eq!(check_err(1).unwrap(), 1)
-    }
-
-    #[test]
-    fn check_err_error() {
-        assert!(check_err(-1).is_err())
-    }
-}
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct ThreadId {
@@ -59,72 +36,26 @@ impl fmt::Display for ThreadId {
     }
 }
 
-/// Return the current time in seconds.
-pub fn get_current_time_secs() -> Result<u64> {
-    Ok(std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_secs())
-}
-
-#[cfg(test)]
-mod get_current_time_secs_tests {
-    use crate::utils::get_current_time_secs;
-
-    #[test]
-    fn get_current_time_secs_success() {
-        assert!(get_current_time_secs().is_ok())
-    }
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct TimeRange {
-    // unix time seconds
-    // todo remove comment, use types
-    pub from: u64,
-    pub until: u64,
+    from_unix: Duration,
+    duration: Duration,
 }
 
-/// Return a range of timestamps in the form [start, end).
-/// The range is inclusive of start and exclusive of end.
-pub fn get_time_range(timestamp: u64) -> Result<TimeRange> {
-    // if timestamp is 0, then get the current time
-    if timestamp == 0 {
-        return get_time_range(get_current_time_secs()?); //todo remove this
+impl TimeRange {
+    pub fn new(from: SystemTime, until: SystemTime) -> Result<TimeRange> {
+        let from_unix = from.duration_since(UNIX_EPOCH)?;
+        let duration = until.duration_since(from).unwrap_or(Duration::ZERO);
+        Ok(Self {
+            from_unix,
+            duration,
+        })
     }
 
-    // Determine the start and end of the range
-    Ok(TimeRange {
-        from: timestamp / 10 * 10,
-        until: timestamp / 10 * 10 + 10,
-    })
-}
-
-#[cfg(test)]
-mod get_time_range_tests {
-    use crate::utils::{TimeRange, get_time_range};
-
-    #[test]
-    fn get_time_range_verify() {
-        assert_eq!(
-            get_time_range(1644194479).unwrap(),
-            TimeRange {
-                from: 1644194470,
-                until: 1644194480,
-            }
-        );
-        assert_eq!(
-            get_time_range(1644194470).unwrap(),
-            TimeRange {
-                from: 1644194470,
-                until: 1644194480,
-            }
-        );
-        assert_eq!(
-            get_time_range(1644194476).unwrap(),
-            TimeRange {
-                from: 1644194470,
-                until: 1644194480,
-            }
-        );
+    pub fn start_time_unix(&self) -> Duration {
+        self.from_unix
+    }
+    pub fn duration(&self) -> Duration {
+        self.duration
     }
 }
