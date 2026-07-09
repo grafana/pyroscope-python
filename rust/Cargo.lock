@@ -1278,7 +1278,6 @@ dependencies = [
  "py-spy",
  "pyo3",
  "reqwest",
- "serde_json",
  "thiserror",
  "url",
  "uuid",

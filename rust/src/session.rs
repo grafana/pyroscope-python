@@ -246,11 +246,17 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
+    fn tags<const N: usize>(tags: [(&str, &str); N]) -> HashMap<String, String> {
+        tags.into_iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect()
+    }
+
     #[test]
     fn labels_for_profile_includes_scope_and_runtime_labels() {
         let config =
             PyroscopeConfig::new("http://localhost:4040", "my-app", 100, "pyspy", "1.0.12")
-                .tags(vec![("env", "prod")])
+                .tags(tags([("env", "prod")]))
                 .runtime("cpython".to_string(), "3.12.4".to_string());
 
         let labels = labels_for_profile(&config, "process_cpu".to_string());
@@ -296,7 +302,7 @@ mod tests {
     fn labels_for_profile_preserves_user_provided_semconv_labels() {
         let config =
             PyroscopeConfig::new("http://localhost:4040", "my-app", 100, "pyspy", "1.0.12")
-                .tags(vec![
+                .tags(tags([
                     (LABEL_SCOPE_NAME, "user-supplied-scope"),
                     (LABEL_SCOPE_VERSION, "user-supplied-scope-version"),
                     (LABEL_PROCESS_RUNTIME_NAME, "user-supplied-runtime"),
@@ -304,7 +310,7 @@ mod tests {
                         LABEL_PROCESS_RUNTIME_VERSION,
                         "user-supplied-runtime-version",
                     ),
-                ])
+                ]))
                 .runtime("cpython".to_string(), "3.12.4".to_string());
 
         let labels = labels_for_profile(&config, "process_cpu".to_string());
@@ -349,10 +355,10 @@ mod tests {
     fn labels_for_profile_uses_user_service_name_and_ignores_user_profile_name() {
         let config =
             PyroscopeConfig::new("http://localhost:4040", "my-app", 100, "pyspy", "1.0.12")
-                .tags(vec![
+                .tags(tags([
                     (LABEL_SERVICE_NAME, "user-service"),
                     (LABEL_PROFILE_NAME, "user-profile"),
-                ])
+                ]))
                 .runtime("cpython".to_string(), "3.12.4".to_string());
 
         let labels = labels_for_profile(&config, "process_cpu".to_string());
