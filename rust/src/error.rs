@@ -29,9 +29,6 @@ pub enum PyroscopeError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
-
     #[error("Agent not running")]
     AgentNotRunning,
     #[error("Agent already running")]

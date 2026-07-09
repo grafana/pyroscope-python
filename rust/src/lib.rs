@@ -16,12 +16,13 @@ mod utils;
 pub use utils::ThreadId;
 pub mod ffikit;
 
+use std::collections::HashMap;
+
 use crate::backend::{BackendConfig, BackendImpl, Tag, ThreadTagsSet};
 use crate::pyroscope::PyroscopeAgentBuilder;
 use crate::pyspy_backend::Pyspy;
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-const LOG_TAG: &str = "Pyroscope::pyspy::pyo3";
 
 const PYSPY_NAME: &str = "pyspy";
 const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -74,9 +75,9 @@ fn initialize_agent(
     report_thread_name: bool,
     runtime_name: String,
     runtime_version: String,
-    tags: String,
+    tags: HashMap<String, String>,
     tenant_id: String,
-    http_headers_json: String,
+    http_headers: HashMap<String, String>,
     line_no: u32,
 ) -> bool {
     let pid = std::process::id();
@@ -103,8 +104,6 @@ fn initialize_agent(
         ..py_spy::Config::default()
     };
 
-    let tags_ref = tags.as_str();
-    let tags = string_to_tags(tags_ref);
     let dynamic_tags = ThreadTagsSet::new();
 
     let pyspy = BackendImpl::new(Box::new(Pyspy::new(
@@ -135,22 +134,7 @@ fn initialize_agent(
     if !tenant_id.is_empty() {
         agent_builder = agent_builder.tenant_id(tenant_id);
     }
-
-    let http_headers = pyroscope::parse_http_headers_json(http_headers_json);
-    match http_headers {
-        Ok(http_headers) => {
-            agent_builder = agent_builder.http_headers(http_headers);
-        }
-        Err(e) => match e {
-            PyroscopeError::Json(e) => {
-                log::error!(target: LOG_TAG, "parse_http_headers_json error {}", e);
-            }
-            PyroscopeError::AdHoc(e) => {
-                log::error!(target: LOG_TAG, "parse_http_headers_json {}", e);
-            }
-            _ => {}
-        },
-    }
+    agent_builder = agent_builder.http_headers(http_headers);
 
     // mem::start(&pyroscope_config.mem_config);
     ffikit::run(PyroscopeAgentBuilder::new(
@@ -174,24 +158,6 @@ fn add_thread_tag(key: String, value: String) -> bool {
 #[pyfunction]
 fn remove_thread_tag(key: String, value: String) -> bool {
     ffikit::remove_thread_tag(self_thread_id(), Tag { key, value }).is_ok()
-}
-
-fn string_to_tags(tags: &str) -> Vec<(&str, &str)> {
-    let mut tags_vec = Vec::new();
-
-    // check if string is empty
-    if tags.is_empty() {
-        return tags_vec;
-    }
-
-    for tag in tags.split(',') {
-        let mut tag_split = tag.split('=');
-        let key = tag_split.next().unwrap();
-        let value = tag_split.next().unwrap();
-        tags_vec.push((key, value));
-    }
-
-    tags_vec
 }
 
 #[repr(C)]

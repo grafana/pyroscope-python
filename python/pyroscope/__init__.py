@@ -1,6 +1,5 @@
 import warnings
 import logging
-import json
 import sys
 from enum import Enum
 
@@ -60,9 +59,9 @@ def configure(
         report_thread_name,
         runtime_name(),
         runtime_version(),
-        tags_to_string(tags),
+        tags or {},
         tenant_id or "",
-        http_headers_to_json(http_headers),
+        http_headers or {},
         line_no.value
     )
 
@@ -80,11 +79,6 @@ def add_thread_tag(key, value):
 def remove_thread_tag(key, value):
     lib.remove_thread_tag(key, value)
 
-def tags_to_string(tags):
-    if tags is None:
-        return ""
-    return ",".join(["{}={}".format(key, value) for key, value in tags.items()])
-
 def runtime_name():
     return sys.implementation.name
 
@@ -93,11 +87,6 @@ def runtime_version():
     if vinfo.releaselevel == "final" and not vinfo.serial:
         vinfo = vinfo[:3]
     return ".".join(map(str, vinfo))
-
-def http_headers_to_json(headers):
-    if headers is None:
-        return "{}"
-    return json.dumps(headers)
 
 @contextmanager
 def tag_wrapper(tags):
