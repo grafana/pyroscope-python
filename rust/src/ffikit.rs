@@ -4,13 +4,6 @@ use crate::pyroscope::{PyroscopeAgentBuilder, PyroscopeAgentRunning};
 use crate::{PyroscopeAgent, ThreadId};
 use std::sync::Mutex;
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Signal {
-    Kill,
-    AddThreadTag(ThreadId, Tag),
-    RemoveThreadTag(ThreadId, Tag),
-}
-
 static RUNNING_AGENT: Mutex<Option<PyroscopeAgent<PyroscopeAgentRunning>>> = Mutex::new(None);
 
 pub fn run(agent: PyroscopeAgentBuilder) -> Result<()> {

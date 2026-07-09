@@ -44,11 +44,6 @@ impl BackendState for BackendBare {}
 impl BackendState for BackendUninitialized {}
 impl BackendState for BackendReady {}
 
-/// Backend Accessibility Trait
-pub trait BackendAccessible: BackendState {}
-impl BackendAccessible for BackendUninitialized {}
-impl BackendAccessible for BackendReady {}
-
 /// Precursor Backend Implementation
 /// This struct is used to implement the Backend trait. It serves two purposes:
 /// 1. It enforces state transitions using the Type System.
@@ -90,8 +85,6 @@ impl BackendImpl<BackendUninitialized> {
         })
     }
 }
-
-impl<S: BackendAccessible> BackendImpl<S> {}
 
 impl BackendImpl<BackendReady> {
     /// Shutdown the backend and destroy BackendImpl
