@@ -4,7 +4,7 @@ import json
 import sys
 from enum import Enum
 
-from ._native import lib
+from . import _native as lib
 
 from contextlib import contextmanager
 
@@ -48,21 +48,21 @@ def configure(
         lib.initialize_logging(log_level)
 
     lib.initialize_agent(
-        application_name.encode("UTF-8"),
-        server_address.encode("UTF-8"),
-        basic_auth_username.encode("UTF-8"),
-        basic_auth_password.encode("UTF-8"),
+        application_name,
+        server_address,
+        basic_auth_username,
+        basic_auth_password,
         sample_rate,
         oncpu,
         gil_only,
         report_pid,
         report_thread_id,
         report_thread_name,
-        runtime_name().encode("UTF-8"),
-        runtime_version().encode("UTF-8"),
-        tags_to_string(tags).encode("UTF-8"),
-        (tenant_id or "").encode("UTF-8"),
-        http_headers_to_json(http_headers).encode("UTF-8"),
+        runtime_name(),
+        runtime_version(),
+        tags_to_string(tags),
+        tenant_id or "",
+        http_headers_to_json(http_headers),
         line_no.value
     )
 
@@ -75,10 +75,10 @@ def shutdown():
         LOGGER.warning("Pyroscope Agent shutdown failed")
 
 def add_thread_tag(key, value):
-    lib.add_thread_tag(key.encode("UTF-8"), value.encode("UTF-8"))
+    lib.add_thread_tag(key, value)
 
 def remove_thread_tag(key, value):
-    lib.remove_thread_tag(key.encode("UTF-8"), value.encode("UTF-8"))
+    lib.remove_thread_tag(key, value)
 
 def tags_to_string(tags):
     if tags is None:
@@ -102,12 +102,12 @@ def http_headers_to_json(headers):
 @contextmanager
 def tag_wrapper(tags):
     for key, value in tags.items():
-        lib.add_thread_tag(key.encode("UTF-8"), value.encode("UTF-8"))
+        lib.add_thread_tag(key, value)
     try:
         yield
     finally:
         for key, value in tags.items():
-            lib.remove_thread_tag(key.encode("UTF-8"), value.encode("UTF-8"))
+            lib.remove_thread_tag(key, value)
 
 def stop():
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
