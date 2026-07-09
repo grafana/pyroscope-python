@@ -110,7 +110,7 @@ impl Session {
     }
 
     fn push(self, client: &reqwest::blocking::Client) -> Result<()> {
-        log::info!(target: LOG_TAG, "Sending Session: {} - {}", self.time_range.from, self.time_range.until);
+        log::info!(target: LOG_TAG, "Sending Session: {:?} ", self.time_range);
 
         let mut req = PushRequest {
             series: Vec::with_capacity(self.batch.len()),

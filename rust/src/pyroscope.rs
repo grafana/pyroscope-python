@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     marker::PhantomData,
     sync::{
-        Arc, Condvar, Mutex,
+        Arc,
         mpsc::{self, Sender},
     },
     thread::JoinHandle,
@@ -13,11 +13,13 @@ use crate::{
     backend::{BackendReady, BackendUninitialized, Tag},
     error::Result,
     session::{Session, SessionManager, SessionSignal},
-    timer::{Timer, TimerSignal},
-    utils::get_time_range,
 };
+use std::sync::Mutex;
+use std::sync::mpsc::SyncSender;
+use std::time::{Duration, SystemTime};
 
-use crate::backend::{BackendImpl, ThreadTag, ThreadTagsSet};
+use crate::backend::{Backend, BackendImpl, ThreadTag, ThreadTagsSet};
+use crate::utils::TimeRange;
 
 const LOG_TAG: &str = "Pyroscope::Agent";
 #[derive(Clone)]
@@ -166,11 +168,6 @@ impl PyroscopeAgentBuilder {
         let backend_ready = self.backend.initialize()?;
         log::trace!(target: LOG_TAG, "Backend initialized");
 
-        // Start the Timer
-        let timer = Timer::initialize(std::time::Duration::from_secs(10))?;
-        log::trace!(target: LOG_TAG, "Timer initialized");
-
-        // Start the SessionManager
         let session_manager = SessionManager::new()?;
         log::trace!(target: LOG_TAG, "SessionManager initialized");
 
@@ -178,15 +175,9 @@ impl PyroscopeAgentBuilder {
         Ok(PyroscopeAgent {
             backend: backend_ready,
             config,
-            timer,
             session_manager,
-            tx: None,
+            terminate_channel: None,
             handle: None,
-            running: Arc::new((
-                #[allow(clippy::mutex_atomic)]
-                Mutex::new(false),
-                Condvar::new(),
-            )),
             _state: PhantomData,
             ruleset: self.ruleset,
         })
@@ -214,18 +205,11 @@ impl PyroscopeAgentState for PyroscopeAgentReady {}
 
 impl PyroscopeAgentState for PyroscopeAgentRunning {}
 
-/// PyroscopeAgent is the main object of the library. It is used to start and stop the profiler, schedule the timer, and send the profiler data to the server.
 pub struct PyroscopeAgent<S: PyroscopeAgentState> {
-    /// Instance of the Timer
-    timer: Timer,
-    /// Instance of the SessionManager
     session_manager: SessionManager,
-    /// Channel sender for the timer thread
-    tx: Option<Sender<TimerSignal>>,
+    terminate_channel: Option<Sender<()>>,
     /// Handle to the thread that runs the Pyroscope Agent
     handle: Option<JoinHandle<Result<()>>>,
-    /// A structure to signal thread termination
-    running: Arc<(Mutex<bool>, Condvar)>,
     /// Profiler backend
     pub backend: BackendImpl<BackendReady>,
     /// Configuration Object
@@ -240,11 +224,9 @@ impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
     /// Transition the PyroscopeAgent to a new state.
     fn transition<D: PyroscopeAgentState>(self) -> PyroscopeAgent<D> {
         PyroscopeAgent {
-            timer: self.timer,
             session_manager: self.session_manager,
-            tx: self.tx,
+            terminate_channel: self.terminate_channel,
             handle: self.handle,
-            running: self.running,
             backend: self.backend,
             config: self.config,
             _state: PhantomData,
@@ -254,31 +236,14 @@ impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
 }
 
 impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
-    /// Properly shutdown the agent.
-    pub fn shutdown(mut self) {
+    fn shutdown(mut self) {
         log::debug!(target: LOG_TAG, "PyroscopeAgent::drop()");
 
-        // Shutdown Backend
         match self.backend.shutdown() {
             Ok(_) => log::debug!(target: LOG_TAG, "Backend shutdown"),
             Err(e) => log::error!(target: LOG_TAG, "Backend shutdown error: {e}"),
         }
 
-        // Drop Timer listeners
-        match self.timer.drop_listeners() {
-            Ok(_) => log::trace!(target: LOG_TAG, "Dropped timer listeners"),
-            Err(_) => log::error!(target: LOG_TAG, "Error Dropping timer listeners"),
-        }
-
-        // Wait for the Timer thread to finish
-        if let Some(handle) = self.timer.handle.take() {
-            match handle.join() {
-                Ok(_) => log::trace!(target: LOG_TAG, "Dropped timer thread"),
-                Err(_) => log::error!(target: LOG_TAG, "Error Dropping timer thread"),
-            }
-        }
-
-        // Stop the SessionManager
         match self.session_manager.push(SessionSignal::Kill) {
             Ok(_) => log::trace!(target: LOG_TAG, "Sent kill signal to SessionManager"),
             Err(_) => log::error!(
@@ -294,31 +259,11 @@ impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
             }
         }
 
-        // Wait for main thread to finish
-        if let Some(handle) = self.handle.take() {
-            match handle.join() {
-                Ok(_) => log::trace!(target: LOG_TAG, "Dropped main thread"),
-                Err(_) => log::error!(target: LOG_TAG, "Error Dropping main thread"),
-            }
-        }
-
         log::debug!(target: LOG_TAG, "Agent Shutdown");
     }
 }
 
 impl PyroscopeAgent<PyroscopeAgentReady> {
-    /// Start profiling and sending data. The agent will keep running until stopped. The agent will send data to the server every 10s seconds.
-    ///
-    /// # Example
-    /// ```no_run
-    /// # use pyroscope::pyroscope::PyroscopeAgentBuilder;
-    /// # use pyroscope::backend::{pprof_backend, PprofConfig, BackendConfig};
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let agent = PyroscopeAgentBuilder::new("http://localhost:4040", "my-app", 100, "pyroscope-rs", "0.1.0", pprof_backend(PprofConfig::default(), BackendConfig::default())).build()?;
-    /// let agent_running = agent.start()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn start(mut self) -> Result<PyroscopeAgent<PyroscopeAgentRunning>> {
         log::debug!(target: LOG_TAG, "Starting");
 
@@ -326,17 +271,8 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
         let backend = Arc::clone(&self.backend.backend);
         // Call start()
 
-        // set running to true
-        let pair = Arc::clone(&self.running);
-        let (lock, _cvar) = &*pair;
-        let mut running = lock.lock()?;
-        *running = true;
-        drop(running);
-
-        // Create a channel to listen for timer signals
         let (tx, rx) = mpsc::channel();
-        self.timer.attach_listener(tx.clone())?;
-        self.tx = Some(tx);
+        self.terminate_channel = Some(tx);
 
         let config = self.config.clone();
 
@@ -345,99 +281,79 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
 
         self.handle = Some(std::thread::spawn(move || {
             log::trace!(target: LOG_TAG, "Main Thread started");
-
-            while let Ok(signal) = rx.recv() {
-                match signal {
-                    TimerSignal::NextSnapshot(until) => {
-                        // get_time_range should be used with "from". We balance this by reducing
-                        // 10s from the returned range.
-                        let mut time_range = get_time_range(until)?;
-                        time_range.from -= 10;
-                        time_range.until -= 10;
-
-                        let mut batch = Vec::with_capacity(2);
-
-                        // if let Some(pprof) = mem::dump_pprof(config.mem_config.heap_sample_size, &time_range) {
-                        //     batch.push(ReportBatch{
-                        //         profile_type: "memory".to_string(),
-                        //         data: ReportData::RawPprof(pprof),
-                        //     })
-                        // }
-
-                        log::trace!(target: LOG_TAG, "Sending session {until}");
-
-                        // Generate report from backend
-                        let report = backend
-                            .lock()?
-                            .as_mut()
-                            .ok_or_else(|| {
-                                PyroscopeError::AdHoc(
-                                    "PyroscopeAgent - Failed to unwrap backend".to_string(),
-                                )
-                            })?
-                            .report()?;
-
-                        batch.push(report);
-
-                        // Send new Session to SessionManager
-                        stx.send(SessionSignal::Session(Box::new(Session::new(
-                            time_range,
-                            config.clone(),
-                            batch,
-                        ))))?
+            let mut sw = StopWatch::new();
+            loop {
+                match rx.recv_timeout(Duration::from_secs(10)) {
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        Self::snapshot(&backend, config.clone(), &stx, &mut sw)?;
                     }
-                    TimerSignal::Terminate => {
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        Self::snapshot(&backend, config.clone(), &stx, &mut sw)?;
                         log::trace!(target: LOG_TAG, "Session Killed");
-                        // mem::stop();
-
-                        // Notify the Stop function
-                        let (lock, cvar) = &*pair;
-                        let mut running = lock.lock()?;
-                        *running = false;
-                        cvar.notify_one();
-
-                        // Kill the internal thread
-                        return Ok(());
+                        break Ok(());
+                    }
+                    Ok(_) => {
+                        // unreachable: nothing is ever sent;
                     }
                 }
             }
-            Ok(())
         }));
 
         Ok(self.transition())
     }
+
+    fn snapshot(
+        backend: &Arc<Mutex<Option<Box<dyn Backend>>>>,
+        config: PyroscopeConfig,
+        stx: &SyncSender<SessionSignal>,
+        stop_watch: &mut StopWatch,
+    ) -> Result<()> {
+        let time_range = stop_watch.lap()?;
+
+        let mut batch = Vec::with_capacity(2);
+
+        // if let Some(pprof) = mem::dump_pprof(config.mem_config.heap_sample_size, &time_range) {
+        //     batch.push(ReportBatch{
+        //         profile_type: "memory".to_string(),
+        //         data: ReportData::RawPprof(pprof),
+        //     })
+        // }
+        log::trace!(target: LOG_TAG, "Sending session {:?}",  time_range);
+
+        // Generate report from backend
+        let report = backend
+            .lock()?
+            .as_mut()
+            .ok_or_else(|| {
+                PyroscopeError::AdHoc("PyroscopeAgent - Failed to unwrap backend".to_string())
+            })?
+            .report()?;
+
+        batch.push(report);
+
+        // Send new Session to SessionManager
+        stx.send(SessionSignal::Session(Box::new(Session::new(
+            time_range, config, batch,
+        ))))?;
+        Ok(())
+    }
 }
 
 impl PyroscopeAgent<PyroscopeAgentRunning> {
-    /// Stop the agent. The agent will stop profiling and send a last report to the server.
-    ///
-    /// # Example
-    /// ```no_run
-    /// # use pyroscope::pyroscope::PyroscopeAgentBuilder;
-    /// # use pyroscope::backend::{pprof_backend, PprofConfig, BackendConfig};
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// # let agent = PyroscopeAgentBuilder::new("http://localhost:4040", "my-app", 100, "pyroscope-rs", "0.1.0", pprof_backend(PprofConfig::default(), BackendConfig::default())).build()?;
-    /// # let agent_running = agent.start()?;
-    /// let agent_ready = agent_running.stop()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn stop(mut self) -> Result<()> {
         log::debug!(target: LOG_TAG, "Stopping");
-        // get tx and send termination signal
-        if let Some(sender) = self.tx.take() {
-            // Send last session
-            sender.send(TimerSignal::NextSnapshot(get_time_range(0)?.until))?;
-            // Terminate PyroscopeAgent internal thread
-            sender.send(TimerSignal::Terminate)?;
-        } else {
-            log::error!("PyroscopeAgent - Missing sender")
+
+        drop(self.terminate_channel.take());
+        if let Some(handle) = self.handle.take() {
+            match handle.join() {
+                Ok(Ok(_)) => log::trace!(target: LOG_TAG, "Main thread exited"),
+                Ok(Err(err)) => {
+                    log::error!(target: LOG_TAG, "Main thread exited early {}", err)
+                }
+                Err(err) => log::error!(target: LOG_TAG, "Error Dropping main thread: {:?}", err),
+            }
         }
 
-        // Wait for the Thread to finish
-        let pair = Arc::clone(&self.running);
-        let (lock, cvar) = &*pair;
-        let _guard = cvar.wait_while(lock.lock()?, |running| *running)?;
         self.shutdown();
         Ok(())
     }
@@ -456,5 +372,24 @@ impl PyroscopeAgent<PyroscopeAgentRunning> {
         self.ruleset.remove(rule)?;
 
         Ok(())
+    }
+}
+
+struct StopWatch {
+    start: SystemTime,
+}
+
+impl StopWatch {
+    pub fn new() -> StopWatch {
+        Self {
+            start: SystemTime::now(),
+        }
+    }
+
+    pub fn lap(&mut self) -> Result<TimeRange> {
+        let until = SystemTime::now();
+        let res = TimeRange::new(self.start, until)?;
+        self.start = until;
+        Ok(res)
     }
 }

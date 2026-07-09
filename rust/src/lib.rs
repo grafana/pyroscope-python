@@ -10,7 +10,6 @@ pub mod encode;
 pub mod error;
 pub mod pyroscope;
 pub mod session;
-pub mod timer;
 
 mod utils;
 pub use utils::ThreadId;

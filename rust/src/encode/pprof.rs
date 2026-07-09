@@ -58,8 +58,9 @@ impl PProfBuilder {
     }
 
     pub fn set_time_range(&mut self, time_range: &TimeRange) {
-        let start_time_nanos = time_range.from * 1_000_000_000;
-        let duration_nanos = (time_range.until - time_range.from) * 1_000_000_000;
+        //todo fix casts before April 2262
+        let start_time_nanos = time_range.start_time_unix().as_nanos() as u64;
+        let duration_nanos = time_range.duration().as_nanos() as u64;
         self.profile.time_nanos = start_time_nanos as i64;
         self.profile.duration_nanos = duration_nanos as i64;
     }
