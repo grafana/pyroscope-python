@@ -23,6 +23,9 @@ include = [
   "FFIFrame",
   "FFIHeapSampleValues",
   "FFISample",
+  "pyroscope_memprof_atfork_prepare",
+  "pyroscope_memprof_atfork_parent",
+  "pyroscope_memprof_atfork_child",
   "pyroscope_memprof_string_table_intern_string",
   "pyroscope_memprof_push_sample",
 ]

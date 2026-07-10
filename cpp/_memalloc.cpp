@@ -7,6 +7,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include "Pyroscope.h"
 #include "_memalloc_debug.h"
 #include "_memalloc_heap.h"
 #include "_memalloc_reentrant.h"
@@ -41,6 +42,25 @@ static bool memalloc_enabled = false;
 static bool memalloc_mem_installed = false;
 #endif // _PY312_AND_LATER
 static std::once_flag memalloc_fork_handler_once_flag;
+
+static void
+memalloc_atfork_prepare(void)
+{
+    pyroscope_memprof_atfork_prepare();
+}
+
+static void
+memalloc_atfork_parent(void)
+{
+    pyroscope_memprof_atfork_parent();
+}
+
+static void
+memalloc_atfork_child(void)
+{
+    memalloc_heap_postfork_child();
+    pyroscope_memprof_atfork_child();
+}
 
 /* Two-slot buffer for atomically publishing the saved (original) allocator.
  *
@@ -276,15 +296,16 @@ extern "C" void memalloc_start(    uint16_t max_nframe,
     // memalloc also has to clear its state after fork via below fork handler.
     // ddup_start();
 
-    // Register fork handler
-    // Mainly to clear the heap tracker state before running any Python code,
-    // otherwise it can lead to undefined behaviors and/or crashes, ref:
-    // incident-48649.
+    // Register fork handlers. The prepare/parent callbacks keep Rust's
+    // profile mutexes from being inherited while locked, and the child
+    // callback clears inherited heap and Rust profile state before running any
+    // Python code. Otherwise prefork workers can deadlock on inherited locks or
+    // continue with parent profile data, ref: incident-48649.
     // We use std::call_once as registered fork handlers persist after fork, and
     // we want to ensure that the fork handlers are registered only once per
     // process, even when the memory profiler is restarted after fork.
     std::call_once(memalloc_fork_handler_once_flag,
-                   []() { pthread_atfork(nullptr, nullptr, memalloc_heap_postfork_child); });
+                   []() { pthread_atfork(memalloc_atfork_prepare, memalloc_atfork_parent, memalloc_atfork_child); });
 
     char* val = getenv("_DD_MEMALLOC_DEBUG_RNG_SEED");
     if (val) {
