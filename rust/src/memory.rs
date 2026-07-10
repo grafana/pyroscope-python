@@ -183,4 +183,31 @@ mod implementation {
             _ => None,
         }
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::ffi::c_char;
+
+        fn intern_string(s: &str) -> FFIInternedString {
+            pyroscope_memprof_string_table_intern_string(FFIStringView {
+                data: s.as_ptr() as *const c_char,
+                len: s.len(),
+            })
+        }
+
+        #[test]
+        fn atfork_child_resets_inherited_memory_profile_state() {
+            ensure_initialized();
+
+            let parent_string = intern_string("parent-only-string");
+            assert!(parent_string.index > 0);
+
+            pyroscope_memprof_atfork_prepare();
+            pyroscope_memprof_atfork_child();
+
+            let child_string = intern_string("child-only-string");
+            assert_eq!(child_string.index, 1);
+        }
+    }
 }
