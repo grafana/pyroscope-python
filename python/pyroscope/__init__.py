@@ -28,6 +28,7 @@ def configure(
         tenant_id="",
         http_headers=None,
         line_no=LineNo.LastInstruction,
+        upload_interval=10,
 ):
 
     if app_name is not None:
@@ -58,7 +59,8 @@ def configure(
         tags or {},
         tenant_id or "",
         http_headers or {},
-        line_no
+        line_no,
+        upload_interval
     )
 
 def shutdown():

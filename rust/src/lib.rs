@@ -19,6 +19,7 @@ use std::{
     collections::HashMap,
     ffi::CString,
     sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
 };
 
 use crate::backend::{BackendConfig, BackendImpl, Tag, ThreadTagsSet};
@@ -112,6 +113,7 @@ fn initialize_agent(
     tenant_id: String,
     http_headers: HashMap<String, String>,
     line_no: LineNo,
+    upload_interval: u64,
 ) -> bool {
     let pid = std::process::id();
 
@@ -159,7 +161,8 @@ fn initialize_agent(
         // },
     )
     .tags(tags)
-    .runtime(runtime_name, runtime_version);
+    .runtime(runtime_name, runtime_version)
+    .upload_interval(Duration::from_secs(upload_interval));
 
     if !basic_auth_username.is_empty() && !basic_auth_password.is_empty() {
         agent_builder = agent_builder.basic_auth(basic_auth_username, basic_auth_password);
