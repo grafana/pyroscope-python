@@ -32,6 +32,7 @@ def configure(
         tenant_id="",
         http_headers=None,
         line_no=LineNo.LastInstruction,
+        restart_on_fork_in_child=False,
 ):
 
     if app_name is not None:
@@ -62,7 +63,8 @@ def configure(
         tags or {},
         tenant_id or "",
         http_headers or {},
-        line_no.value
+        line_no.value,
+        restart_on_fork_in_child,
     )
 
 def shutdown():

@@ -125,6 +125,11 @@ if __name__ == '__main__':
     logger.setLevel(logging.INFO)
     multiprocessing.log_to_stderr(logging.INFO)
     if do_multiprocessing:
+        pyroscope.configure(
+            application_name=app_name + ".parent",
+            server_address="http://localhost:4040",
+            enable_logging=True,
+        )
         procs = []
         res = []
         for on_cpu in [True, False]:
@@ -141,6 +146,7 @@ if __name__ == '__main__':
             if t[0] != 0:
                 logging.info("test failed %s", str(t))
                 exit(1)
+        pyroscope.shutdown()
     else:
         on_cpu = sys.argv[1] == "true"
         gil_only = sys.argv[2] == "true"

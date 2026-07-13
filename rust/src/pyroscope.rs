@@ -8,6 +8,8 @@ use std::{
     thread::JoinHandle,
 };
 
+use crate::backend::{Backend, BackendImpl, ThreadTag, ThreadTagsSet};
+use crate::utils::TimeRange;
 use crate::{
     PyroscopeError,
     backend::{BackendReady, BackendUninitialized, Tag},
@@ -17,9 +19,6 @@ use crate::{
 use std::sync::Mutex;
 use std::sync::mpsc::SyncSender;
 use std::time::{Duration, SystemTime};
-
-use crate::backend::{Backend, BackendImpl, ThreadTag, ThreadTagsSet};
-use crate::utils::TimeRange;
 
 const LOG_TAG: &str = "Pyroscope::Agent";
 #[derive(Clone)]

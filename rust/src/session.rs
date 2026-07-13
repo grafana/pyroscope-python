@@ -47,6 +47,21 @@ pub struct SessionManager {
     pub tx: SyncSender<SessionSignal>,
 }
 
+// Client::new parks the calling thread. On macOS the std parker is fork-unsafe,
+// so build on a fresh thread whose parker postdates any fork; elsewhere the
+// parker is futex-based and fork-safe.
+#[cfg(target_os = "macos")]
+fn build_client() -> Result<reqwest::blocking::Client> {
+    thread::spawn(reqwest::blocking::Client::new)
+        .join()
+        .map_err(|_| crate::PyroscopeError::new("SessionManager: failed to build HTTP client"))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn build_client() -> Result<reqwest::blocking::Client> {
+    Ok(reqwest::blocking::Client::new())
+}
+
 impl SessionManager {
     /// Create a new SessionManager
     pub fn new() -> Result<Self> {
@@ -55,10 +70,11 @@ impl SessionManager {
         // Create a channel for sending and receiving sessions
         let (tx, rx): (SyncSender<SessionSignal>, Receiver<SessionSignal>) = sync_channel(10);
 
+        let client = build_client()?;
+
         // Create a thread for the SessionManager
         let handle = Some(thread::spawn(move || {
             log::trace!(target: LOG_TAG, "Started");
-            let client = reqwest::blocking::Client::new();
             while let Ok(signal) = rx.recv() {
                 match signal {
                     SessionSignal::Session(session) => {
