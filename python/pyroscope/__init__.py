@@ -1,7 +1,6 @@
 import warnings
 import logging
 import sys
-from enum import Enum
 
 from . import _native as lib
 
@@ -9,10 +8,7 @@ from contextlib import contextmanager
 
 LOGGER = logging.getLogger(__name__)
 
-class LineNo(Enum):
-    LastInstruction = lib.LastInstruction
-    First = lib.First
-    NoLine = lib.NoLine
+LineNo = lib.LineNo
 
 def configure(
         app_name=None,
@@ -62,7 +58,7 @@ def configure(
         tags or {},
         tenant_id or "",
         http_headers or {},
-        line_no.value
+        line_no
     )
 
 def shutdown():
