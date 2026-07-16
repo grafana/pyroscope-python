@@ -45,7 +45,8 @@ fn warn_about_fork(py: Python<'_>) -> PyResult<()> {
     let message = CString::new(format!(
         "This process (pid={}) is running Pyroscope, use of fork() may lead to \
          deadlocks in the child. Forking after Pyroscope starts is unsupported; \
-         configure Pyroscope after forking or call pyroscope.shutdown() before forking.",
+         configure Pyroscope after forking or call pyroscope.shutdown() before forking. \
+         See https://github.com/grafana/pyroscope-python/issues/122 for details.",
         std::process::id()
     ))
     .expect("fork warning does not contain null bytes");
