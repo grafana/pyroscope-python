@@ -24,7 +24,7 @@ use std::{
 use crate::backend::{BackendConfig, BackendImpl, Tag, ThreadTagsSet};
 use crate::pyroscope::PyroscopeAgentBuilder;
 use crate::pyspy_backend::Pyspy;
-use pyo3::exceptions::PyDeprecationWarning;
+use pyo3::exceptions::{PyDeprecationWarning, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
@@ -49,7 +49,7 @@ fn warn_about_fork(py: Python<'_>) -> PyResult<()> {
          See https://github.com/grafana/pyroscope-python/issues/122 for details.",
         std::process::id()
     ))
-    .expect("fork warning does not contain null bytes");
+    .map_err(|error| PyValueError::new_err(error.to_string()))?;
 
     PyErr::warn(py, &py.get_type::<PyDeprecationWarning>(), &message, 2)
 }
