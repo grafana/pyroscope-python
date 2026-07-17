@@ -1,3 +1,5 @@
+use pyo3::PyErr;
+
 pub type Result<T> = std::result::Result<T, PyroscopeError>;
 
 /// Error type of Pyroscope
@@ -33,6 +35,9 @@ pub enum PyroscopeError {
     AgentNotRunning,
     #[error("Agent already running")]
     AgentAlreadyRunning,
+
+    #[error("PyErr {0}")]
+    PyErr(#[from] PyErr)
 }
 
 impl PyroscopeError {

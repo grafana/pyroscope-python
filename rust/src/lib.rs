@@ -194,12 +194,7 @@ fn initialize_agent(
     }
     agent_builder = agent_builder.http_headers(http_headers);
 
-    memory::start(py, &agent_builder.mem_config);
-    if let Some(err) = PyErr::take(py) {
-        log::error!(target: "pyroscope-python", "failed to start memory profiler: {}", err);
-        return false;
-    }
-    let result = ffikit::run(PyroscopeAgentBuilder::new(
+    let result = ffikit::run(py, PyroscopeAgentBuilder::new(
         agent_builder,
         pyspy,
         dynamic_tags,
@@ -211,7 +206,6 @@ fn initialize_agent(
         }
         Err(e) => {
             log::error!(target: "pyroscope-python", "failed to start agent: {}", e);
-            memory::stop(py);
             false
         }
     }

@@ -140,7 +140,7 @@ pub struct PyroscopeAgentBuilder {
     /// Profiler backend
     backend: BackendImpl<BackendUninitialized>,
     /// Configuration Object
-    config: PyroscopeConfig,
+    pub config: PyroscopeConfig,
     ruleset: ThreadTagsSet,
 }
 

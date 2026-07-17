@@ -9,16 +9,20 @@ pub struct Config {
     pub heap_sample_size: u64,
 }
 
-pub fn start(_py: Python<'_>, config: &Config) {
+pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
     if !config.enabled {
-        return;
+        return Ok(());
     }
     unsafe {
         implementation::memalloc_start(
             config.max_nframe,
             config.heap_sample_size,
             config.enable_mem_domain,
-        )
+        );
+        match PyErr::take(py) {
+            None => Ok(()),
+            Some(err) => Err(err),
+        }
     }
 }
 

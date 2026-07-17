@@ -1,8 +1,8 @@
 use crate::backend::Tag;
 use crate::error::{PyroscopeError, Result};
-use crate::forksafety;
 use crate::pyroscope::{PyroscopeAgentBuilder, PyroscopeAgentRunning};
 use crate::{PyroscopeAgent, ThreadId};
+use crate::{forksafety, memory};
 use pyo3::Python;
 
 static STATE: forksafety::LeakableMutex<State> = forksafety::LeakableMutex::new();
@@ -12,17 +12,28 @@ struct State {
     agent: Option<PyroscopeAgent<PyroscopeAgentRunning>>,
 }
 
-pub fn run(agent: PyroscopeAgentBuilder) -> Result<()> {
+pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
     let mut guard = STATE.mutex().lock()?;
     if guard.agent.is_some() {
         return Err(PyroscopeError::AgentAlreadyRunning);
     }
+    let mem_config = agent.config.mem_config.clone();
+    let start_agent =
+        || -> Result<PyroscopeAgent<PyroscopeAgentRunning>> { agent.build()?.start() };
 
-    let agent = agent.build()?.start()?;
+    memory::start(py, &mem_config)?;
 
-    guard.agent = Some(agent);
-
-    Ok(())
+    let agent = start_agent();
+    match agent {
+        Ok(agent) => {
+            guard.agent = Some(agent);
+            Ok(())
+        }
+        Err(err) => {
+            memory::stop(py);
+            Err(err)
+        }
+    }
 }
 
 pub fn add_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
