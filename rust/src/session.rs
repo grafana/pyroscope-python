@@ -20,6 +20,13 @@ use reqwest::Url;
 use uuid::Uuid;
 
 const LOG_TAG: &str = "Pyroscope::Session";
+const LABEL_SCOPE_NAME: &str = "otel.scope.name";
+const LABEL_SCOPE_VERSION: &str = "otel.scope.version";
+const LABEL_PROCESS_RUNTIME_NAME: &str = "process.runtime.name";
+const LABEL_PROCESS_RUNTIME_VERSION: &str = "process.runtime.version";
+const LABEL_SERVICE_NAME: &str = "service_name";
+const LABEL_PROFILE_NAME: &str = "__name__";
+const SCOPE_NAME: &str = "com.grafana.pyroscope/python";
 
 /// Session Signal
 ///
@@ -103,7 +110,7 @@ impl Session {
     }
 
     fn push(self, client: &reqwest::blocking::Client) -> Result<()> {
-        log::info!(target: LOG_TAG, "Sending Session: {} - {}", self.time_range.from, self.time_range.until);
+        log::info!(target: LOG_TAG, "Sending Session: {:?} ", self.time_range);
 
         let mut req = PushRequest {
             series: Vec::with_capacity(self.batch.len()),
@@ -119,21 +126,7 @@ impl Session {
                 }
             };
 
-            let mut labels: Vec<LabelPair> = Vec::with_capacity(2 + self.config.tags.len());
-            labels.push(LabelPair {
-                name: "service_name".to_string(),
-                value: self.config.application_name.clone(),
-            });
-            labels.push(LabelPair {
-                name: "__name__".to_string(),
-                value: profile_type,
-            });
-            for (k, v) in &self.config.tags {
-                labels.push(LabelPair {
-                    name: k.clone(),
-                    value: v.clone(),
-                })
-            }
+            let labels = labels_for_profile(&self.config, profile_type);
             let series = RawProfileSeries {
                 labels,
                 samples: vec![RawSample {
@@ -203,5 +196,195 @@ impl Session {
         encoder.write_all(report)?;
         let compressed_data = encoder.finish().into_result()?;
         Ok(compressed_data)
+    }
+}
+
+fn labels_for_profile(config: &PyroscopeConfig, profile_type: String) -> Vec<LabelPair> {
+    let mut labels: Vec<LabelPair> = Vec::with_capacity(6 + config.tags.len());
+    labels.push(LabelPair {
+        name: LABEL_PROFILE_NAME.to_string(),
+        value: profile_type,
+    });
+    for (k, v) in &config.tags {
+        if k == LABEL_PROFILE_NAME {
+            continue;
+        }
+        labels.push(LabelPair {
+            name: k.clone(),
+            value: v.clone(),
+        })
+    }
+    push_label_if_absent(&mut labels, LABEL_SERVICE_NAME, &config.application_name);
+    push_label_if_absent(&mut labels, LABEL_SCOPE_NAME, SCOPE_NAME);
+    push_label_if_absent(&mut labels, LABEL_SCOPE_VERSION, &config.spy_version);
+    push_label_if_absent(
+        &mut labels,
+        LABEL_PROCESS_RUNTIME_NAME,
+        &config.runtime_name,
+    );
+    push_label_if_absent(
+        &mut labels,
+        LABEL_PROCESS_RUNTIME_VERSION,
+        &config.runtime_version,
+    );
+
+    labels
+}
+
+fn push_label_if_absent(labels: &mut Vec<LabelPair>, name: &str, value: &str) {
+    if labels.iter().any(|label| label.name == name) {
+        return;
+    }
+    labels.push(LabelPair {
+        name: name.to_string(),
+        value: value.to_string(),
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn tags<const N: usize>(tags: [(&str, &str); N]) -> HashMap<String, String> {
+        tags.into_iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn labels_for_profile_includes_scope_and_runtime_labels() {
+        let config =
+            PyroscopeConfig::new("http://localhost:4040", "my-app", 100, "pyspy", "1.0.12")
+                .tags(tags([("env", "prod")]))
+                .runtime("cpython".to_string(), "3.12.4".to_string());
+
+        let labels = labels_for_profile(&config, "process_cpu".to_string());
+        let labels_by_name: HashMap<&str, &str> = labels
+            .iter()
+            .map(|label| (label.name.as_str(), label.value.as_str()))
+            .collect();
+
+        assert_eq!(labels_by_name.get(LABEL_SERVICE_NAME), Some(&"my-app"));
+        assert_eq!(labels_by_name.get(LABEL_PROFILE_NAME), Some(&"process_cpu"));
+        assert_eq!(
+            labels.first().map(|label| label.name.as_str()),
+            Some(LABEL_PROFILE_NAME)
+        );
+        assert_eq!(labels_by_name.get("env"), Some(&"prod"));
+        assert_eq!(labels_by_name.get(LABEL_SCOPE_NAME), Some(&SCOPE_NAME));
+        assert_eq!(labels_by_name.get(LABEL_SCOPE_VERSION), Some(&"1.0.12"));
+        assert_eq!(
+            labels_by_name.get(LABEL_PROCESS_RUNTIME_NAME),
+            Some(&"cpython")
+        );
+        assert_eq!(
+            labels_by_name.get(LABEL_PROCESS_RUNTIME_VERSION),
+            Some(&"3.12.4")
+        );
+        assert_eq!(
+            labels
+                .iter()
+                .filter(|label| label.name == LABEL_SCOPE_NAME)
+                .count(),
+            1
+        );
+        assert_eq!(
+            labels
+                .iter()
+                .filter(|label| label.name == LABEL_PROCESS_RUNTIME_VERSION)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn labels_for_profile_preserves_user_provided_semconv_labels() {
+        let config =
+            PyroscopeConfig::new("http://localhost:4040", "my-app", 100, "pyspy", "1.0.12")
+                .tags(tags([
+                    (LABEL_SCOPE_NAME, "user-supplied-scope"),
+                    (LABEL_SCOPE_VERSION, "user-supplied-scope-version"),
+                    (LABEL_PROCESS_RUNTIME_NAME, "user-supplied-runtime"),
+                    (
+                        LABEL_PROCESS_RUNTIME_VERSION,
+                        "user-supplied-runtime-version",
+                    ),
+                ]))
+                .runtime("cpython".to_string(), "3.12.4".to_string());
+
+        let labels = labels_for_profile(&config, "process_cpu".to_string());
+        let labels_by_name: HashMap<&str, &str> = labels
+            .iter()
+            .map(|label| (label.name.as_str(), label.value.as_str()))
+            .collect();
+
+        assert_eq!(
+            labels_by_name.get(LABEL_SCOPE_NAME),
+            Some(&"user-supplied-scope")
+        );
+        assert_eq!(
+            labels_by_name.get(LABEL_SCOPE_VERSION),
+            Some(&"user-supplied-scope-version")
+        );
+        assert_eq!(
+            labels_by_name.get(LABEL_PROCESS_RUNTIME_NAME),
+            Some(&"user-supplied-runtime")
+        );
+        assert_eq!(
+            labels_by_name.get(LABEL_PROCESS_RUNTIME_VERSION),
+            Some(&"user-supplied-runtime-version")
+        );
+        assert_eq!(
+            labels
+                .iter()
+                .filter(|label| label.name == LABEL_SCOPE_NAME)
+                .count(),
+            1
+        );
+        assert_eq!(
+            labels
+                .iter()
+                .filter(|label| label.name == LABEL_PROCESS_RUNTIME_VERSION)
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn labels_for_profile_uses_user_service_name_and_ignores_user_profile_name() {
+        let config =
+            PyroscopeConfig::new("http://localhost:4040", "my-app", 100, "pyspy", "1.0.12")
+                .tags(tags([
+                    (LABEL_SERVICE_NAME, "user-service"),
+                    (LABEL_PROFILE_NAME, "user-profile"),
+                ]))
+                .runtime("cpython".to_string(), "3.12.4".to_string());
+
+        let labels = labels_for_profile(&config, "process_cpu".to_string());
+        let labels_by_name: HashMap<&str, &str> = labels
+            .iter()
+            .map(|label| (label.name.as_str(), label.value.as_str()))
+            .collect();
+
+        assert_eq!(
+            labels_by_name.get(LABEL_SERVICE_NAME),
+            Some(&"user-service")
+        );
+        assert_eq!(labels_by_name.get(LABEL_PROFILE_NAME), Some(&"process_cpu"));
+        assert_eq!(
+            labels
+                .iter()
+                .filter(|label| label.name == LABEL_SERVICE_NAME)
+                .count(),
+            1
+        );
+        assert_eq!(
+            labels
+                .iter()
+                .filter(|label| label.name == LABEL_PROFILE_NAME)
+                .count(),
+            1
+        );
     }
 }

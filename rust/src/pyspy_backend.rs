@@ -1,7 +1,7 @@
 use crate::{
     backend::{
         Backend, BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame,
-        StackTrace, ThreadTag, ThreadTagsSet,
+        StackTrace, ThreadTagsSet,
     },
     error::{PyroscopeError, Result},
 };
@@ -17,14 +17,13 @@ use std::{
 
 const LOG_TAG: &str = "Pyroscope::Pyspy";
 
-#[derive(Default)]
 pub struct Pyspy {
     buffer: Arc<Mutex<StackBuffer>>,
     config: py_spy::config::Config,
     backend_config: BackendConfig,
     sampler_thread: Option<JoinHandle<Result<()>>>,
     running: Arc<AtomicBool>,
-    ruleset: Arc<Mutex<ThreadTagsSet>>,
+    ruleset: ThreadTagsSet,
 }
 
 impl std::fmt::Debug for Pyspy {
@@ -34,31 +33,23 @@ impl std::fmt::Debug for Pyspy {
 }
 
 impl Pyspy {
-    pub fn new(config: py_spy::config::Config, backend_config: BackendConfig) -> Self {
+    pub fn new(
+        config: py_spy::config::Config,
+        backend_config: BackendConfig,
+        ruleset: ThreadTagsSet,
+    ) -> Self {
         Pyspy {
             buffer: Arc::new(Mutex::new(StackBuffer::default())),
             config,
             backend_config,
             sampler_thread: None,
             running: Arc::new(AtomicBool::new(false)),
-            ruleset: Arc::new(Mutex::new(ThreadTagsSet::default())),
+            ruleset,
         }
     }
 }
 
 impl Backend for Pyspy {
-    fn add_tag(&self, rule: ThreadTag) -> Result<()> {
-        self.ruleset.lock()?.add(rule)?;
-
-        Ok(())
-    }
-
-    fn remove_tag(&self, rule: ThreadTag) -> Result<()> {
-        self.ruleset.lock()?.remove(rule)?;
-
-        Ok(())
-    }
-
     fn initialize(&mut self) -> Result<()> {
         if self.config.pid.is_none() {
             return Err(PyroscopeError::new("Pyspy: No Process ID Specified"));
@@ -98,7 +89,7 @@ impl Backend for Pyspy {
                     let own_trace: StackTrace =
                         Into::<StackTraceWrapper>::into((trace.clone(), &backend_config)).into();
 
-                    let stacktrace = own_trace.add_tag_rules(&*ruleset.lock()?);
+                    let stacktrace = own_trace.add_tag_rules(&ruleset);
 
                     buffer.lock()?.record(stacktrace)?;
                 }

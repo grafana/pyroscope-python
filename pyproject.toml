@@ -1,6 +1,6 @@
 [project]
 name = "pyroscope-io"
-version = "1.0.12" # x-release-please-version
+version = "1.1.0" # x-release-please-version
 description = "Pyroscope Python integration"
 authors = [
     {name = "Tolya Korniltsev",email = "anatoly.korniltsev@grafana.com"}
@@ -9,9 +9,7 @@ license-files = [ "LICENSE" ]
 license = "Apache-2.0"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = [
-    "cffi (>=2.0.0,<3.0.0)",
-]
+dependencies = []
 maintainers = [
     {name = "Tolyan Korniltsev", email = "anatoly.korniltsev@grafana.com"},
 ]
@@ -29,15 +27,10 @@ classifiers = [
 [tool.setuptools.packages]
 find = { where = ["python/"] }
 
-[tool.distutils.bdist_wheel]
-py_limited_api = "cp310"
-
-
 [build-system]
 requires = [
-    "setuptools (>=82.0.0,<83.0.0)",
+    "setuptools (>=83.0.0,<83.1.0)",
     "setuptools-rust (>=1.12.0,<2.0.0)",
-    "cffi (>=2.0.0,<3.0.0)",
 ]
 
 

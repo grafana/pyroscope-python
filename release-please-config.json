@@ -23,6 +23,11 @@
         {
           "type": "generic",
           "path": "rust/Cargo.toml"
+        },
+        {
+          "type": "toml",
+          "path": "rust/Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==\"pyroscope_python_extension\")].version"
         }
       ]
     }

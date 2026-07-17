@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use super::{ReportBatch, ThreadTag};
+use super::ReportBatch;
 
 /// Backend Config
 #[derive(Debug, Copy, Clone, Default)]
@@ -24,8 +24,6 @@ pub trait Backend: Send {
     fn shutdown(self: Box<Self>) -> Result<()>;
     /// Generate profiling report
     fn report(&mut self) -> Result<ReportBatch>;
-    fn add_tag(&self, tag: ThreadTag) -> Result<()>;
-    fn remove_tag(&self, tag: ThreadTag) -> Result<()>;
 }
 
 /// Marker struct for Empty BackendImpl
@@ -45,11 +43,6 @@ pub trait BackendState {}
 impl BackendState for BackendBare {}
 impl BackendState for BackendUninitialized {}
 impl BackendState for BackendReady {}
-
-/// Backend Accessibility Trait
-pub trait BackendAccessible: BackendState {}
-impl BackendAccessible for BackendUninitialized {}
-impl BackendAccessible for BackendReady {}
 
 /// Precursor Backend Implementation
 /// This struct is used to implement the Backend trait. It serves two purposes:
@@ -90,24 +83,6 @@ impl BackendImpl<BackendUninitialized> {
             backend,
             _state: std::marker::PhantomData,
         })
-    }
-}
-
-impl<S: BackendAccessible> BackendImpl<S> {
-    pub fn add_tag(&self, tag: ThreadTag) -> Result<()> {
-        self.backend
-            .lock()?
-            .as_ref()
-            .ok_or(PyroscopeError::BackendImpl)?
-            .add_tag(tag)
-    }
-
-    pub fn remove_tag(&self, rule: ThreadTag) -> Result<()> {
-        self.backend
-            .lock()?
-            .as_ref()
-            .ok_or(PyroscopeError::BackendImpl)?
-            .remove_tag(rule)
     }
 }
 

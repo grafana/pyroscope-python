@@ -10,24 +10,62 @@ pub mod encode;
 pub mod error;
 pub mod pyroscope;
 pub mod session;
-pub mod timer;
 
 mod utils;
 pub use utils::ThreadId;
 pub mod ffikit;
 
-use crate::backend::{BackendConfig, BackendImpl, Tag};
+use std::{
+    collections::HashMap,
+    ffi::CString,
+    sync::atomic::{AtomicBool, Ordering},
+};
+
+use crate::backend::{BackendConfig, BackendImpl, Tag, ThreadTagsSet};
 use crate::pyroscope::PyroscopeAgentBuilder;
 use crate::pyspy_backend::Pyspy;
-use std::ffi::CStr;
-use std::os::raw::c_char;
-const LOG_TAG: &str = "Pyroscope::pyspy::ffi";
+use pyo3::exceptions::{PyDeprecationWarning, PyValueError};
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
+use pyo3::wrap_pyfunction;
 
 const PYSPY_NAME: &str = "pyspy";
 const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[unsafe(no_mangle)]
-pub extern "C" fn initialize_logging(logging_level: u32) -> bool {
+static AGENT_RUNNING: AtomicBool = AtomicBool::new(false);
+
+#[pyfunction]
+fn warn_about_fork(py: Python<'_>) -> PyResult<()> {
+    if !AGENT_RUNNING.load(Ordering::Acquire) {
+        return Ok(());
+    }
+
+    // The native agent starts threads and is not safe to inherit across a fork.
+    // See https://github.com/grafana/pyroscope-python/issues/122.
+    let message = CString::new(format!(
+        "This process (pid={}) is running Pyroscope, use of fork() may lead to \
+         deadlocks in the child. Forking after Pyroscope starts is unsupported; \
+         configure Pyroscope after forking or call pyroscope.shutdown() before forking. \
+         See https://github.com/grafana/pyroscope-python/issues/122 for details.",
+        std::process::id()
+    ))
+    .map_err(|error| PyValueError::new_err(error.to_string()))?;
+
+    PyErr::warn(py, &py.get_type::<PyDeprecationWarning>(), &message, 2)
+}
+
+fn register_fork_warning(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+    let register_at_fork = py.import("os")?.getattr("register_at_fork")?;
+
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("after_in_parent", wrap_pyfunction!(warn_about_fork, m)?)?;
+    register_at_fork.call((), Some(&kwargs))?;
+    Ok(())
+}
+
+#[pyfunction]
+fn initialize_logging(logging_level: u32) -> bool {
     // Force rustc to display the log messages in the console.
     match logging_level {
         50 => {
@@ -55,61 +93,26 @@ pub extern "C" fn initialize_logging(logging_level: u32) -> bool {
     true
 }
 
-#[unsafe(no_mangle)]
-/// # Safety
-/// All pointer arguments must be valid, non-null, null-terminated C strings.
-pub unsafe extern "C" fn initialize_agent(
-    application_name: *const c_char,
-    server_address: *const c_char,
-    basic_auth_username: *const c_char,
-    basic_auth_password: *const c_char,
+#[allow(clippy::too_many_arguments)]
+#[pyfunction]
+fn initialize_agent(
+    application_name: String,
+    server_address: String,
+    basic_auth_username: String,
+    basic_auth_password: String,
     sample_rate: u32,
     oncpu: bool,
     gil_only: bool,
     report_pid: bool,
     report_thread_id: bool,
     report_thread_name: bool,
-    tags: *const c_char,
-    tenant_id: *const c_char,
-    http_headers_json: *const c_char,
+    runtime_name: String,
+    runtime_version: String,
+    tags: HashMap<String, String>,
+    tenant_id: String,
+    http_headers: HashMap<String, String>,
     line_no: LineNo,
 ) -> bool {
-    let application_name = unsafe { CStr::from_ptr(application_name) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let server_address = unsafe { CStr::from_ptr(server_address) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let basic_auth_username = unsafe { CStr::from_ptr(basic_auth_username) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let basic_auth_password = unsafe { CStr::from_ptr(basic_auth_password) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    // tags
-    let tags_string = unsafe { CStr::from_ptr(tags) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let tenant_id = unsafe { CStr::from_ptr(tenant_id) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
-    let http_headers_json = unsafe { CStr::from_ptr(http_headers_json) }
-        .to_str()
-        .unwrap()
-        .to_string();
-
     let pid = std::process::id();
 
     let backend_config = BackendConfig {
@@ -134,10 +137,13 @@ pub unsafe extern "C" fn initialize_agent(
         ..py_spy::Config::default()
     };
 
-    let tags_ref = tags_string.as_str();
-    let tags = string_to_tags(tags_ref);
+    let dynamic_tags = ThreadTagsSet::new();
 
-    let pyspy = BackendImpl::new(Box::new(Pyspy::new(config, backend_config)));
+    let pyspy = BackendImpl::new(Box::new(Pyspy::new(
+        config,
+        backend_config,
+        dynamic_tags.clone(),
+    )));
 
     let mut agent_builder = pyroscope::PyroscopeConfig::new(
         server_address,
@@ -152,7 +158,8 @@ pub unsafe extern "C" fn initialize_agent(
         //     heap_sample_size: mem_heap_sample_size,
         // },
     )
-    .tags(tags);
+    .tags(tags)
+    .runtime(runtime_name, runtime_version);
 
     if !basic_auth_username.is_empty() && !basic_auth_password.is_empty() {
         agent_builder = agent_builder.basic_auth(basic_auth_username, basic_auth_password);
@@ -160,86 +167,42 @@ pub unsafe extern "C" fn initialize_agent(
     if !tenant_id.is_empty() {
         agent_builder = agent_builder.tenant_id(tenant_id);
     }
-
-    let http_headers = pyroscope::parse_http_headers_json(http_headers_json);
-    match http_headers {
-        Ok(http_headers) => {
-            agent_builder = agent_builder.http_headers(http_headers);
-        }
-        Err(e) => match e {
-            PyroscopeError::Json(e) => {
-                log::error!(target: LOG_TAG, "parse_http_headers_json error {}", e);
-            }
-            PyroscopeError::AdHoc(e) => {
-                log::error!(target: LOG_TAG, "parse_http_headers_json {}", e);
-            }
-            _ => {}
-        },
-    }
+    agent_builder = agent_builder.http_headers(http_headers);
 
     // mem::start(&pyroscope_config.mem_config);
-    ffikit::run(PyroscopeAgentBuilder::new(agent_builder, pyspy)).is_ok()
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn drop_agent() -> bool {
-    ffikit::send(ffikit::Signal::Kill).is_ok()
-}
-
-#[unsafe(no_mangle)]
-/// # Safety
-/// `key` and `value` must be valid, non-null, null-terminated C strings.
-pub unsafe extern "C" fn add_thread_tag(key: *const c_char, value: *const c_char) -> bool {
-    let key = unsafe { CStr::from_ptr(key) }.to_str().unwrap().to_owned();
-    let value = unsafe { CStr::from_ptr(value) }
-        .to_str()
-        .unwrap()
-        .to_owned();
-
-    ffikit::send(ffikit::Signal::AddThreadTag(
-        self_thread_id(),
-        Tag { key, value },
+    let started = ffikit::run(PyroscopeAgentBuilder::new(
+        agent_builder,
+        pyspy,
+        dynamic_tags,
     ))
-    .is_ok()
-}
-
-#[unsafe(no_mangle)]
-/// # Safety
-/// `key` and `value` must be valid, non-null, null-terminated C strings.
-pub unsafe extern "C" fn remove_thread_tag(key: *const c_char, value: *const c_char) -> bool {
-    let key = unsafe { CStr::from_ptr(key) }.to_str().unwrap().to_owned();
-    let value = unsafe { CStr::from_ptr(value) }
-        .to_str()
-        .unwrap()
-        .to_owned();
-
-    ffikit::send(ffikit::Signal::RemoveThreadTag(
-        self_thread_id(),
-        Tag { key, value },
-    ))
-    .is_ok()
-}
-
-fn string_to_tags(tags: &str) -> Vec<(&str, &str)> {
-    let mut tags_vec = Vec::new();
-
-    // check if string is empty
-    if tags.is_empty() {
-        return tags_vec;
+    .is_ok();
+    if started {
+        AGENT_RUNNING.store(true, Ordering::Release);
     }
-
-    for tag in tags.split(',') {
-        let mut tag_split = tag.split('=');
-        let key = tag_split.next().unwrap();
-        let value = tag_split.next().unwrap();
-        tags_vec.push((key, value));
-    }
-
-    tags_vec
+    started
 }
 
-#[repr(C)]
-#[derive(Debug)]
+#[pyfunction]
+fn drop_agent() -> bool {
+    let dropped = ffikit::stop().is_ok();
+    if dropped {
+        AGENT_RUNNING.store(false, Ordering::Release);
+    }
+    dropped
+}
+
+#[pyfunction]
+fn add_thread_tag(key: String, value: String) -> bool {
+    ffikit::add_thread_tag(self_thread_id(), Tag { key, value }).is_ok()
+}
+
+#[pyfunction]
+fn remove_thread_tag(key: String, value: String) -> bool {
+    ffikit::remove_thread_tag(self_thread_id(), Tag { key, value }).is_ok()
+}
+
+#[pyclass(eq, eq_int, from_py_object)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LineNo {
     LastInstruction = 0,
     First = 1,
@@ -254,6 +217,18 @@ impl From<LineNo> for py_spy::config::LineNo {
             LineNo::NoLine => py_spy::config::LineNo::NoLine,
         }
     }
+}
+
+#[pymodule]
+fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<LineNo>()?;
+    m.add_function(wrap_pyfunction!(initialize_logging, m)?)?;
+    m.add_function(wrap_pyfunction!(initialize_agent, m)?)?;
+    m.add_function(wrap_pyfunction!(drop_agent, m)?)?;
+    m.add_function(wrap_pyfunction!(add_thread_tag, m)?)?;
+    m.add_function(wrap_pyfunction!(remove_thread_tag, m)?)?;
+    register_fork_warning(m)?;
+    Ok(())
 }
 
 pub fn self_thread_id() -> ThreadId {

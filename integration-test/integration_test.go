@@ -64,23 +64,22 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 		boolString(cfg.gilOnly),
 	)
 
-	var lastCollapsed string
-	var lastErr error
 	require.Eventually(t, func() bool {
-		lastCollapsed, lastErr = queryProfile(pyroscopeURL, labelSelector)
-		if lastErr != nil {
-			t.Logf("query failed for %s: %v", cfg, lastErr)
+		collapsed, err := queryProfile(pyroscopeURL, labelSelector)
+		if err != nil {
+			t.Logf("query failed for %s: %v", cfg, err)
 			return false
 		}
-		if lastCollapsed == "" {
+		if collapsed == "" {
+			t.Logf("profile for %s is empty", cfg)
 			return false
 		}
-		if !strings.Contains(lastCollapsed, "multihash") {
-			t.Logf("profile for %s does not contain multihash yet:\n%s", cfg, lastCollapsed)
+		if !strings.Contains(collapsed, "multihash") {
+			t.Logf("profile for %s does not contain multihash yet:\n%s", cfg, collapsed)
 			return false
 		}
 		return true
-	}, 3*time.Minute, 5*time.Second, "expected multihash samples for %s; last error: %v; last profile:\n%s", cfg, lastErr, lastCollapsed)
+	}, 3*time.Minute, 5*time.Second, "expected multihash samples for %s", cfg)
 }
 
 func startPyroscope(t *testing.T, net *dockertest.Network) string {

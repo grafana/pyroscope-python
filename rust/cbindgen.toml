@@ -13,10 +13,21 @@ braces = "SameLine"
 tab_width = 2
 line_length = 80
 
-
 [parse]
 parse_deps = false
-include = ["LineNoFFI"]
 
 [export]
-include = ["LineNoFFI"]
+include = [
+  "FFIInternedString",
+  "FFIStringView",
+  "FFIFrame",
+  "FFIHeapSampleValues",
+  "FFISample",
+  "pyroscope_memprof_string_table_intern_string",
+  "pyroscope_memprof_push_sample",
+]
+exclude = [
+  "memalloc_start",
+  "memalloc_stop",
+  "memalloc_heap_py",
+]
