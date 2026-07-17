@@ -64,7 +64,20 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 		boolString(cfg.gilOnly),
 	)
 
+	var workloadExited bool
+	var workloadExitCode int
 	require.Eventually(t, func() bool {
+		state, err := workload.State()
+		if err != nil {
+			t.Logf("failed to inspect workload container: %v", err)
+			return false
+		}
+		if !state.Running {
+			workloadExited = true
+			workloadExitCode = state.ExitCode
+			return true
+		}
+
 		collapsed, err := queryProfile(pyroscopeURL, labelSelector)
 		if err != nil {
 			t.Logf("query failed for %s: %v", cfg, err)
@@ -80,6 +93,9 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 		}
 		return true
 	}, 3*time.Minute, 5*time.Second, "expected multihash samples for %s", cfg)
+	if workloadExited {
+		t.Fatalf("workload container exited before producing the expected profile (exit code %d)", workloadExitCode)
+	}
 }
 
 func startPyroscope(t *testing.T, net *dockertest.Network) string {

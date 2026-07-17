@@ -19,6 +19,11 @@ type Container struct {
 	ID string
 }
 
+type ContainerState struct {
+	Running  bool
+	ExitCode int
+}
+
 type WaitStrategy struct {
 	typ      string
 	port     string
@@ -150,6 +155,21 @@ func (c *Container) Stop(t *testing.T, timeout time.Duration) {
 		seconds = 1
 	}
 	runQuiet("docker", "stop", "--time", fmt.Sprintf("%d", seconds), c.ID)
+}
+
+func (c *Container) State() (ContainerState, error) {
+	output, err := exec.Command(
+		"docker", "inspect", c.ID, "--format", "{{.State.Running}} {{.State.ExitCode}}",
+	).CombinedOutput()
+	if err != nil {
+		return ContainerState{}, fmt.Errorf("docker inspect: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+
+	var state ContainerState
+	if _, err := fmt.Sscanf(string(output), "%t %d", &state.Running, &state.ExitCode); err != nil {
+		return ContainerState{}, fmt.Errorf("parse docker state %q: %w", strings.TrimSpace(string(output)), err)
+	}
+	return state, nil
 }
 
 type BuildRequest struct {
