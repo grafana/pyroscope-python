@@ -35,6 +35,17 @@ const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
 static AGENT_RUNNING: AtomicBool = AtomicBool::new(false);
 
 #[pyfunction]
+fn at_fork_after_in_parent(py: Python<'_>) -> PyResult<()> {
+    warn_about_fork(py)
+}
+
+#[pyfunction]
+fn at_fork_after_in_child(py: Python<'_>) -> PyResult<()> {
+    ffikit::at_fork_after_in_child(py);
+    AGENT_RUNNING.store(false, Ordering::Release);
+    Ok(())
+}
+
 fn warn_about_fork(py: Python<'_>) -> PyResult<()> {
     if !AGENT_RUNNING.load(Ordering::Acquire) {
         return Ok(());
@@ -59,7 +70,14 @@ fn register_fork_warning(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let register_at_fork = py.import("os")?.getattr("register_at_fork")?;
 
     let kwargs = PyDict::new(py);
-    kwargs.set_item("after_in_parent", wrap_pyfunction!(warn_about_fork, m)?)?;
+    kwargs.set_item(
+        "after_in_parent",
+        wrap_pyfunction!(at_fork_after_in_parent, m)?,
+    )?;
+    kwargs.set_item(
+        "after_in_child",
+        wrap_pyfunction!(at_fork_after_in_child, m)?,
+    )?;
     register_at_fork.call((), Some(&kwargs))?;
     Ok(())
 }
