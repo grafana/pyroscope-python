@@ -117,7 +117,7 @@ func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string
 		Cmd: []string{
 			"sh",
 			"-c",
-			"python -m pip install --no-cache-dir /pyroscope-wheels/*.whl && python /pyroscope-python/integration-test/testdata/workload.py",
+			"python -m pip install --no-cache-dir --no-index --find-links /pyroscope-wheels pyroscope-io && python /pyroscope-python/integration-test/testdata/workload.py",
 		},
 	})
 }
