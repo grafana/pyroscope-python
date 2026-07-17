@@ -1,7 +1,6 @@
 import warnings
 import logging
 import sys
-from enum import Enum
 
 from . import _native as lib
 
@@ -9,10 +8,7 @@ from contextlib import contextmanager
 
 LOGGER = logging.getLogger(__name__)
 
-class LineNo(Enum):
-    LastInstruction = lib.LastInstruction
-    First = lib.First
-    NoLine = lib.NoLine
+LineNo = lib.LineNo
 
 def configure(
         app_name=None,
@@ -46,7 +42,7 @@ def configure(
         log_level = LOGGER.getEffectiveLevel()
         lib.initialize_logging(log_level)
 
-    lib.initialize_agent(
+    return lib.initialize_agent(
         application_name,
         server_address,
         basic_auth_username,
@@ -62,7 +58,7 @@ def configure(
         tags or {},
         tenant_id or "",
         http_headers or {},
-        line_no.value
+        line_no
     )
 
 def shutdown():
@@ -72,6 +68,8 @@ def shutdown():
         LOGGER.info("Pyroscope Agent successfully shutdown")
     else:
         LOGGER.warning("Pyroscope Agent shutdown failed")
+
+    return drop
 
 def add_thread_tag(key, value):
     lib.add_thread_tag(key, value)

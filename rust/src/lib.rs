@@ -14,20 +14,73 @@ pub mod session;
 mod utils;
 pub use utils::ThreadId;
 pub mod ffikit;
+mod forksafety;
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ffi::CString,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use crate::backend::{BackendConfig, Tag, ThreadTagsSet};
 use crate::pyroscope::PyroscopeAgentBuilder;
+use pyo3::exceptions::{PyDeprecationWarning, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
 
 const PYSPY_NAME: &str = "pyspy";
 const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-const LAST_INSTRUCTION: u32 = LineNo::LastInstruction as u32;
-const FIRST: u32 = LineNo::First as u32;
-const NO_LINE: u32 = LineNo::NoLine as u32;
+static AGENT_RUNNING: AtomicBool = AtomicBool::new(false);
+
+#[pyfunction]
+fn at_fork_after_in_parent(py: Python<'_>) -> PyResult<()> {
+    warn_about_fork(py)
+}
+
+#[pyfunction]
+fn at_fork_after_in_child(py: Python<'_>) -> PyResult<()> {
+    ffikit::at_fork_after_in_child(py);
+    AGENT_RUNNING.store(false, Ordering::Release);
+    Ok(())
+}
+
+fn warn_about_fork(py: Python<'_>) -> PyResult<()> {
+    if !AGENT_RUNNING.load(Ordering::Acquire) {
+        return Ok(());
+    }
+
+    // The native agent starts threads and is not safe to inherit across a fork.
+    // See https://github.com/grafana/pyroscope-python/issues/122.
+    let message = CString::new(format!(
+        "This process (pid={}) is running Pyroscope, use of fork() may lead to \
+         deadlocks in the child. Forking after Pyroscope starts is unsupported; \
+         configure Pyroscope after forking or call pyroscope.shutdown() before forking. \
+         See https://github.com/grafana/pyroscope-python/issues/122 for details.",
+        std::process::id()
+    ))
+    .map_err(|error| PyValueError::new_err(error.to_string()))?;
+
+    PyErr::warn(py, &py.get_type::<PyDeprecationWarning>(), &message, 2)
+}
+
+fn register_fork_warning(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+    let register_at_fork = py.import("os")?.getattr("register_at_fork")?;
+
+    let kwargs = PyDict::new(py);
+    kwargs.set_item(
+        "after_in_parent",
+        wrap_pyfunction!(at_fork_after_in_parent, m)?,
+    )?;
+    kwargs.set_item(
+        "after_in_child",
+        wrap_pyfunction!(at_fork_after_in_child, m)?,
+    )?;
+    register_at_fork.call((), Some(&kwargs))?;
+    Ok(())
+}
 
 #[pyfunction]
 fn initialize_logging(logging_level: u32) -> bool {
@@ -76,7 +129,7 @@ fn initialize_agent(
     tags: HashMap<String, String>,
     tenant_id: String,
     http_headers: HashMap<String, String>,
-    line_no: u32,
+    line_no: LineNo,
 ) -> bool {
     let pid = std::process::id();
 
@@ -97,7 +150,7 @@ fn initialize_agent(
         include_thread_ids: true,
         subprocesses: false,
         gil_only,
-        lineno: LineNo::from(line_no).into(),
+        lineno: line_no.into(),
         duration: py_spy::config::RecordDuration::Unlimited,
         ..py_spy::Config::default()
     };
@@ -129,18 +182,26 @@ fn initialize_agent(
     agent_builder = agent_builder.http_headers(http_headers);
 
     // mem::start(&pyroscope_config.mem_config);
-    ffikit::run(PyroscopeAgentBuilder::new(
+    let started = ffikit::run(PyroscopeAgentBuilder::new(
         agent_builder,
         config,
         backend_config,
         dynamic_tags,
     ))
-    .is_ok()
+    .is_ok();
+    if started {
+        AGENT_RUNNING.store(true, Ordering::Release);
+    }
+    started
 }
 
 #[pyfunction]
 fn drop_agent() -> bool {
-    ffikit::stop().is_ok()
+    let dropped = ffikit::stop().is_ok();
+    if dropped {
+        AGENT_RUNNING.store(false, Ordering::Release);
+    }
+    dropped
 }
 
 #[pyfunction]
@@ -153,22 +214,12 @@ fn remove_thread_tag(key: String, value: String) -> bool {
     ffikit::remove_thread_tag(self_thread_id(), Tag { key, value }).is_ok()
 }
 
-#[repr(C)]
-#[derive(Debug)]
+#[pyclass(eq, eq_int, from_py_object)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LineNo {
     LastInstruction = 0,
     First = 1,
     NoLine = 2,
-}
-
-impl From<u32> for LineNo {
-    fn from(val: u32) -> Self {
-        match val {
-            FIRST => LineNo::First,
-            NO_LINE => LineNo::NoLine,
-            _ => LineNo::LastInstruction,
-        }
-    }
 }
 
 impl From<LineNo> for py_spy::config::LineNo {
@@ -183,14 +234,13 @@ impl From<LineNo> for py_spy::config::LineNo {
 
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add("LastInstruction", LAST_INSTRUCTION)?;
-    m.add("First", FIRST)?;
-    m.add("NoLine", NO_LINE)?;
+    m.add_class::<LineNo>()?;
     m.add_function(wrap_pyfunction!(initialize_logging, m)?)?;
     m.add_function(wrap_pyfunction!(initialize_agent, m)?)?;
     m.add_function(wrap_pyfunction!(drop_agent, m)?)?;
     m.add_function(wrap_pyfunction!(add_thread_tag, m)?)?;
     m.add_function(wrap_pyfunction!(remove_thread_tag, m)?)?;
+    register_fork_warning(m)?;
     Ok(())
 }
 
