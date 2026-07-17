@@ -37,7 +37,7 @@ pub enum PyroscopeError {
     AgentAlreadyRunning,
 
     #[error("PyErr {0}")]
-    PyErr(#[from] PyErr)
+    PyErr(#[from] PyErr),
 }
 
 impl PyroscopeError {

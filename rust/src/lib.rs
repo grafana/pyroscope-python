@@ -194,11 +194,10 @@ fn initialize_agent(
     }
     agent_builder = agent_builder.http_headers(http_headers);
 
-    let result = ffikit::run(py, PyroscopeAgentBuilder::new(
-        agent_builder,
-        pyspy,
-        dynamic_tags,
-    ));
+    let result = ffikit::run(
+        py,
+        PyroscopeAgentBuilder::new(agent_builder, pyspy, dynamic_tags),
+    );
     match result {
         Ok(_) => {
             AGENT_RUNNING.store(true, Ordering::Release);
