@@ -14,6 +14,7 @@ pub mod session;
 mod utils;
 pub use utils::ThreadId;
 pub mod ffikit;
+mod forksafety;
 
 use std::{
     collections::HashMap,
