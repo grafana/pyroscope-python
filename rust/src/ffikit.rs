@@ -4,7 +4,6 @@ use crate::forksafety::LeakableMutex;
 use crate::pyroscope::{PyroscopeAgentBuilder, PyroscopeAgentRunning};
 use crate::{PyroscopeAgent, ThreadId};
 use pyo3::Python;
-use std::ops::DerefMut;
 
 static STATE: LeakableMutex<State> = LeakableMutex::new();
 
@@ -27,7 +26,7 @@ pub fn run(agent: PyroscopeAgentBuilder) -> Result<()> {
 }
 
 pub fn add_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
-    if let Some(agent) = &STATE.mutex().lock()?.deref_mut().agent {
+    if let Some(agent) = &STATE.mutex().lock()?.agent {
         agent.add_thread_tag(tid, tag)
     } else {
         Err(PyroscopeError::AgentNotRunning)
@@ -35,7 +34,7 @@ pub fn add_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
 }
 
 pub fn remove_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
-    if let Some(agent) = &STATE.mutex().lock()?.deref_mut().agent {
+    if let Some(agent) = &STATE.mutex().lock()?.agent {
         agent.remove_thread_tag(tid, tag)
     } else {
         Err(PyroscopeError::AgentNotRunning)
