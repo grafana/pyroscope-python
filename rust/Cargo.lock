@@ -1182,7 +1182,7 @@ dependencies = [
 [[package]]
 name = "py-spy"
 version = "0.4.2"
-source = "git+https://github.com/benfred/py-spy?rev=32080cc#32080cc0c22bc23938541dfa7dabb6090e40be14"
+source = "git+https://github.com/korniltsev-grafanista/py-spy?rev=4a905e80a1dacc907087d0ec829c622c970ca27e#4a905e80a1dacc907087d0ec829c622c970ca27e"
 dependencies = [
  "anyhow",
  "chrono",
