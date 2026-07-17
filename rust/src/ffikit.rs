@@ -21,7 +21,8 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
     let start_agent =
         || -> Result<PyroscopeAgent<PyroscopeAgentRunning>> { agent.build()?.start() };
 
-    memory::start(py, &mem_config)?;
+    memory::start(py, &mem_config)
+        .map_err(|err| PyroscopeError::new(&format!("failed to start memory profiler: {err}")))?;
 
     let agent = start_agent();
     match agent {
