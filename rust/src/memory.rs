@@ -30,6 +30,7 @@ pub fn stop(_py: Python<'_>) {
     unsafe {
         implementation::memalloc_stop();
     }
+    implementation::clear_state();
 }
 
 pub fn postfork_child() {
@@ -96,6 +97,24 @@ mod implementation {
         if let Ok(mut pb) = PROFILE_BUILDER.lock() {
             pb.add_ffi_sample(frames, &sample.values);
         }
+    }
+
+    /// Discard all interned strings and buffered samples.
+    ///
+    /// Called from `stop()` after the allocator hooks are uninstalled. Every
+    /// hook runs with the GIL held and `stop()` itself holds the GIL, so no
+    /// hook can be mid-push here and no live C++ traceback references the
+    /// interned string IDs anymore. Without this, samples buffered by a
+    /// stopped session (or inherited from the parent after fork, since the
+    /// fork-child handler also goes through `stop()`) would leak into the
+    /// next session's first profile, and the string table would grow for the
+    /// lifetime of the process.
+    pub fn clear_state() {
+        let mut st = STRING_TABLE.lock().unwrap_or_else(|e| e.into_inner());
+        *st = StringTable::new();
+        drop(st);
+        let mut pb = PROFILE_BUILDER.lock().unwrap_or_else(|e| e.into_inner());
+        pb.reset();
     }
 
     pub fn dump_pprof(
