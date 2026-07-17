@@ -1,16 +1,67 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
+/// A lazily-initialized global mutex whose contents can be abandoned
+/// (leaked) and replaced with a fresh default value.
+///
+/// # Why it exists
+///
+/// This type solves a fork-safety problem. After `fork()`, only the calling
+/// thread survives in the child process, but the child inherits a copy of the
+/// parent's memory, including global state such as a running profiler agent
+/// and any mutexes guarding it. That inherited state is unusable in the
+/// child:
+///
+/// - a mutex held by another thread at fork time stays locked forever, so
+///   any attempt to lock it deadlocks;
+/// - dropping the guarded value may block on threads that don't exist in the
+///   child (e.g. the agent's `stop()` joins its worker threads).
+///
+/// The only safe way out is to never touch the inherited value again. In an
+/// `os.register_at_fork` "after in child" hook, [`leak_and_reset`] swaps in a
+/// brand-new mutex around `T::default()`, deliberately leaking the old
+/// allocation and everything inside it. The child then starts from a clean
+/// slate, and the parent's state is never dropped or unlocked in the child.
+///
+/// [`leak_and_reset`]: LeakableMutex::leak_and_reset
+///
+/// # How to use it
+///
+/// ```ignore
+/// static STATE: LeakableMutex<State> = LeakableMutex::new();
+///
+/// // Normal access from anywhere:
+/// let guard = STATE.mutex().lock()?;
+///
+/// // In the post-fork child hook (os.register_at_fork(after_in_child=...)):
+/// STATE.leak_and_reset();
+/// ```
+///
+/// Do not cache the `&Mutex<T>` returned by [`mutex`] across a potential
+/// fork: after `leak_and_reset` it points at the abandoned parent-era mutex.
+/// Always re-fetch it via `STATE.mutex()` at the point of use.
+///
+/// [`mutex`]: LeakableMutex::mutex
 pub struct LeakableMutex<T> {
     state: AtomicPtr<Mutex<T>>,
 }
 impl<T: Default> LeakableMutex<T> {
+    /// Creates an empty (uninitialized) `LeakableMutex`.
+    ///
+    /// `const`, so it can be used in a `static`. The inner mutex is allocated
+    /// lazily on the first call to [`mutex`](LeakableMutex::mutex).
     pub const fn new() -> Self {
         Self {
             state: AtomicPtr::new(std::ptr::null_mut()),
         }
     }
 
+    /// Returns the current inner mutex, allocating `Mutex::new(T::default())`
+    /// on first use.
+    ///
+    /// Call this at every point of use instead of caching the returned
+    /// reference, so that after [`leak_and_reset`](LeakableMutex::leak_and_reset)
+    /// you observe the fresh mutex rather than the abandoned one.
     pub fn mutex(&self) -> &Mutex<T> {
         unsafe {
             let cur = self.state.load(Ordering::SeqCst);
@@ -35,6 +86,17 @@ impl<T: Default> LeakableMutex<T> {
         }
     }
 
+    /// Abandons the current mutex and its contents, replacing them with a
+    /// fresh `Mutex::new(T::default())`.
+    ///
+    /// The old allocation is intentionally leaked: neither the mutex nor the
+    /// `T` inside it is dropped. This is the whole point — after `fork()` the
+    /// child must never unlock or drop state inherited from the parent.
+    ///
+    /// Intended to be called only from a post-fork child hook while the
+    /// process is effectively single-threaded. Callers racing with this from
+    /// other threads may still hold references to the old mutex, which stays
+    /// valid (it is leaked, not freed), but their updates will be lost.
     pub fn leak_and_reset(&self) {
         self.state.store(Self::new_static(), Ordering::SeqCst)
     }
