@@ -60,7 +60,11 @@ def main():
     if fork_and_capture_pyroscope_warnings():
         raise AssertionError("Pyroscope warned before the agent was started")
 
-    pyroscope.configure(application_name="pyroscope.fork-warning-test")
+    # mem_enabled is off by default; enable it so the fork exercises the
+    # memory profiler's fork handlers.
+    pyroscope.configure(
+        application_name="pyroscope.fork-warning-test", mem_enabled=True
+    )
     try:
         fork_and_configure_in_child()
         active_warnings = fork_and_capture_pyroscope_warnings(

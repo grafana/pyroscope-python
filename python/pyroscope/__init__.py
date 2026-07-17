@@ -28,7 +28,7 @@ def configure(
         tenant_id="",
         http_headers=None,
         line_no=LineNo.LastInstruction,
-        mem_enabled=True,
+        mem_enabled=False,
         mem_max_nframe=128,
         mem_heap_sample_size=512 * 1024,
         mem_enable_mem_domain=True,
