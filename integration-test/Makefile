@@ -1,6 +1,7 @@
 .PHONY: ci-matrix
 ci-matrix:
-	@go test -list . -json . | jq -sc '[.[] | select(.Action=="output") | .Output | rtrimstr("\n") | select(startswith("Test"))]'
+	@output="$$(go test -list . -json .)" && \
+		printf '%s\n' "$$output" | jq -sc '[.[] | select(.Action=="output") | .Output | rtrimstr("\n") | select(startswith("Test"))]'
 
 UNAME_MACHINE := $(shell uname -m)
 WHEEL_ARCH := $(if $(filter arm64 aarch64,$(UNAME_MACHINE)),arm64,amd64)
