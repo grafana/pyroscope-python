@@ -42,7 +42,7 @@ def configure(
         log_level = LOGGER.getEffectiveLevel()
         lib.initialize_logging(log_level)
 
-    lib.initialize_agent(
+    return lib.initialize_agent(
         application_name,
         server_address,
         basic_auth_username,
@@ -68,6 +68,8 @@ def shutdown():
         LOGGER.info("Pyroscope Agent successfully shutdown")
     else:
         LOGGER.warning("Pyroscope Agent shutdown failed")
+
+    return drop
 
 def add_thread_tag(key, value):
     lib.add_thread_tag(key, value)
