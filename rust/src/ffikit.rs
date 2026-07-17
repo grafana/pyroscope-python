@@ -42,7 +42,8 @@ pub fn remove_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
 }
 
 pub fn stop(py: Python<'_>) -> Result<()> {
-    if let Some(agent) = STATE.mutex().lock()?.agent.take() {
+    let agent = STATE.mutex().lock()?.agent.take();
+    if let Some(agent) = agent {
         let res = py.detach(|| agent.stop());
         crate::memory::stop(py);
         res
