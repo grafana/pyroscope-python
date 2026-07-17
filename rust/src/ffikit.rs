@@ -1,11 +1,11 @@
 use crate::backend::Tag;
 use crate::error::{PyroscopeError, Result};
-use crate::forksafety::LeakableMutex;
+use crate::forksafety;
 use crate::pyroscope::{PyroscopeAgentBuilder, PyroscopeAgentRunning};
 use crate::{PyroscopeAgent, ThreadId};
 use pyo3::Python;
 
-static STATE: LeakableMutex<State> = LeakableMutex::new();
+static STATE: forksafety::LeakableMutex<State> = forksafety::LeakableMutex::new();
 
 #[derive(Default)]
 struct State {
