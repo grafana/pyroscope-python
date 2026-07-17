@@ -15,16 +15,54 @@ mod utils;
 pub use utils::ThreadId;
 pub mod ffikit;
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ffi::CString,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use crate::backend::{BackendConfig, BackendImpl, Tag, ThreadTagsSet};
 use crate::pyroscope::PyroscopeAgentBuilder;
 use crate::pyspy_backend::Pyspy;
+use pyo3::exceptions::{PyDeprecationWarning, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
 
 const PYSPY_NAME: &str = "pyspy";
 const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+static AGENT_RUNNING: AtomicBool = AtomicBool::new(false);
+
+#[pyfunction]
+fn warn_about_fork(py: Python<'_>) -> PyResult<()> {
+    if !AGENT_RUNNING.load(Ordering::Acquire) {
+        return Ok(());
+    }
+
+    // The native agent starts threads and is not safe to inherit across a fork.
+    // See https://github.com/grafana/pyroscope-python/issues/122.
+    let message = CString::new(format!(
+        "This process (pid={}) is running Pyroscope, use of fork() may lead to \
+         deadlocks in the child. Forking after Pyroscope starts is unsupported; \
+         configure Pyroscope after forking or call pyroscope.shutdown() before forking. \
+         See https://github.com/grafana/pyroscope-python/issues/122 for details.",
+        std::process::id()
+    ))
+    .map_err(|error| PyValueError::new_err(error.to_string()))?;
+
+    PyErr::warn(py, &py.get_type::<PyDeprecationWarning>(), &message, 2)
+}
+
+fn register_fork_warning(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+    let register_at_fork = py.import("os")?.getattr("register_at_fork")?;
+
+    let kwargs = PyDict::new(py);
+    kwargs.set_item("after_in_parent", wrap_pyfunction!(warn_about_fork, m)?)?;
+    register_at_fork.call((), Some(&kwargs))?;
+    Ok(())
+}
 
 #[pyfunction]
 fn initialize_logging(logging_level: u32) -> bool {
@@ -132,17 +170,25 @@ fn initialize_agent(
     agent_builder = agent_builder.http_headers(http_headers);
 
     // mem::start(&pyroscope_config.mem_config);
-    ffikit::run(PyroscopeAgentBuilder::new(
+    let started = ffikit::run(PyroscopeAgentBuilder::new(
         agent_builder,
         pyspy,
         dynamic_tags,
     ))
-    .is_ok()
+    .is_ok();
+    if started {
+        AGENT_RUNNING.store(true, Ordering::Release);
+    }
+    started
 }
 
 #[pyfunction]
 fn drop_agent() -> bool {
-    ffikit::stop().is_ok()
+    let dropped = ffikit::stop().is_ok();
+    if dropped {
+        AGENT_RUNNING.store(false, Ordering::Release);
+    }
+    dropped
 }
 
 #[pyfunction]
@@ -181,6 +227,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(drop_agent, m)?)?;
     m.add_function(wrap_pyfunction!(add_thread_tag, m)?)?;
     m.add_function(wrap_pyfunction!(remove_thread_tag, m)?)?;
+    register_fork_warning(m)?;
     Ok(())
 }
 
