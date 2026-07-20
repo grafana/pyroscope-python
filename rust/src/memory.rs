@@ -1,4 +1,6 @@
 use crate::utils::TimeRange;
+#[cfg(feature = "memory")]
+use pyo3::exceptions::PyRuntimeError;
 #[cfg(not(feature = "memory"))]
 use pyo3::exceptions::PyRuntimeWarning;
 use pyo3::prelude::*;
@@ -26,14 +28,27 @@ pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
 
     #[cfg(feature = "memory")]
     unsafe {
-        implementation::memalloc_start(
+        if let Some(err) = PyErr::take(py) {
+            return Err(err);
+        }
+
+        let status = implementation::memalloc_start(
             config.max_nframe,
             config.heap_sample_size,
             config.enable_mem_domain,
         );
-        match PyErr::take(py) {
-            None => Ok(()),
-            Some(err) => Err(err),
+        let err = PyErr::take(py);
+        match (status, err) {
+            (0, None) => Ok(()),
+            (0, Some(err)) => {
+                implementation::memalloc_stop();
+                implementation::clear_state();
+                Err(err)
+            }
+            (_, Some(err)) => Err(err),
+            (_, None) => Err(PyRuntimeError::new_err(
+                "memory profiler failed to start without setting a Python exception",
+            )),
         }
     }
 }
@@ -78,7 +93,11 @@ mod implementation {
         static ref PROFILE_BUILDER: Mutex<PProfBuilder> = Mutex::new(PProfBuilder::new());
     }
     unsafe extern "C" {
-        pub fn memalloc_start(max_nframe: u16, heap_sample_size: u64, enable_mem_domain: bool);
+        pub fn memalloc_start(
+            max_nframe: u16,
+            heap_sample_size: u64,
+            enable_mem_domain: bool,
+        ) -> i32;
         pub fn memalloc_stop();
         // flush heap inuse samples
         pub fn memalloc_heap_py();

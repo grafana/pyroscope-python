@@ -262,14 +262,15 @@ memalloc_realloc_mem(void* ctx, void* ptr, size_t new_size)
 #endif // _PY312_AND_LATER
 
 // Pyroscope patch: expose a typed C ABI entrypoint for the Rust integration
-// instead of defining a Python extension-module callback.
-extern "C" void memalloc_start(    uint16_t max_nframe,
+// instead of defining a Python extension-module callback. Return 0 on success
+// and -1 with a Python exception on failure so Rust can distinguish the paths.
+extern "C" int memalloc_start(    uint16_t max_nframe,
     uint64_t heap_sample_size,
     bool enable_mem_domain)
 {
     if (memalloc_enabled) {
         PyErr_SetString(PyExc_RuntimeError, "the memalloc module is already started");
-        return;
+        return -1;
     }
 
     // Pyroscope patch: the Rust profile builder owns profiler initialization,
@@ -300,19 +301,19 @@ extern "C" void memalloc_start(    uint16_t max_nframe,
 
     if (max_nframe < 1 || max_nframe > TRACEBACK_MAX_NFRAME) {
         PyErr_Format(PyExc_ValueError, "the number of frames must be in range [1; %u]", TRACEBACK_MAX_NFRAME);
-        return;
+        return -1;
     }
 
     global_memalloc_ctx.max_nframe = (uint16_t)max_nframe;
 
     if (heap_sample_size < 0 || heap_sample_size > MAX_HEAP_SAMPLE_SIZE) {
         PyErr_Format(PyExc_ValueError, "the heap sample size must be in range [0; %u]", MAX_HEAP_SAMPLE_SIZE);
-        return;
+        return -1;
     }
 
     if (!memalloc_heap_tracker_init_no_cpython((uint32_t)heap_sample_size)) {
         PyErr_SetString(PyExc_RuntimeError, "failed to initialize heap tracker");
-        return;
+        return -1;
     }
 
     PyMemAllocatorEx alloc;
@@ -362,6 +363,7 @@ extern "C" void memalloc_start(    uint16_t max_nframe,
 
     memalloc_enabled = true;
 
+    return 0;
 }
 
 
