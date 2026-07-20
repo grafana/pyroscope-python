@@ -1,4 +1,6 @@
 use crate::utils::TimeRange;
+#[cfg(not(feature = "memory"))]
+use pyo3::exceptions::PyRuntimeWarning;
 use pyo3::prelude::*;
 
 #[derive(Clone)]
@@ -13,6 +15,16 @@ pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
     if !config.enabled {
         return Ok(());
     }
+
+    #[cfg(not(feature = "memory"))]
+    return PyErr::warn(
+        py,
+        &py.get_type::<PyRuntimeWarning>(),
+        c"Memory profiling was enabled, but this build does not include memory profiling support; mem_enabled will be ignored.",
+        2,
+    );
+
+    #[cfg(feature = "memory")]
     unsafe {
         implementation::memalloc_start(
             config.max_nframe,
@@ -142,13 +154,6 @@ mod implementation {
 mod implementation {
     use crate::utils::TimeRange;
     use pyo3::prelude::*;
-
-    pub unsafe fn memalloc_start(
-        _max_nframe: u16,
-        _heap_sample_size: u64,
-        _enable_mem_domain: bool,
-    ) {
-    }
 
     pub unsafe fn memalloc_stop() {}
 
