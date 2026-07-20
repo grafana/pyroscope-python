@@ -5,7 +5,6 @@ use crate::encode::pprof::ffi::FFIInternedString;
 use crate::encode::pprof::ffi::{FFIFrame, FFIHeapSampleValues};
 use crate::utils::TimeRange;
 use hashbrown::hash_map::EntryRef;
-use prost::Message;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -228,22 +227,21 @@ impl PProfBuilder {
         self.memory_samples.clear();
         self.ffi_locations_scratch.clear();
     }
-    pub fn encode_and_reset(
+    pub fn take_profile_and_reset(
         &mut self,
         st: &StringTable,
         time_range: &TimeRange,
-    ) -> Option<Vec<u8>> {
+    ) -> Option<Profile> {
         self.flush_memory_samples();
         if self.profile.sample.is_empty() {
             self.reset();
-            None
-        } else {
-            self.set_time_range(time_range);
-            st.clone_pprof_table(&mut self.profile.string_table);
-            let res = self.profile.encode_to_vec();
-            self.reset();
-            Some(res)
+            return None;
         }
+        self.set_time_range(time_range);
+        st.clone_pprof_table(&mut self.profile.string_table);
+        let profile = std::mem::take(&mut self.profile);
+        self.reset();
+        Some(profile)
     }
 }
 
@@ -436,8 +434,10 @@ pub mod ffi {
 
 #[cfg(test)]
 mod tests {
-    use super::PProfBuilder;
     use super::ffi::{FFIFrame, FFIHeapSampleValues, FFIInternedString};
+    use super::{PProfBuilder, StringTable};
+    use crate::utils::TimeRange;
+    use std::time::{Duration, UNIX_EPOCH};
 
     fn frame(function_name: u32, file_name: u32, line: i32) -> FFIFrame {
         FFIFrame {
@@ -491,6 +491,32 @@ mod tests {
             .collect();
         sample_values.sort();
         assert_eq!(sample_values, vec![vec![1, 100, 0], vec![2, 200, 0]]);
+    }
+
+    #[test]
+    fn take_profile_and_reset_moves_samples_and_resets() {
+        let mut builder = PProfBuilder::new();
+        let mut strings = StringTable::new();
+        let time_range =
+            TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
+
+        builder.set_memory_profile_type(&mut strings, 512 * 1024);
+        builder.add_ffi_sample(&[frame(1, 2, 10)], &values(300, 100, 1));
+
+        let profile = builder
+            .take_profile_and_reset(&strings, &time_range)
+            .expect("expected a profile with samples");
+        assert_eq!(profile.sample.len(), 1);
+        assert_eq!(profile.sample[0].value, vec![1, 100, 300]);
+        assert_eq!(profile.sample_type.len(), 3);
+        assert_eq!(profile.string_table.len(), strings.set.len());
+        assert_eq!(profile.duration_nanos, 10_000_000_000);
+
+        assert!(
+            builder
+                .take_profile_and_reset(&strings, &time_range)
+                .is_none()
+        );
     }
 
     #[test]

@@ -77,6 +77,7 @@ mod implementation {
     use crate::encode::pprof::{StringID, StringTable};
     use crate::utils::TimeRange;
     use lazy_static::lazy_static;
+    use prost::Message;
     use pyo3::prelude::*;
     use std::ops::{Deref, DerefMut};
     use std::sync::Mutex;
@@ -146,18 +147,21 @@ mod implementation {
     }
 
     pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u8>> {
-        Python::attach(|_| unsafe {
-            memalloc_heap_py();
-        });
-        let st = STRING_TABLE.lock();
-        let pb = PROFILE_BUILDER.lock();
-        match (st, pb) {
-            (Ok(mut st), Ok(mut pb)) => {
-                pb.set_memory_profile_type(st.deref_mut(), heap_sample_size);
-                pb.encode_and_reset(st.deref(), time_range)
+        let profile = Python::attach(|_| {
+            unsafe {
+                memalloc_heap_py();
             }
-            _ => None,
-        }
+            let st = STRING_TABLE.lock();
+            let pb = PROFILE_BUILDER.lock();
+            match (st, pb) {
+                (Ok(mut st), Ok(mut pb)) => {
+                    pb.set_memory_profile_type(st.deref_mut(), heap_sample_size);
+                    pb.take_profile_and_reset(st.deref(), time_range)
+                }
+                _ => None,
+            }
+        })?;
+        Some(profile.encode_to_vec())
     }
 }
 
