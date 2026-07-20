@@ -497,8 +497,7 @@ mod tests {
     fn take_profile_and_reset_moves_samples_and_resets() {
         let mut builder = PProfBuilder::new();
         let mut strings = StringTable::new();
-        let time_range =
-            TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
+        let time_range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
 
         builder.set_memory_profile_type(&mut strings, 512 * 1024);
         builder.add_ffi_sample(&[frame(1, 2, 10)], &values(300, 100, 1));
