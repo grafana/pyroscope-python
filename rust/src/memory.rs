@@ -47,6 +47,7 @@ pub fn dump_pprof(
     implementation::dump_pprof(_py, heap_sample_size, time_range)
 }
 
+#[cfg(feature = "memory")]
 mod implementation {
     use crate::encode::pprof::PProfBuilder;
     use crate::encode::pprof::ffi::{FFIInternedString, FFISample, FFIStringView};
@@ -134,5 +135,32 @@ mod implementation {
             }
             _ => None,
         }
+    }
+}
+
+#[cfg(not(feature = "memory"))]
+mod implementation {
+    use crate::utils::TimeRange;
+    use pyo3::prelude::*;
+
+    pub unsafe fn memalloc_start(
+        _max_nframe: u16,
+        _heap_sample_size: u64,
+        _enable_mem_domain: bool,
+    ) {
+    }
+
+    pub unsafe fn memalloc_stop() {}
+
+    pub unsafe fn memalloc_heap_postfork_child() {}
+
+    pub fn clear_state() {}
+
+    pub fn dump_pprof(
+        _py: Python<'_>,
+        _heap_sample_size: u64,
+        _time_range: &TimeRange,
+    ) -> Option<Vec<u8>> {
+        None
     }
 }

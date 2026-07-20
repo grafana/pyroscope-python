@@ -28,3 +28,7 @@ pyo3 = { version = "0.29.0", features = ["extension-module"] }
 
 [build-dependencies]
 cmake = "0.1"
+
+[features]
+default = []
+memory = []

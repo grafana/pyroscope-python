@@ -18,8 +18,8 @@ env.update({
 })
 
 features = []
-# if sysconfig.get_config_vars().get("Py_GIL_DISABLED") != 1:
-#     features.append("memory")
+if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
+    features.append("memory")
 
 setup(
     rust_extensions=[

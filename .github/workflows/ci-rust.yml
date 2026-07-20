@@ -42,6 +42,7 @@ jobs:
 
       - name: Run clippy
         run: |
+          cargo clippy --all-targets --no-default-features -- --deny warnings
           export PYROSCOPE__Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
           cargo clippy --all-targets --all-features -- --deny warnings
         working-directory: rust
@@ -66,7 +67,11 @@ jobs:
         with:
           toolchain: 1.96.0
 
-      - name: Run tests
+      - name: Run tests without memory profiling
+        run: cargo test --locked --no-default-features
+        working-directory: rust
+
+      - name: Run tests with memory profiling
         run: |
           export PYROSCOPE__Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
           cargo test --locked --all-features
