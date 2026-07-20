@@ -195,8 +195,18 @@ heap_tracker_t::next_sample_size_no_cpython(uint32_t sample_size)
        NOTE: std::exponential_distribution calls log internally. log is not
        listed as async-signal-safe by POSIX, but does not use locks in practice.
        We assume it is safe to call from heap_tracker_t::postfork_child. */
-    std::exponential_distribution<double> dist(1.0 / (sample_size + 1));
-    return static_cast<uint32_t>(dist(rng));
+
+    /* Pyroscope patch: widen to double before adding 1 so sample_size == UINT32_MAX
+       cannot wrap the 32-bit addition to zero (which would make the rate infinite). */
+    std::exponential_distribution<double> dist(1.0 / (static_cast<double>(sample_size) + 1.0));
+    /* Pyroscope patch: clamp before the cast. Converting a double >= 2^32 to uint32_t
+       is UB, and the exponential distribution has unbounded support, so large draws
+       are expected for large sampling intervals. */
+    double draw = dist(rng);
+    if (draw >= static_cast<double>(UINT32_MAX)) {
+        return UINT32_MAX;
+    }
+    return static_cast<uint32_t>(draw);
 }
 
 // Method implementations
