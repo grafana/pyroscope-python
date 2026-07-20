@@ -412,6 +412,10 @@ memalloc_heap_track_invokes_cpython(uint16_t max_nframe, void* ptr, size_t size,
     auto tb =
       heap_tracker_t::instance->pool_get_with_alloc_data_invokes_cpython(size, allocated_memory_val, max_nframe);
 
+    // Pyroscope patch: carry the sampling-scaled allocation count over to the
+    // heap (inuse) values before reset_alloc discards it, so live samples
+    // report inuse_objects with the same estimate that alloc_objects used.
+    size_t scaled_count = tb->sample.alloc_count();
     // Export allocation sample right away to avoid holding it
     tb->sample.export_sample();
     // Reset the allocation data, keep heap data for tracking
@@ -421,7 +425,8 @@ memalloc_heap_track_invokes_cpython(uint16_t max_nframe, void* ptr, size_t size,
     // Use the weighted size (allocated_memory_val) so the heap profile accounts
     // for sampling, matching the tcmalloc/Go pprof approach: each sampled live
     // allocation represents ~R bytes of heap, not just its own raw size.
-    tb->sample.push_heap(allocated_memory_val);
+    // Pyroscope patch: also pass the scaled count so dumps report inuse_objects.
+    tb->sample.push_heap(allocated_memory_val, scaled_count);
 
     // Check that instance is still valid after GIL release in constructor
     if (heap_tracker_t::instance) {

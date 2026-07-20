@@ -27,6 +27,7 @@ typedef struct {
 
 typedef struct {
   uintptr_t heap_space;
+  uintptr_t heap_count;
   uintptr_t alloc_space;
   uintptr_t alloc_count;
 } FFIHeapSampleValues;

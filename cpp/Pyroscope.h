@@ -51,9 +51,10 @@ namespace Pyroscope
             values.alloc_count += count;
         }
 
-        void push_heap(const size_t size)
+        void push_heap(const size_t size, const size_t count)
         {
             values.heap_space += size;
+            values.heap_count += count;
         }
 
         void reset_alloc()
@@ -62,11 +63,20 @@ namespace Pyroscope
             values.alloc_count = 0;
         }
 
+        /* Sampling-scaled estimate of how many allocations this sample stands
+         * for, as computed by push_alloc. Read before reset_alloc to carry the
+         * same estimate over to the heap (inuse) values. */
+        size_t alloc_count() const
+        {
+            return values.alloc_count;
+        }
+
         void clear()
         {
             values.alloc_space = 0;
             values.alloc_count = 0;
             values.heap_space = 0;
+            values.heap_count = 0;
             frames.clear();
         }
 
