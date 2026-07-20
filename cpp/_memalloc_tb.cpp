@@ -38,6 +38,8 @@ unicode_to_sv_no_alloc(PyObject* obj)
  * to str(thread_id) when name is empty. The stack profiler provides thread names
  * via stack.register_thread() at safe points.
  */
+// Pyroscope patch: use Pyroscope::Sample instead of Datadog::Sample;
+// Pyroscope::Sample exports profiling data to the Rust backend.
 static void
 push_threadinfo_to_sample(Pyroscope::Sample& sample)
 {
@@ -63,6 +65,8 @@ push_threadinfo_to_sample(Pyroscope::Sample& sample)
  *
  * By reading frame pointers directly (borrowed references, no refcount change)
  * we eliminate that risk and reduce per-frame overhead. */
+// Pyroscope patch: use Pyroscope::Sample instead of Datadog::Sample;
+// Pyroscope::Sample exports profiling data to the Rust backend.
 static void
 push_stacktrace_to_sample_no_refcount(Pyroscope::Sample& sample, uint16_t max_nframe)
 {
@@ -126,6 +130,8 @@ traceback_t::init_sample(size_t size, size_t weighted_size, uint16_t max_nframe)
 }
 
 // AIDEV-NOTE: Constructor calls init_sample() which reads CPython structs directly
+// Pyroscope patch: its sample adapter only needs the frame limit; Datadog
+// sample-type flags do not apply to the Rust profile builder.
 traceback_t::traceback_t(size_t size, size_t weighted_size, uint16_t max_nframe)
   : sample(max_nframe)
 {

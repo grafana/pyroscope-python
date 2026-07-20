@@ -14,6 +14,8 @@
 #include "_memalloc_tb.h"
 #include "_pymacro.h"
 
+// Pyroscope patch: Pyroscope's CMake build always provides Abseil, including
+// debug builds, so use the same heap-map implementation in every build mode.
 #include "absl/container/flat_hash_map.h"
 template<typename K, typename V>
 using HeapMapType = absl::flat_hash_map<K, V>;
@@ -283,6 +285,8 @@ heap_tracker_t::export_heap_no_cpython()
         tb->sample.export_sample();
     }
 
+    // Pyroscope patch: heap samples are exported through the Rust profile
+    // builder, which has no Datadog profile-state statistics object.
     // Datadog::Sample::profile_borrow().stats().set_heap_tracker_size(allocs_m.size());
 }
 

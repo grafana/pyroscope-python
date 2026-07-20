@@ -13,7 +13,8 @@
 #include "_memalloc_tb.h"
 #include "_pymacro.h"
 
-// Ensure profile_state is initialized before creating Sample objects
+// Pyroscope patch: Pyroscope uses its Rust profile builder and does not provide
+// Datadog's ddup interface.
 // #include "ddup_interface.hpp"
 
 typedef struct
@@ -260,7 +261,8 @@ memalloc_realloc_mem(void* ctx, void* ptr, size_t new_size)
 }
 #endif // _PY312_AND_LATER
 
-
+// Pyroscope patch: expose a typed C ABI entrypoint for the Rust integration
+// instead of defining a Python extension-module callback.
 extern "C" void memalloc_start(    uint16_t max_nframe,
     uint64_t heap_sample_size,
     bool enable_mem_domain)
@@ -270,12 +272,8 @@ extern "C" void memalloc_start(    uint16_t max_nframe,
         return;
     }
 
-    // Ensure profile_state is initialized before creating Sample objects
-    // This initializes the Sample::profile_state which is required for Sample objects to work correctly
-    // ddup_start() uses std::call_once, so it's safe to call multiple times
-    // ddup_start also registers fork handlers for various components, so if
-    // any of memalloc's states refer to states that are reset after fork,
-    // memalloc also has to clear its state after fork via below fork handler.
+    // Pyroscope patch: the Rust profile builder owns profiler initialization,
+    // so Datadog's ddup state must not be started here.
     // ddup_start();
 
     // Register fork handler
@@ -367,6 +365,8 @@ extern "C" void memalloc_start(    uint16_t max_nframe,
 }
 
 
+// Pyroscope patch: expose an idempotent C ABI stop entrypoint for Rust instead
+// of a Python extension-module callback that raises when already stopped.
 extern "C" void memalloc_stop()
 {
     if (!memalloc_enabled) {
@@ -392,7 +392,7 @@ extern "C" void memalloc_stop()
             PyMemAllocatorEx restore_mem = *saved_mem;
             PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &restore_mem);
         }
-        /* Deliberately leave g_saved_alloc_mem_pub pointing at the valid saved
+        /* Pyroscope patch: deliberately leave g_saved_alloc_mem_pub pointing at the valid saved
          * allocator (mirroring the OBJ path above, which never nulls
          * g_saved_alloc_pub). Once PyMem_SetAllocator has restored the real MEM
          * allocator, CPython no longer dispatches frees to our hook, so a stale
@@ -410,6 +410,8 @@ extern "C" void memalloc_stop()
 }
 
 
+// Pyroscope patch: expose an idempotent C ABI heap-export entrypoint for Rust
+// instead of a Python extension-module callback that raises when not started.
 extern "C" void memalloc_heap_py()
 {
     if (!memalloc_enabled) {

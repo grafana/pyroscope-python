@@ -5,12 +5,15 @@
 
 #include <Python.h>
 
+// Pyroscope patch: use the Rust-backed Pyroscope sample adapter instead of
+// Datadog's sample.hpp implementation.
 #include "Pyroscope.h"
 
 class traceback_t
 {
   public:
-    /* Sample object storing the stacktrace */
+    /* Pyroscope patch: store samples in the Pyroscope adapter so exports are
+     * forwarded to the Rust profile builder. */
     Pyroscope::Sample sample;
 
     /* Constructor - also collects frames from the current Python frame chain. */
