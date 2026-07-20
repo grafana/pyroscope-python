@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 name = "_native"
 
 [dependencies]
-py-spy = { git = "https://github.com/benfred/py-spy", rev = "32080cc", default-features = false }
+py-spy = { path = "vendor/py-spy", default-features = false }
 pretty_env_logger = "0.5"
 log = "0.4"
 libc = "0.2"
