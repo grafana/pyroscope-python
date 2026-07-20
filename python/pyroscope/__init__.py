@@ -77,8 +77,6 @@ def shutdown():
         LOGGER.warning("Pyroscope Agent shutdown failed")
     return drop
 
-    return drop
-
 def add_thread_tag(key, value):
     return lib.add_thread_tag(key, value)
 
