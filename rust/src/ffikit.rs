@@ -55,10 +55,9 @@ pub fn remove_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
 
 pub fn stop(py: Python<'_>) -> Result<()> {
     let agent = STATE.mutex().lock()?.agent.take();
+    crate::memory::stop(py);
     if let Some(agent) = agent {
-        let res = py.detach(|| agent.stop());
-        crate::memory::stop(py);
-        res
+        py.detach(|| agent.stop())
     } else {
         Err(PyroscopeError::AgentNotRunning)
     }
