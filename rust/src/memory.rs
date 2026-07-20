@@ -66,12 +66,8 @@ pub fn postfork_child() {
     }
 }
 
-pub fn dump_pprof(
-    _py: Python<'_>,
-    heap_sample_size: u64,
-    time_range: &TimeRange,
-) -> Option<Vec<u8>> {
-    implementation::dump_pprof(_py, heap_sample_size, time_range)
+pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u8>> {
+    implementation::dump_pprof(heap_sample_size, time_range)
 }
 
 #[cfg(feature = "memory")]
@@ -149,14 +145,10 @@ mod implementation {
         pb.reset();
     }
 
-    pub fn dump_pprof(
-        _py: Python<'_>,
-        heap_sample_size: u64,
-        time_range: &TimeRange,
-    ) -> Option<Vec<u8>> {
-        unsafe {
+    pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u8>> {
+        Python::attach(|_| unsafe {
             memalloc_heap_py();
-        }
+        });
         let st = STRING_TABLE.lock();
         let pb = PROFILE_BUILDER.lock();
         match (st, pb) {
@@ -172,7 +164,6 @@ mod implementation {
 #[cfg(not(feature = "memory"))]
 mod implementation {
     use crate::utils::TimeRange;
-    use pyo3::prelude::*;
 
     pub unsafe fn memalloc_stop() {}
 
@@ -180,11 +171,7 @@ mod implementation {
 
     pub fn clear_state() {}
 
-    pub fn dump_pprof(
-        _py: Python<'_>,
-        _heap_sample_size: u64,
-        _time_range: &TimeRange,
-    ) -> Option<Vec<u8>> {
+    pub fn dump_pprof(_heap_sample_size: u64, _time_range: &TimeRange) -> Option<Vec<u8>> {
         None
     }
 }

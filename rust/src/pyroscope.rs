@@ -17,7 +17,6 @@ use crate::{
     memory,
     session::{Session, SessionManager, SessionSignal},
 };
-use pyo3::Python;
 use std::sync::Mutex;
 use std::sync::mpsc::SyncSender;
 use std::time::{Duration, SystemTime};
@@ -314,9 +313,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
         let mut batch = Vec::with_capacity(2);
 
         if config.mem_config.enabled {
-            let pprof = Python::attach(|py| {
-                memory::dump_pprof(py, config.mem_config.heap_sample_size, &time_range)
-            });
+            let pprof = memory::dump_pprof(config.mem_config.heap_sample_size, &time_range);
             if let Some(pprof) = pprof {
                 batch.push(ReportBatch {
                     profile_type: "memory".to_string(),
