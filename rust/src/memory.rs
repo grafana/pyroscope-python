@@ -1,8 +1,6 @@
 use crate::utils::TimeRange;
 #[cfg(feature = "memory")]
 use pyo3::exceptions::PyRuntimeError;
-#[cfg(not(feature = "memory"))]
-use pyo3::exceptions::PyRuntimeWarning;
 use pyo3::prelude::*;
 
 #[derive(Clone)]
@@ -19,12 +17,14 @@ pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
     }
 
     #[cfg(not(feature = "memory"))]
-    return PyErr::warn(
-        py,
-        &py.get_type::<PyRuntimeWarning>(),
-        c"Memory profiling was enabled, but this build does not include memory profiling support; mem_enabled will be ignored.",
-        2,
-    );
+    {
+        let _ = py;
+        log::warn!(
+            target: "pyroscope-python",
+            "Memory profiling was enabled, but this build does not include memory profiling support; mem_enabled will be ignored."
+        );
+        Ok(())
+    }
 
     #[cfg(feature = "memory")]
     unsafe {
