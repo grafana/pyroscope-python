@@ -14,6 +14,7 @@
  *   - echion's sampling thread (no-GIL requirement)
  */
 
+#include "version_compat.h"
 
 namespace DataDog {
 
