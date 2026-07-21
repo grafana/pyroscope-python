@@ -35,26 +35,6 @@ const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 static AGENT_RUNNING: AtomicBool = AtomicBool::new(false);
 
-fn create_http_client() -> Result<reqwest::blocking::Client> {
-    // reqwest's blocking client waits on its runtime thread via Thread::park.
-    // Captured crash when this ran on the fork-surviving thread:
-    //   EXC_BREAKPOINT (SIGTRAP)
-    //   libdispatch: BUG IN CLIENT OF LIBDISPATCH:
-    //                Use-after-free of dispatch_semaphore_t or dispatch_group_t
-    //   libsystem_c: crashed on child side of fork pre-exec
-    //
-    //   _dispatch_semaphore_wait_slow
-    //   std::thread::Thread::park
-    //   reqwest::blocking::client::ClientBuilder::build
-    //   _native::session::SessionManager::new
-    //   _native::pyroscope::PyroscopeAgentBuilder::build
-    //   _native::ffikit::run
-    //   _native::initialize_agent
-    Ok(forksafety::no_dispatch_semaphore(|| {
-        reqwest::blocking::Client::builder().build()
-    })?)
-}
-
 #[pyfunction]
 fn at_fork_after_in_parent(py: Python<'_>) -> PyResult<()> {
     warn_about_fork(py)
@@ -171,10 +151,6 @@ fn initialize_agent(
     mem_heap_sample_size: u64,
     mem_enable_mem_domain: bool,
 ) -> bool {
-    let Ok(http_client) = create_http_client() else {
-        return false;
-    };
-
     let pid = std::process::id();
 
     let backend_config = BackendConfig {
@@ -233,7 +209,7 @@ fn initialize_agent(
 
     let result = ffikit::run(
         py,
-        PyroscopeAgentBuilder::new(agent_builder, pyspy, dynamic_tags, http_client),
+        PyroscopeAgentBuilder::new(agent_builder, pyspy, dynamic_tags),
     );
     match result {
         Ok(_) => {

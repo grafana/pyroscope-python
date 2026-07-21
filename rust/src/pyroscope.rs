@@ -141,7 +141,6 @@ pub struct PyroscopeAgentBuilder {
     /// Configuration Object
     pub config: PyroscopeConfig,
     ruleset: ThreadTagsSet,
-    http_client: reqwest::blocking::Client,
 }
 
 impl PyroscopeAgentBuilder {
@@ -149,17 +148,18 @@ impl PyroscopeAgentBuilder {
         config: PyroscopeConfig,
         backend: BackendImpl<BackendUninitialized>,
         ruleset: ThreadTagsSet,
-        http_client: reqwest::blocking::Client,
     ) -> Self {
         Self {
             backend,
             config,
             ruleset,
-            http_client,
         }
     }
 
-    pub fn build(self) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
+    pub fn build(
+        self,
+        http_client: reqwest::blocking::Client,
+    ) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
         let config = self.config;
 
         // Set Global Tags
@@ -171,7 +171,7 @@ impl PyroscopeAgentBuilder {
         let backend_ready = self.backend.initialize()?;
         log::trace!(target: LOG_TAG, "Backend initialized");
 
-        let session_manager = SessionManager::new(self.http_client);
+        let session_manager = SessionManager::new(http_client);
         log::trace!(target: LOG_TAG, "SessionManager initialized");
 
         // Return PyroscopeAgent

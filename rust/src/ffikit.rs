@@ -15,6 +15,26 @@ enum State {
     Running(Box<PyroscopeAgent<PyroscopeAgentRunning>>),
 }
 
+fn create_http_client() -> Result<reqwest::blocking::Client> {
+    // reqwest's blocking client waits on its runtime thread via Thread::park.
+    // Captured crash when this ran on the fork-surviving thread:
+    //   EXC_BREAKPOINT (SIGTRAP)
+    //   libdispatch: BUG IN CLIENT OF LIBDISPATCH:
+    //                Use-after-free of dispatch_semaphore_t or dispatch_group_t
+    //   libsystem_c: crashed on child side of fork pre-exec
+    //
+    //   _dispatch_semaphore_wait_slow
+    //   std::thread::Thread::park
+    //   reqwest::blocking::client::ClientBuilder::build
+    //   _native::session::SessionManager::new
+    //   _native::pyroscope::PyroscopeAgentBuilder::build
+    //   _native::ffikit::run
+    //   _native::initialize_agent
+    Ok(forksafety::no_dispatch_semaphore(|| {
+        reqwest::blocking::Client::builder().build()
+    })?)
+}
+
 pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
     let mut guard = STATE.mutex().lock()?;
     match *guard {
@@ -23,8 +43,13 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
         State::Running(_) => return Err(PyroscopeError::AgentAlreadyRunning),
     }
     let mem_config = agent.config.mem_config.clone();
-    let start_agent =
-        || -> Result<PyroscopeAgent<PyroscopeAgentRunning>> { agent.build()?.start() };
+    let start_agent = || -> Result<PyroscopeAgent<PyroscopeAgentRunning>> {
+        // Create the client only after the Idle check, so an already-running or
+        // busy agent doesn't build (and, on macOS, spawn a thread for) a client
+        // that would just be thrown away.
+        let http_client = create_http_client()?;
+        agent.build(http_client)?.start()
+    };
 
     memory::start(py, &mem_config)
         .map_err(|err| PyroscopeError::new(&format!("failed to start memory profiler: {err}")))?;
