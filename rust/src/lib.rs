@@ -42,7 +42,9 @@ fn create_http_client() -> Result<reqwest::blocking::Client> {
 
 #[cfg(target_os = "macos")]
 fn create_http_client() -> Result<reqwest::blocking::Client> {
-    // macOS may abort if reqwest initializes on Python's post-fork thread.
+    // The crash is _dispatch_semaphore_wait_slow -> Thread::park -> ClientBuilder::build,
+    // reported as a use-after-free of dispatch_semaphore_t. We assume the fork-surviving
+    // Python thread retains Rust's pre-fork parker; a new thread gets fresh parking state.
     let client = std::thread::spawn(|| reqwest::blocking::Client::builder().build())
         .join()
         .map_err(|_| PyroscopeError::new("HTTP client thread panicked"))??;
