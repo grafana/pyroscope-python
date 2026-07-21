@@ -8,18 +8,18 @@ use std::{
     thread::JoinHandle,
 };
 
+use crate::backend::{Backend, BackendImpl, ReportBatch, ReportData, ThreadTag, ThreadTagsSet};
+use crate::utils::TimeRange;
 use crate::{
     PyroscopeError,
     backend::{BackendReady, BackendUninitialized, Tag},
     error::Result,
+    memory,
     session::{Session, SessionManager, SessionSignal},
 };
 use std::sync::Mutex;
 use std::sync::mpsc::SyncSender;
 use std::time::{Duration, SystemTime};
-
-use crate::backend::{Backend, BackendImpl, ThreadTag, ThreadTagsSet};
-use crate::utils::TimeRange;
 
 const LOG_TAG: &str = "Pyroscope::Agent";
 const DEFAULT_UPLOAD_INTERVAL: Duration = Duration::from_secs(10);
@@ -46,7 +46,7 @@ pub struct PyroscopeConfig {
     pub http_headers: HashMap<String, String>,
     /// How often the agent snapshots and uploads profile data.
     pub upload_interval: Duration,
-    // pub mem_config: crate::mem::Config,
+    pub mem_config: crate::memory::Config,
 }
 
 #[derive(Clone, Debug)]
@@ -62,7 +62,7 @@ impl PyroscopeConfig {
         sample_rate: u32,
         spy_name: impl AsRef<str>,
         spy_version: impl AsRef<str>,
-        // mem_config: mem::Config,
+        mem_config: crate::memory::Config,
     ) -> Self {
         Self {
             url: url.as_ref().to_owned(),
@@ -77,7 +77,7 @@ impl PyroscopeConfig {
             tenant_id: None,
             http_headers: HashMap::new(),
             upload_interval: DEFAULT_UPLOAD_INTERVAL,
-            // mem_config,
+            mem_config,
         }
     }
 
@@ -150,7 +150,7 @@ pub struct PyroscopeAgentBuilder {
     /// Profiler backend
     backend: BackendImpl<BackendUninitialized>,
     /// Configuration Object
-    config: PyroscopeConfig,
+    pub config: PyroscopeConfig,
     ruleset: ThreadTagsSet,
 }
 
@@ -323,12 +323,15 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
 
         let mut batch = Vec::with_capacity(2);
 
-        // if let Some(pprof) = mem::dump_pprof(config.mem_config.heap_sample_size, &time_range) {
-        //     batch.push(ReportBatch{
-        //         profile_type: "memory".to_string(),
-        //         data: ReportData::RawPprof(pprof),
-        //     })
-        // }
+        if config.mem_config.enabled {
+            let pprof = memory::dump_pprof(config.mem_config.heap_sample_size, &time_range);
+            if let Some(pprof) = pprof {
+                batch.push(ReportBatch {
+                    profile_type: "memory".to_string(),
+                    data: ReportData::RawPprof(pprof),
+                })
+            }
+        }
         log::trace!(target: LOG_TAG, "Sending session {:?}",  time_range);
 
         // Generate report from backend

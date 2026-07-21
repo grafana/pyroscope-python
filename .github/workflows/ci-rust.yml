@@ -41,7 +41,11 @@ jobs:
           components: clippy
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- --deny warnings
+        run: |
+          cargo clippy --all-targets --no-default-features -- --deny warnings
+          export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
+          export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
+          cargo clippy --all-targets --all-features -- --deny warnings
         working-directory: rust
 
   test:
@@ -64,6 +68,13 @@ jobs:
         with:
           toolchain: 1.96.0
 
-      - name: Run tests
-        run: cargo test --locked
+      - name: Run tests without memory profiling
+        run: cargo test --locked --no-default-features
+        working-directory: rust
+
+      - name: Run tests with memory profiling
+        run: |
+          export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
+          export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
+          cargo test --locked --all-features
         working-directory: rust
