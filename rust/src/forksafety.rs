@@ -16,7 +16,7 @@ use std::thread;
 /// fork, so any parking it does is safe. Other platforms park on a futex, which
 /// is fork-safe, so `f` runs inline.
 #[cfg(target_os = "macos")]
-pub fn execute_no_libdispatch_park<F, R>(f: F) -> R
+pub fn no_dispatch_semaphore<F, R>(f: F) -> R
 where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,
@@ -30,7 +30,7 @@ where
 /// See the macOS variant. Parking on non-macOS platforms uses a fork-safe
 /// futex, so `f` runs directly on the calling thread.
 #[cfg(not(target_os = "macos"))]
-pub fn execute_no_libdispatch_park<F, R>(f: F) -> R
+pub fn no_dispatch_semaphore<F, R>(f: F) -> R
 where
     F: FnOnce() -> R + Send + 'static,
     R: Send + 'static,

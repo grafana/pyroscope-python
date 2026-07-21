@@ -50,7 +50,7 @@ fn create_http_client() -> Result<reqwest::blocking::Client> {
     //   _native::pyroscope::PyroscopeAgentBuilder::build
     //   _native::ffikit::run
     //   _native::initialize_agent
-    Ok(forksafety::execute_no_libdispatch_park(|| {
+    Ok(forksafety::no_dispatch_semaphore(|| {
         reqwest::blocking::Client::builder().build()
     })?)
 }

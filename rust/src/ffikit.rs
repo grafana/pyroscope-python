@@ -58,7 +58,7 @@ pub fn stop() -> Result<()> {
         //   _native::pyroscope::PyroscopeAgent::stop
         //   _native::ffikit::stop
         //   _native::__pyfunction_drop_agent
-        forksafety::execute_no_libdispatch_park(|| agent.stop())
+        forksafety::no_dispatch_semaphore(|| agent.stop())
     } else {
         Err(PyroscopeError::AgentNotRunning)
     }
