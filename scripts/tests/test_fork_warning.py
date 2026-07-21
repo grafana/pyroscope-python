@@ -1,3 +1,4 @@
+# Intentionally not run in CI: it sometimes deadlocks; run manually.
 import os
 import warnings
 

@@ -121,7 +121,8 @@ fn initialize_logging(logging_level: u32) -> bool {
         }
     }
 
-    pretty_env_logger::init_timed();
+    // The logger can only be installed once; repeat calls keep the first level.
+    let _ = pretty_env_logger::try_init_timed();
     true
 }
 
