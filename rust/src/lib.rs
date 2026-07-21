@@ -36,6 +36,20 @@ const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
 static AGENT_RUNNING: AtomicBool = AtomicBool::new(false);
 
 fn create_http_client() -> Result<reqwest::blocking::Client> {
+    // reqwest's blocking client waits on its runtime thread via Thread::park.
+    // Captured crash when this ran on the fork-surviving thread:
+    //   EXC_BREAKPOINT (SIGTRAP)
+    //   libdispatch: BUG IN CLIENT OF LIBDISPATCH:
+    //                Use-after-free of dispatch_semaphore_t or dispatch_group_t
+    //   libsystem_c: crashed on child side of fork pre-exec
+    //
+    //   _dispatch_semaphore_wait_slow
+    //   std::thread::Thread::park
+    //   reqwest::blocking::client::ClientBuilder::build
+    //   _native::session::SessionManager::new
+    //   _native::pyroscope::PyroscopeAgentBuilder::build
+    //   _native::ffikit::run
+    //   _native::initialize_agent
     Ok(forksafety::execute_no_libdispatch_park(|| {
         reqwest::blocking::Client::builder().build()
     })?)

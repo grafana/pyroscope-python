@@ -43,7 +43,22 @@ pub fn remove_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
 
 pub fn stop() -> Result<()> {
     if let Some(agent) = STATE.mutex().lock()?.agent.take() {
-        agent.stop()
+        // stop() sends a Kill over the bounded session channel; when that
+        // channel is full SyncSender::send waits via Thread::park. Captured
+        // crash when this ran on the fork-surviving thread:
+        //   EXC_BREAKPOINT (SIGTRAP)
+        //   libdispatch: BUG IN CLIENT OF LIBDISPATCH:
+        //                Use-after-free of dispatch_semaphore_t or dispatch_group_t
+        //   libsystem_c: crashed on child side of fork pre-exec
+        //
+        //   _dispatch_semaphore_wait_slow
+        //   std::thread::Thread::park
+        //   std::sync::mpmc::zero::Channel::send
+        //   std::sync::mpmc::Sender::send
+        //   _native::pyroscope::PyroscopeAgent::stop
+        //   _native::ffikit::stop
+        //   _native::__pyfunction_drop_agent
+        forksafety::execute_no_libdispatch_park(|| agent.stop())
     } else {
         Err(PyroscopeError::AgentNotRunning)
     }
