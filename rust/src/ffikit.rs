@@ -8,14 +8,19 @@ use pyo3::Python;
 static STATE: forksafety::LeakableMutex<State> = forksafety::LeakableMutex::new();
 
 #[derive(Default)]
-struct State {
-    agent: Option<PyroscopeAgent<PyroscopeAgentRunning>>,
+enum State {
+    #[default]
+    Idle,
+    Busy,
+    Running(Box<PyroscopeAgent<PyroscopeAgentRunning>>),
 }
 
 pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
     let mut guard = STATE.mutex().lock()?;
-    if guard.agent.is_some() {
-        return Err(PyroscopeError::AgentAlreadyRunning);
+    match *guard {
+        State::Idle => {}
+        State::Busy => return Err(PyroscopeError::ConcurrentOperation),
+        State::Running(_) => return Err(PyroscopeError::AgentAlreadyRunning),
     }
     let mem_config = agent.config.mem_config.clone();
     let start_agent =
@@ -27,7 +32,7 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
     let agent = start_agent();
     match agent {
         Ok(agent) => {
-            guard.agent = Some(agent);
+            *guard = State::Running(Box::new(agent));
             Ok(())
         }
         Err(err) => {
@@ -38,7 +43,7 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
 }
 
 pub fn add_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
-    if let Some(agent) = &STATE.mutex().lock()?.agent {
+    if let State::Running(agent) = &*STATE.mutex().lock()? {
         agent.add_thread_tag(tid, tag)
     } else {
         Err(PyroscopeError::AgentNotRunning)
@@ -46,7 +51,7 @@ pub fn add_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
 }
 
 pub fn remove_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
-    if let Some(agent) = &STATE.mutex().lock()?.agent {
+    if let State::Running(agent) = &*STATE.mutex().lock()? {
         agent.remove_thread_tag(tid, tag)
     } else {
         Err(PyroscopeError::AgentNotRunning)
@@ -54,14 +59,29 @@ pub fn remove_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
 }
 
 pub fn stop(py: Python<'_>) -> Result<()> {
-    let agent = STATE.mutex().lock()?.agent.take();
-    if let Some(agent) = agent {
-        let res = py.detach(|| agent.stop());
-        crate::memory::stop(py);
-        res
-    } else {
-        Err(PyroscopeError::AgentNotRunning)
-    }
+    // Claim the agent and leave a Busy marker so concurrent run/stop calls
+    // fail fast instead of racing with the teardown below.
+    let agent = {
+        let mut guard = STATE.mutex().lock()?;
+        match std::mem::replace(&mut *guard, State::Busy) {
+            State::Running(agent) => agent,
+            State::Busy => return Err(PyroscopeError::ConcurrentOperation),
+            State::Idle => {
+                *guard = State::Idle;
+                return Err(PyroscopeError::AgentNotRunning);
+            }
+        }
+    };
+
+    // The lock must not be held while joining the agent threads: the snapshot
+    // thread attaches to Python for the memory flush, and a third thread
+    // already attached to Python could block on the lock, which would
+    // deadlock the three of them (stopper -> snapshot thread -> GIL holder ->
+    // lock). The GIL is detached for the same reason.
+    let res = py.detach(|| agent.stop());
+    crate::memory::stop(py);
+    *STATE.mutex().lock()? = State::Idle;
+    res
 }
 
 pub fn at_fork_after_in_child(_py: Python<'_>) {
