@@ -6,17 +6,16 @@ use std::{
 };
 
 use crate::{
-    backend::Tag,
+    backend::{BackendConfig, ReportBatch, ReportData, Tag, ThreadTag, ThreadTagsSet},
     error::Result,
+    memory,
     session::{Session, SessionManager, SessionSignal},
 };
 use std::sync::mpsc::SyncSender;
 use std::time::{Duration, SystemTime};
 
-use crate::backend::{BackendConfig, ThreadTag, ThreadTagsSet};
 use crate::pyspy_backend::Pyspy;
 use crate::utils::TimeRange;
-
 const LOG_TAG: &str = "Pyroscope::Agent";
 #[derive(Clone)]
 pub struct PyroscopeConfig {
@@ -39,7 +38,7 @@ pub struct PyroscopeConfig {
     pub basic_auth: Option<BasicAuth>,
     pub tenant_id: Option<String>,
     pub http_headers: HashMap<String, String>,
-    // pub mem_config: crate::mem::Config,
+    pub mem_config: crate::memory::Config,
 }
 
 #[derive(Clone, Debug)]
@@ -55,7 +54,7 @@ impl PyroscopeConfig {
         sample_rate: u32,
         spy_name: impl AsRef<str>,
         spy_version: impl AsRef<str>,
-        // mem_config: mem::Config,
+        mem_config: crate::memory::Config,
     ) -> Self {
         Self {
             url: url.as_ref().to_owned(),
@@ -69,7 +68,7 @@ impl PyroscopeConfig {
             basic_auth: None,
             tenant_id: None,
             http_headers: HashMap::new(),
-            // mem_config,
+            mem_config,
         }
     }
 
@@ -116,7 +115,7 @@ impl PyroscopeConfig {
 }
 
 pub struct PyroscopeAgentBuilder {
-    config: PyroscopeConfig,
+    pub config: PyroscopeConfig,
     pyspy_config: py_spy::config::Config,
     backend_config: BackendConfig,
     ruleset: ThreadTagsSet,
@@ -291,12 +290,15 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
 
         let mut batch = Vec::with_capacity(2);
 
-        // if let Some(pprof) = mem::dump_pprof(config.mem_config.heap_sample_size, &time_range) {
-        //     batch.push(ReportBatch{
-        //         profile_type: "memory".to_string(),
-        //         data: ReportData::RawPprof(pprof),
-        //     })
-        // }
+        if config.mem_config.enabled {
+            let pprof = memory::dump_pprof(config.mem_config.heap_sample_size, &time_range);
+            if let Some(pprof) = pprof {
+                batch.push(ReportBatch {
+                    profile_type: "memory".to_string(),
+                    data: ReportData::RawPprof(pprof),
+                })
+            }
+        }
         log::trace!(target: LOG_TAG, "Sending session {:?}",  time_range);
 
         let report = reporter.report()?;
