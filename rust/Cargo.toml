@@ -17,10 +17,18 @@ pretty_env_logger = "0.5"
 log = "0.4"
 libc = "0.2"
 thiserror = "2.0"
-reqwest = { version = "0.13", features = ["blocking", "query", "native-tls"], default-features = false }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "query", "native-tls"] }
 uuid = { version = "1.20.0", features = ["v4"] }
 url = "2.2.2"
 libflate = "2.1.0"
 prost = "0.14"
 hashbrown = "0.17.1"
+lazy_static = "1.5.0"
 pyo3 = { version = "0.29.0", features = ["extension-module"] }
+
+[build-dependencies]
+cmake = "0.1"
+
+[features]
+default = []
+memory = []

@@ -28,8 +28,11 @@ def configure(
         tenant_id="",
         http_headers=None,
         line_no=LineNo.LastInstruction,
+        mem_enabled=False,
+        mem_max_nframe=128,
+        mem_heap_sample_size=512 * 1024,
+        mem_enable_mem_domain=True,
 ):
-
     if app_name is not None:
         warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
         application_name = app_name
@@ -42,7 +45,7 @@ def configure(
         log_level = LOGGER.getEffectiveLevel()
         lib.initialize_logging(log_level)
 
-    lib.initialize_agent(
+    return lib.initialize_agent(
         application_name,
         server_address,
         basic_auth_username,
@@ -58,7 +61,11 @@ def configure(
         tags or {},
         tenant_id or "",
         http_headers or {},
-        line_no
+        line_no,
+        mem_enabled,
+        mem_max_nframe,
+        mem_heap_sample_size,
+        mem_enable_mem_domain,
     )
 
 def shutdown():
@@ -68,12 +75,13 @@ def shutdown():
         LOGGER.info("Pyroscope Agent successfully shutdown")
     else:
         LOGGER.warning("Pyroscope Agent shutdown failed")
+    return drop
 
 def add_thread_tag(key, value):
-    lib.add_thread_tag(key, value)
+    return lib.add_thread_tag(key, value)
 
 def remove_thread_tag(key, value):
-    lib.remove_thread_tag(key, value)
+    return lib.remove_thread_tag(key, value)
 
 def runtime_name():
     return sys.implementation.name

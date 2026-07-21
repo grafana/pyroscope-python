@@ -5,7 +5,6 @@ use crate::encode::pprof::ffi::FFIInternedString;
 use crate::encode::pprof::ffi::{FFIFrame, FFIHeapSampleValues};
 use crate::utils::TimeRange;
 use hashbrown::hash_map::EntryRef;
-use prost::Message;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -14,6 +13,8 @@ pub struct PProfBuilder {
     profile: Profile,
     functions: HashMap<FunctionMirror, u64>,
     locations: HashMap<LocationMirror, u64>,
+    memory_samples: hashbrown::HashMap<Vec<u64>, [i64; 4]>,
+    ffi_locations_scratch: Vec<u64>,
 }
 #[derive(Hash, PartialEq, Eq, Clone)]
 pub struct LocationMirror {
@@ -38,6 +39,8 @@ impl PProfBuilder {
         PProfBuilder {
             functions: HashMap::new(),
             locations: HashMap::new(),
+            memory_samples: hashbrown::HashMap::new(),
+            ffi_locations_scratch: Vec::new(),
             profile: Profile {
                 sample_type: vec![],
                 sample: vec![],
@@ -87,6 +90,10 @@ impl PProfBuilder {
                 unit: strings.add("bytes").pprof(),
             },
             ValueType {
+                r#type: strings.add("inuse_objects").pprof(),
+                unit: strings.add("count").pprof(),
+            },
+            ValueType {
                 r#type: strings.add("inuse_space").pprof(),
                 unit: strings.add("bytes").pprof(),
             },
@@ -129,15 +136,9 @@ impl PProfBuilder {
     }
 
     pub fn add_ffi_sample(&mut self, frames: &[FFIFrame], values: &FFIHeapSampleValues) {
-        let mut sample = Sample {
-            location_id: Vec::with_capacity(frames.len()),
-            value: vec![
-                values.alloc_count as i64,
-                values.alloc_space as i64,
-                values.heap_space as i64,
-            ],
-            label: vec![],
-        };
+        let mut location_ids = std::mem::take(&mut self.ffi_locations_scratch);
+        location_ids.clear();
+        location_ids.reserve(frames.len());
 
         for f in frames {
             let line = f.line as i64;
@@ -145,10 +146,39 @@ impl PProfBuilder {
                 name: (&f.function_name).into(),
                 filename: (&f.file_name).into(),
             });
-            let location_id = self.add_location_mirror(LocationMirror { function_id, line });
-            sample.location_id.push(location_id);
+            location_ids.push(self.add_location_mirror(LocationMirror { function_id, line }));
         }
-        self.profile.sample.push(sample);
+
+        // Order must match the sample_type order in set_memory_profile_type:
+        // alloc_objects, alloc_space, inuse_objects, inuse_space.
+        let sample_values = [
+            values.alloc_count as i64,
+            values.alloc_space as i64,
+            values.heap_count as i64,
+            values.heap_space as i64,
+        ];
+        match self.memory_samples.entry_ref(location_ids.as_slice()) {
+            EntryRef::Occupied(mut entry) => {
+                for (accumulated, value) in entry.get_mut().iter_mut().zip(sample_values) {
+                    *accumulated = accumulated.saturating_add(value);
+                }
+            }
+            EntryRef::Vacant(entry) => {
+                entry.insert_entry_with_key(location_ids.clone(), sample_values);
+            }
+        }
+        self.ffi_locations_scratch = location_ids;
+    }
+
+    fn flush_memory_samples(&mut self) {
+        self.profile.sample.reserve(self.memory_samples.len());
+        for (location_id, value) in self.memory_samples.drain() {
+            self.profile.sample.push(Sample {
+                location_id,
+                value: value.to_vec(),
+                label: vec![],
+            });
+        }
     }
 
     pub fn add_function_mirror(&mut self, fm: FunctionMirror) -> u64 {
@@ -201,22 +231,24 @@ impl PProfBuilder {
         self.profile.duration_nanos = 0;
         self.locations.clear();
         self.functions.clear();
+        self.memory_samples.clear();
+        self.ffi_locations_scratch.clear();
     }
-    pub fn encode_and_reset(
+    pub fn take_profile_and_reset(
         &mut self,
         st: &StringTable,
         time_range: &TimeRange,
-    ) -> Option<Vec<u8>> {
+    ) -> Option<Profile> {
+        self.flush_memory_samples();
         if self.profile.sample.is_empty() {
             self.reset();
-            None
-        } else {
-            self.set_time_range(time_range);
-            st.clone_pprof_table(&mut self.profile.string_table);
-            let res = self.profile.encode_to_vec();
-            self.reset();
-            Some(res)
+            return None;
         }
+        self.set_time_range(time_range);
+        st.clone_pprof_table(&mut self.profile.string_table);
+        let profile = std::mem::take(&mut self.profile);
+        self.reset();
+        Some(profile)
     }
 }
 
@@ -397,6 +429,7 @@ pub mod ffi {
     #[repr(C)]
     pub struct FFIHeapSampleValues {
         pub heap_space: usize,
+        pub heap_count: usize,
         pub alloc_space: usize,
         pub alloc_count: usize,
     }
@@ -404,5 +437,112 @@ pub mod ffi {
     #[repr(C)]
     pub struct FFIInternedString {
         pub index: u32,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ffi::{FFIFrame, FFIHeapSampleValues, FFIInternedString};
+    use super::{PProfBuilder, StringTable};
+    use crate::utils::TimeRange;
+    use std::time::{Duration, UNIX_EPOCH};
+
+    fn frame(function_name: u32, file_name: u32, line: i32) -> FFIFrame {
+        FFIFrame {
+            function_name: FFIInternedString {
+                index: function_name,
+            },
+            file_name: FFIInternedString { index: file_name },
+            line,
+        }
+    }
+
+    fn values(
+        heap_space: usize,
+        heap_count: usize,
+        alloc_space: usize,
+        alloc_count: usize,
+    ) -> FFIHeapSampleValues {
+        FFIHeapSampleValues {
+            heap_space,
+            heap_count,
+            alloc_space,
+            alloc_count,
+        }
+    }
+
+    #[test]
+    fn equal_ffi_stacks_are_accumulated_element_wise() {
+        let mut builder = PProfBuilder::new();
+        let frames = [frame(1, 2, 10), frame(3, 4, 20)];
+
+        builder.add_ffi_sample(&frames, &values(0, 0, 100, 2));
+        builder.add_ffi_sample(&frames, &values(300, 4, 0, 0));
+
+        assert_eq!(builder.memory_samples.len(), 1);
+        assert!(builder.profile.sample.is_empty());
+
+        builder.flush_memory_samples();
+
+        assert_eq!(builder.profile.sample.len(), 1);
+        assert_eq!(builder.profile.sample[0].value, vec![2, 100, 4, 300]);
+    }
+
+    #[test]
+    fn distinct_ffi_stacks_remain_distinct() {
+        let mut builder = PProfBuilder::new();
+
+        builder.add_ffi_sample(&[frame(1, 2, 10)], &values(0, 0, 100, 1));
+        builder.add_ffi_sample(&[frame(1, 2, 20)], &values(0, 0, 200, 2));
+        builder.flush_memory_samples();
+
+        assert_eq!(builder.profile.sample.len(), 2);
+        let mut sample_values: Vec<_> = builder
+            .profile
+            .sample
+            .iter()
+            .map(|sample| sample.value.clone())
+            .collect();
+        sample_values.sort();
+        assert_eq!(sample_values, vec![vec![1, 100, 0, 0], vec![2, 200, 0, 0]]);
+    }
+
+    #[test]
+    fn take_profile_and_reset_moves_samples_and_resets() {
+        let mut builder = PProfBuilder::new();
+        let mut strings = StringTable::new();
+        let time_range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
+
+        builder.set_memory_profile_type(&mut strings, 512 * 1024);
+        builder.add_ffi_sample(&[frame(1, 2, 10)], &values(300, 2, 100, 1));
+
+        let profile = builder
+            .take_profile_and_reset(&strings, &time_range)
+            .expect("expected a profile with samples");
+        assert_eq!(profile.sample.len(), 1);
+        assert_eq!(profile.sample[0].value, vec![1, 100, 2, 300]);
+        assert_eq!(profile.sample_type.len(), 4);
+        assert_eq!(profile.string_table.len(), strings.set.len());
+        assert_eq!(profile.duration_nanos, 10_000_000_000);
+
+        assert!(
+            builder
+                .take_profile_and_reset(&strings, &time_range)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn reset_discards_accumulated_ffi_samples() {
+        let mut builder = PProfBuilder::new();
+        let frames = [frame(1, 2, 10)];
+
+        builder.add_ffi_sample(&frames, &values(0, 0, 100, 1));
+        builder.reset();
+        builder.add_ffi_sample(&frames, &values(0, 0, 200, 2));
+        builder.flush_memory_samples();
+
+        assert_eq!(builder.profile.sample.len(), 1);
+        assert_eq!(builder.profile.sample[0].value, vec![2, 200, 0, 0]);
     }
 }
