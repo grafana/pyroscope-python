@@ -44,6 +44,8 @@ if (NOT Python3_INCLUDE_DIRS)
     message(FATAL_ERROR "Python3_INCLUDE_DIRS not found")
 endif ()
 
+message(STATUS "Python3_EXECUTABLE ${Python3_EXECUTABLE}")
+message(STATUS "Python3_VERSION ${Python3_VERSION}")
 message(STATUS "Python3_INCLUDE_DIRS ${Python3_INCLUDE_DIRS}")
 
 # Python3::Python target might not exist in all build environments so we'll link using include dirs and let the linker

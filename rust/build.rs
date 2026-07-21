@@ -34,10 +34,14 @@ fn main() {
 
     let mut cfg = Config::new(&cpp_dir);
 
-    println!("cargo:rerun-if-env-changed=PYROSCOPE__Python3_ROOT_DIR");
-    let python_root = env::var_os("PYROSCOPE__Python3_ROOT_DIR")
-        .expect("PYROSCOPE__Python3_ROOT_DIR must be set (passed from setup.py) so the C++ memalloc profiler is compiled against the target Python version");
+    println!("cargo:rerun-if-env-changed=Python3_ROOT_DIR");
+    let python_root = env::var_os("Python3_ROOT_DIR")
+        .expect("Python3_ROOT_DIR must be set (passed from setup.py) so the C++ memalloc profiler is compiled against the target Python version");
     cfg.define("Python3_ROOT_DIR", &python_root);
+    println!("cargo:rerun-if-env-changed=Python3_EXECUTABLE");
+    let python_executable = env::var_os("Python3_EXECUTABLE")
+        .expect("Python3_EXECUTABLE must be set (passed from setup.py) so the C++ memalloc profiler is compiled against the exact target Python interpreter");
+    cfg.define("Python3_EXECUTABLE", &python_executable);
     cfg.define("Python3_FIND_STRATEGY", "LOCATION");
 
     let dst = cfg.build();
