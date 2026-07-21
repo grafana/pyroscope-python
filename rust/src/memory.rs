@@ -147,7 +147,8 @@ mod implementation {
     }
 
     pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u8>> {
-        let profile = Python::attach(|_| {
+        // returns error on >= 3.13 if Py_IsFinalizing, panics on older versions
+        let profile = Python::try_attach(|_| {
             unsafe {
                 memalloc_heap_py();
             }
@@ -160,7 +161,7 @@ mod implementation {
                 }
                 _ => None,
             }
-        })?;
+        })??;
         Some(profile.encode_to_vec())
     }
 }

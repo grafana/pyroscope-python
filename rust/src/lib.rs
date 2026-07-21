@@ -86,6 +86,18 @@ fn register_fork_handlers(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 #[pyfunction]
+fn at_exit(py: Python<'_>) {
+    let _ = drop_agent(py);
+}
+
+fn register_atexit_handler(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = m.py();
+    let register = py.import("atexit")?.getattr("register")?;
+    register.call1((wrap_pyfunction!(at_exit, m)?,))?;
+    Ok(())
+}
+
+#[pyfunction]
 fn initialize_logging(logging_level: u32) -> bool {
     // Force rustc to display the log messages in the console.
     match logging_level {
@@ -256,6 +268,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(add_thread_tag, m)?)?;
     m.add_function(wrap_pyfunction!(remove_thread_tag, m)?)?;
     register_fork_handlers(m)?;
+    register_atexit_handler(m)?;
     Ok(())
 }
 
