@@ -33,6 +33,8 @@ pub enum PyroscopeError {
     AgentNotRunning,
     #[error("Agent already running")]
     AgentAlreadyRunning,
+    #[error("Another configure/shutdown operation is in progress")]
+    ConcurrentOperation,
 }
 
 impl PyroscopeError {

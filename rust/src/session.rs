@@ -244,6 +244,7 @@ fn push_label_if_absent(labels: &mut Vec<LabelPair>, name: &str, value: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory;
     use std::collections::HashMap;
 
     fn tags<const N: usize>(tags: [(&str, &str); N]) -> HashMap<String, String> {
@@ -252,12 +253,27 @@ mod tests {
             .collect()
     }
 
+    fn disabled_memory_config() -> memory::Config {
+        memory::Config {
+            enabled: false,
+            enable_mem_domain: false,
+            max_nframe: 0,
+            heap_sample_size: 0,
+        }
+    }
+
     #[test]
     fn labels_for_profile_includes_scope_and_runtime_labels() {
-        let config =
-            PyroscopeConfig::new("http://localhost:4040", "my-app", 100, "pyspy", "1.0.12")
-                .tags(tags([("env", "prod")]))
-                .runtime("cpython".to_string(), "3.12.4".to_string());
+        let config = PyroscopeConfig::new(
+            "http://localhost:4040",
+            "my-app",
+            100,
+            "pyspy",
+            "1.0.12",
+            disabled_memory_config(),
+        )
+        .tags(tags([("env", "prod")]))
+        .runtime("cpython".to_string(), "3.12.4".to_string());
 
         let labels = labels_for_profile(&config, "process_cpu".to_string());
         let labels_by_name: HashMap<&str, &str> = labels
@@ -300,18 +316,24 @@ mod tests {
 
     #[test]
     fn labels_for_profile_preserves_user_provided_semconv_labels() {
-        let config =
-            PyroscopeConfig::new("http://localhost:4040", "my-app", 100, "pyspy", "1.0.12")
-                .tags(tags([
-                    (LABEL_SCOPE_NAME, "user-supplied-scope"),
-                    (LABEL_SCOPE_VERSION, "user-supplied-scope-version"),
-                    (LABEL_PROCESS_RUNTIME_NAME, "user-supplied-runtime"),
-                    (
-                        LABEL_PROCESS_RUNTIME_VERSION,
-                        "user-supplied-runtime-version",
-                    ),
-                ]))
-                .runtime("cpython".to_string(), "3.12.4".to_string());
+        let config = PyroscopeConfig::new(
+            "http://localhost:4040",
+            "my-app",
+            100,
+            "pyspy",
+            "1.0.12",
+            disabled_memory_config(),
+        )
+        .tags(tags([
+            (LABEL_SCOPE_NAME, "user-supplied-scope"),
+            (LABEL_SCOPE_VERSION, "user-supplied-scope-version"),
+            (LABEL_PROCESS_RUNTIME_NAME, "user-supplied-runtime"),
+            (
+                LABEL_PROCESS_RUNTIME_VERSION,
+                "user-supplied-runtime-version",
+            ),
+        ]))
+        .runtime("cpython".to_string(), "3.12.4".to_string());
 
         let labels = labels_for_profile(&config, "process_cpu".to_string());
         let labels_by_name: HashMap<&str, &str> = labels
@@ -353,13 +375,19 @@ mod tests {
 
     #[test]
     fn labels_for_profile_uses_user_service_name_and_ignores_user_profile_name() {
-        let config =
-            PyroscopeConfig::new("http://localhost:4040", "my-app", 100, "pyspy", "1.0.12")
-                .tags(tags([
-                    (LABEL_SERVICE_NAME, "user-service"),
-                    (LABEL_PROFILE_NAME, "user-profile"),
-                ]))
-                .runtime("cpython".to_string(), "3.12.4".to_string());
+        let config = PyroscopeConfig::new(
+            "http://localhost:4040",
+            "my-app",
+            100,
+            "pyspy",
+            "1.0.12",
+            disabled_memory_config(),
+        )
+        .tags(tags([
+            (LABEL_SERVICE_NAME, "user-service"),
+            (LABEL_PROFILE_NAME, "user-profile"),
+        ]))
+        .runtime("cpython".to_string(), "3.12.4".to_string());
 
         let labels = labels_for_profile(&config, "process_cpu".to_string());
         let labels_by_name: HashMap<&str, &str> = labels
