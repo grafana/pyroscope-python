@@ -42,9 +42,25 @@ fn create_http_client() -> Result<reqwest::blocking::Client> {
 
 #[cfg(target_os = "macos")]
 fn create_http_client() -> Result<reqwest::blocking::Client> {
-    // The crash is _dispatch_semaphore_wait_slow -> Thread::park -> ClientBuilder::build,
-    // reported as a use-after-free of dispatch_semaphore_t. We assume the fork-surviving
-    // Python thread retains Rust's pre-fork parker; a new thread gets fresh parking state.
+    // Captured macOS crash:
+    //   EXC_BREAKPOINT (SIGTRAP), Abort Cause 15
+    //   Termination Reason: Namespace SIGNAL, Code 5, Trace/BPT trap: 5
+    //   Faulting queue: com.apple.main-thread
+    //   libdispatch: BUG IN CLIENT OF LIBDISPATCH:
+    //                Use-after-free of dispatch_semaphore_t or dispatch_group_t
+    //   libsystem_c: crashed on child side of fork pre-exec
+    //
+    //   _dispatch_sema4_wait
+    //   _dispatch_semaphore_wait_slow
+    //   std::thread::Thread::park
+    //   reqwest::blocking::client::ClientBuilder::build
+    //   _native::session::SessionManager::new
+    //   _native::pyroscope::PyroscopeAgentBuilder::build
+    //   _native::ffikit::run
+    //   _native::initialize_agent
+    //
+    // We assume the fork-surviving Python thread retains Rust's pre-fork parker.
+    // A new thread gets fresh parking state.
     let client = std::thread::spawn(|| reqwest::blocking::Client::builder().build())
         .join()
         .map_err(|_| PyroscopeError::new("HTTP client thread panicked"))??;
