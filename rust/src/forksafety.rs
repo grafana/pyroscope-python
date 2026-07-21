@@ -1,6 +1,50 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
+/// Runs `f` without ever parking the calling thread on a libdispatch semaphore.
+///
+/// On macOS, `std::thread`'s parker is backed by a `dispatch_semaphore_t`. After
+/// `fork()` only the calling thread survives, but it still holds the parker it
+/// created before the fork. Touching that inherited semaphore in the child (a
+/// `fork()`-without-`exec()` process) makes macOS abort:
+///
+/// ```text
+/// EXC_BREAKPOINT (SIGTRAP)
+/// libdispatch: BUG IN CLIENT OF LIBDISPATCH:
+///              Use-after-free of dispatch_semaphore_t or dispatch_group_t
+/// libsystem_c: crashed on child side of fork pre-exec
+///
+/// _dispatch_semaphore_wait_slow
+/// std::thread::Thread::park
+/// reqwest::blocking::client::ClientBuilder::build
+/// ```
+///
+/// Running `f` on a freshly spawned thread gives it a parker created after the
+/// fork, so any parking it does is safe. Other platforms park on a futex, which
+/// is fork-safe, so `f` runs inline.
+#[cfg(target_os = "macos")]
+pub fn execute_no_libdispatch_park<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R + Send,
+    R: Send,
+{
+    match std::thread::scope(|scope| scope.spawn(f).join()) {
+        Ok(value) => value,
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}
+
+/// See the macOS variant. Parking on non-macOS platforms uses a fork-safe
+/// futex, so `f` runs directly on the calling thread.
+#[cfg(not(target_os = "macos"))]
+pub fn execute_no_libdispatch_park<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R + Send,
+    R: Send,
+{
+    f()
+}
+
 /// A lazily-initialized global mutex whose contents can be abandoned
 /// (leaked) and replaced with a fresh default value.
 ///
