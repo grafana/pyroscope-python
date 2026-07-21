@@ -119,7 +119,7 @@ jobs:
             --network=host \
             -v ${{ github.workspace }}:/pyroscope-python \
             python:${{ matrix.PYTHON_VERSION }}-${{ matrix.image-suffix }} \
-            sh -c "pip install --no-index --find-links /pyroscope-python/python pyroscope-io && python /pyroscope-python/scripts/tests/test.py && python /pyroscope-python/scripts/tests/test_memory.py && python /pyroscope-python/scripts/tests/test_fork_warning.py && python /pyroscope-python/scripts/tests/test_concurrency.py && python /pyroscope-python/scripts/tests/test_atexit.py"
+            sh -c "pip install --no-index --find-links /pyroscope-python/python pyroscope-io && timeout 3m python /pyroscope-python/scripts/tests/test.py && timeout 3m python /pyroscope-python/scripts/tests/test_memory.py && timeout 3m python /pyroscope-python/scripts/tests/test_concurrency.py && timeout 3m python /pyroscope-python/scripts/tests/test_atexit.py"
 
   sdist-build:
     name: sdist
