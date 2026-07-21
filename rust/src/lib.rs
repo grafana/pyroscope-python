@@ -35,6 +35,19 @@ const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 static AGENT_RUNNING: AtomicBool = AtomicBool::new(false);
 
+#[cfg(not(target_os = "macos"))]
+fn create_http_client() -> Result<reqwest::blocking::Client> {
+    Ok(reqwest::blocking::Client::builder().build()?)
+}
+
+#[cfg(target_os = "macos")]
+fn create_http_client() -> Result<reqwest::blocking::Client> {
+    let client = std::thread::spawn(|| reqwest::blocking::Client::builder().build())
+        .join()
+        .map_err(|_| PyroscopeError::new("HTTP client thread panicked"))??;
+    Ok(client)
+}
+
 #[pyfunction]
 fn at_fork_after_in_parent(py: Python<'_>) -> PyResult<()> {
     warn_about_fork(py)
@@ -132,6 +145,10 @@ fn initialize_agent(
     http_headers: HashMap<String, String>,
     line_no: LineNo,
 ) -> bool {
+    let Ok(http_client) = create_http_client() else {
+        return false;
+    };
+
     let pid = std::process::id();
 
     let backend_config = BackendConfig {
@@ -193,6 +210,7 @@ fn initialize_agent(
         agent_builder,
         pyspy,
         dynamic_tags,
+        http_client,
     ))
     .is_ok();
     if started {

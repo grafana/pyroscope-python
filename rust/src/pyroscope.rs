@@ -141,6 +141,7 @@ pub struct PyroscopeAgentBuilder {
     /// Configuration Object
     config: PyroscopeConfig,
     ruleset: ThreadTagsSet,
+    http_client: reqwest::blocking::Client,
 }
 
 impl PyroscopeAgentBuilder {
@@ -148,11 +149,13 @@ impl PyroscopeAgentBuilder {
         config: PyroscopeConfig,
         backend: BackendImpl<BackendUninitialized>,
         ruleset: ThreadTagsSet,
+        http_client: reqwest::blocking::Client,
     ) -> Self {
         Self {
             backend,
             config,
             ruleset,
+            http_client,
         }
     }
 
@@ -168,7 +171,7 @@ impl PyroscopeAgentBuilder {
         let backend_ready = self.backend.initialize()?;
         log::trace!(target: LOG_TAG, "Backend initialized");
 
-        let session_manager = SessionManager::new()?;
+        let session_manager = SessionManager::new(self.http_client);
         log::trace!(target: LOG_TAG, "SessionManager initialized");
 
         // Return PyroscopeAgent

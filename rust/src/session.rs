@@ -49,7 +49,7 @@ pub struct SessionManager {
 
 impl SessionManager {
     /// Create a new SessionManager
-    pub fn new() -> Result<Self> {
+    pub fn new(client: reqwest::blocking::Client) -> Self {
         log::info!(target: LOG_TAG, "Creating SessionManager");
 
         // Create a channel for sending and receiving sessions
@@ -58,7 +58,6 @@ impl SessionManager {
         // Create a thread for the SessionManager
         let handle = Some(thread::spawn(move || {
             log::trace!(target: LOG_TAG, "Started");
-            let client = reqwest::blocking::Client::new();
             while let Ok(signal) = rx.recv() {
                 match signal {
                     SessionSignal::Session(session) => {
@@ -80,7 +79,7 @@ impl SessionManager {
             Ok(())
         }));
 
-        Ok(SessionManager { handle, tx })
+        SessionManager { handle, tx }
     }
 
     /// Push a new session into the SessionManager
