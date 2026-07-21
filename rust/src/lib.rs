@@ -42,6 +42,7 @@ fn create_http_client() -> Result<reqwest::blocking::Client> {
 
 #[cfg(target_os = "macos")]
 fn create_http_client() -> Result<reqwest::blocking::Client> {
+    // macOS may abort if reqwest initializes on Python's post-fork thread.
     let client = std::thread::spawn(|| reqwest::blocking::Client::builder().build())
         .join()
         .map_err(|_| PyroscopeError::new("HTTP client thread panicked"))??;
