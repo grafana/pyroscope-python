@@ -1,5 +1,7 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicPtr, Ordering};
+#[cfg(target_os = "macos")]
+use std::thread;
 
 /// Runs `f` without ever parking the calling thread on a libdispatch semaphore.
 ///
@@ -16,10 +18,10 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 #[cfg(target_os = "macos")]
 pub fn execute_no_libdispatch_park<F, R>(f: F) -> R
 where
-    F: FnOnce() -> R + Send,
-    R: Send,
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
 {
-    match std::thread::scope(|scope| scope.spawn(f).join()) {
+    match thread::spawn(f).join() {
         Ok(value) => value,
         Err(panic) => std::panic::resume_unwind(panic),
     }
@@ -30,8 +32,8 @@ where
 #[cfg(not(target_os = "macos"))]
 pub fn execute_no_libdispatch_park<F, R>(f: F) -> R
 where
-    F: FnOnce() -> R + Send,
-    R: Send,
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
 {
     f()
 }
