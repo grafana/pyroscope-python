@@ -1,11 +1,13 @@
 package dockertest
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -155,6 +157,36 @@ func (c *Container) Stop(t *testing.T, timeout time.Duration) {
 		seconds = 1
 	}
 	runQuiet("docker", "stop", "--time", fmt.Sprintf("%d", seconds), c.ID)
+}
+
+func (c *Container) Wait(t *testing.T, timeout time.Duration) int {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "docker", "wait", c.ID)
+	output, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		runQuiet("docker", "kill", c.ID)
+		t.Fatalf("dockertest: container %s did not exit after %v\nlogs:\n%s", c.ID[:12], timeout, c.Logs(t))
+	}
+	if err != nil {
+		t.Fatalf("dockertest: docker wait %s failed: %v\n%s", c.ID[:12], err, output)
+	}
+	code, err := strconv.Atoi(strings.TrimSpace(string(output)))
+	if err != nil {
+		t.Fatalf("dockertest: parse docker wait output %q: %v", strings.TrimSpace(string(output)), err)
+	}
+	return code
+}
+
+func (c *Container) Logs(t *testing.T) string {
+	t.Helper()
+	logs, err := exec.Command("docker", "logs", c.ID).CombinedOutput()
+	if err != nil {
+		t.Fatalf("dockertest: docker logs %s failed: %v\n%s", c.ID[:12], err, logs)
+	}
+	return string(logs)
 }
 
 func (c *Container) State() (ContainerState, error) {
