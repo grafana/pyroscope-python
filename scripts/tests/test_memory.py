@@ -66,6 +66,7 @@ def main():
         application_name=app_name,
         server_address='http://localhost:4040',
         enable_logging=True,
+        cpu_enabled=False,
         mem_enabled=True,
         tags={
             'canary': canary,

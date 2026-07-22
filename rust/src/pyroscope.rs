@@ -28,6 +28,8 @@ pub struct PyroscopeConfig {
     pub tags: HashMap<String, String>,
     /// Sample Rate
     pub sample_rate: u32,
+    /// Whether CPU profiling is enabled
+    pub cpu_enabled: bool,
     /// Spy Name
     pub spy_name: String,
     /// Spy Version
@@ -64,6 +66,7 @@ impl PyroscopeConfig {
             application_name: application_name.as_ref().to_owned(),
             tags: HashMap::new(),
             sample_rate,
+            cpu_enabled: true,
             spy_name: spy_name.as_ref().to_owned(),
             spy_version: spy_version.as_ref().to_owned(),
             runtime_name: String::new(),
@@ -103,6 +106,13 @@ impl PyroscopeConfig {
         }
     }
 
+    pub fn cpu_enabled(self, cpu_enabled: bool) -> Self {
+        Self {
+            cpu_enabled,
+            ..self
+        }
+    }
+
     pub fn tenant_id(self, tenant_id: String) -> Self {
         Self {
             tenant_id: Some(tenant_id),
@@ -127,7 +137,7 @@ impl PyroscopeConfig {
 
 pub struct PyroscopeAgentBuilder {
     pub config: PyroscopeConfig,
-    pyspy_config: py_spy::config::Config,
+    pyspy_config: Option<py_spy::config::Config>,
     backend_config: BackendConfig,
     ruleset: ThreadTagsSet,
 }
@@ -135,7 +145,7 @@ pub struct PyroscopeAgentBuilder {
 impl PyroscopeAgentBuilder {
     pub fn new(
         config: PyroscopeConfig,
-        pyspy_config: py_spy::config::Config,
+        pyspy_config: Option<py_spy::config::Config>,
         backend_config: BackendConfig,
         ruleset: ThreadTagsSet,
     ) -> Self {
@@ -158,9 +168,13 @@ impl PyroscopeAgentBuilder {
         // todo!("implement")
         // }
 
-        let backend = Pyspy::new(self.pyspy_config, self.backend_config, self.ruleset.clone())?;
-
-        log::trace!(target: LOG_TAG, "Backend initialized");
+        let backend = self
+            .pyspy_config
+            .map(|config| Pyspy::new(config, self.backend_config, self.ruleset.clone()))
+            .transpose()?;
+        if backend.is_some() {
+            log::trace!(target: LOG_TAG, "Backend initialized");
+        }
 
         let session_manager = SessionManager::new(http_client);
         log::trace!(target: LOG_TAG, "SessionManager initialized");
@@ -205,7 +219,7 @@ pub struct PyroscopeAgent<S: PyroscopeAgentState> {
     /// Handle to the thread that runs the Pyroscope Agent
     handle: Option<JoinHandle<Result<()>>>,
     /// Profiler backend
-    pub backend: Pyspy,
+    pub backend: Option<Pyspy>,
     /// Configuration Object
     pub config: PyroscopeConfig,
     /// PyroscopeAgent State
@@ -233,9 +247,11 @@ impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
     fn shutdown(mut self) {
         log::debug!(target: LOG_TAG, "PyroscopeAgent::drop()");
 
-        match self.backend.shutdown_thread() {
-            Ok(_) => log::debug!(target: LOG_TAG, "Backend shutdown"),
-            Err(e) => log::error!(target: LOG_TAG, "Backend shutdown error: {e}"),
+        if let Some(backend) = &mut self.backend {
+            match backend.shutdown_thread() {
+                Ok(_) => log::debug!(target: LOG_TAG, "Backend shutdown"),
+                Err(e) => log::error!(target: LOG_TAG, "Backend shutdown error: {e}"),
+            }
         }
 
         match self.session_manager.push(SessionSignal::Kill) {
@@ -261,7 +277,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
     pub fn start(mut self) -> Result<PyroscopeAgent<PyroscopeAgentRunning>> {
         log::debug!(target: LOG_TAG, "Starting");
 
-        let reporter = self.backend.reporter();
+        let reporter = self.backend.as_ref().map(Pyspy::reporter);
 
         let (tx, rx) = mpsc::channel();
         self.terminate_channel = Some(tx);
@@ -295,7 +311,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
     }
 
     fn snapshot(
-        reporter: &crate::pyspy_backend::Reporter,
+        reporter: &Option<crate::pyspy_backend::Reporter>,
         config: PyroscopeConfig,
         stx: &SyncSender<SessionSignal>,
         stop_watch: &mut StopWatch,
@@ -315,9 +331,10 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
         }
         log::trace!(target: LOG_TAG, "Sending session {:?}",  time_range);
 
-        let report = reporter.report()?;
-
-        batch.push(report);
+        if let Some(reporter) = reporter {
+            let report = reporter.report()?;
+            batch.push(report);
+        }
 
         // Send new Session to SessionManager
         stx.send(SessionSignal::Session(Box::new(Session::new(
