@@ -1,5 +1,42 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicPtr, Ordering};
+#[cfg(target_os = "macos")]
+use std::thread;
+
+/// Runs `f` without ever parking the calling thread on a libdispatch semaphore.
+///
+/// On macOS, `std::thread`'s parker is backed by a `dispatch_semaphore_t`. After
+/// `fork()` only the calling thread survives, but it still holds the parker it
+/// created before the fork. Touching that inherited semaphore in the child (a
+/// `fork()`-without-`exec()` process) makes macOS abort with a libdispatch
+/// "use-after-free of dispatch_semaphore_t" SIGTRAP. See the call sites for the
+/// captured stacks.
+///
+/// Running `f` on a freshly spawned thread gives it a parker created after the
+/// fork, so any parking it does is safe. Other platforms park on a futex, which
+/// is fork-safe, so `f` runs inline.
+#[cfg(target_os = "macos")]
+pub fn no_dispatch_semaphore<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    match thread::spawn(f).join() {
+        Ok(value) => value,
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}
+
+/// See the macOS variant. Parking on non-macOS platforms uses a fork-safe
+/// futex, so `f` runs directly on the calling thread.
+#[cfg(not(target_os = "macos"))]
+pub fn no_dispatch_semaphore<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    f()
+}
 
 /// A lazily-initialized global mutex whose contents can be abandoned
 /// (leaked) and replaced with a fresh default value.
