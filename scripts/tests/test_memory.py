@@ -62,10 +62,19 @@ def main():
     canary = uuid.uuid4().hex
     logging.info('canary %s', canary)
 
+    if pyroscope.configure(
+        application_name=app_name,
+        enable_logging=True,
+        cpu_enabled=False,
+        mem_enabled=False,
+    ):
+        raise AssertionError('configure accepted disabled CPU and memory profiling')
+
     pyroscope.configure(
         application_name=app_name,
         server_address='http://localhost:4040',
         enable_logging=True,
+        cpu_enabled=False,
         mem_enabled=True,
         tags={
             'canary': canary,

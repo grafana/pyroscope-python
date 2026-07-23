@@ -33,6 +33,7 @@ def configure(
         mem_max_nframe=128,
         mem_heap_sample_size=512 * 1024,
         mem_enable_mem_domain=True,
+        cpu_enabled=True,
 ):
     if app_name is not None:
         warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
@@ -68,6 +69,7 @@ def configure(
         mem_max_nframe,
         mem_heap_sample_size,
         mem_enable_mem_domain,
+        cpu_enabled,
     )
 
 def shutdown():

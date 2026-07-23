@@ -151,8 +151,15 @@ fn initialize_agent(
     mem_max_nframe: u16,
     mem_heap_sample_size: u64,
     mem_enable_mem_domain: bool,
+    cpu_enabled: bool,
 ) -> bool {
-    let pid = std::process::id();
+    if !cpu_enabled && !mem_enabled {
+        log::error!(
+            target: "pyroscope-python",
+            "at least one of CPU or memory profiling must be enabled"
+        );
+        return false;
+    }
 
     let backend_config = BackendConfig {
         report_thread_id,
@@ -160,12 +167,10 @@ fn initialize_agent(
         report_pid,
     };
 
-    let pid = pid.try_into().unwrap();
-
-    let config = py_spy::Config {
+    let pyspy_config = cpu_enabled.then(|| py_spy::Config {
         blocking: py_spy::config::LockingStrategy::NonBlocking,
         native: false,
-        pid: Some(pid),
+        pid: Some(std::process::id().try_into().unwrap()),
         sampling_rate: sample_rate.into(),
         include_idle: !oncpu,
         include_thread_ids: true,
@@ -174,7 +179,7 @@ fn initialize_agent(
         lineno: line_no.into(),
         duration: py_spy::config::RecordDuration::Unlimited,
         ..py_spy::Config::default()
-    };
+    });
 
     let dynamic_tags = ThreadTagsSet::new();
 
@@ -205,7 +210,7 @@ fn initialize_agent(
 
     let result = ffikit::run(
         py,
-        PyroscopeAgentBuilder::new(agent_builder, config, backend_config, dynamic_tags),
+        PyroscopeAgentBuilder::new(agent_builder, pyspy_config, backend_config, dynamic_tags),
     );
     match result {
         Ok(_) => {
