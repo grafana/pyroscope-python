@@ -87,6 +87,7 @@ def do_one_test(on_cpu, gil_only):
         report_pid=True,
         report_thread_id=True,
         report_thread_name=True,
+        upload_interval=1,
 
         tags={
             "oncpu": '{}'.format(on_cpu),
