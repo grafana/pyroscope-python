@@ -23,9 +23,8 @@ use std::{
     time::Duration,
 };
 
-use crate::backend::{BackendConfig, BackendImpl, Tag, ThreadTagsSet};
+use crate::backend::{BackendConfig, Tag, ThreadTagsSet};
 use crate::pyroscope::PyroscopeAgentBuilder;
-use crate::pyspy_backend::Pyspy;
 use pyo3::exceptions::{PyDeprecationWarning, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -179,12 +178,6 @@ fn initialize_agent(
 
     let dynamic_tags = ThreadTagsSet::new();
 
-    let pyspy = BackendImpl::new(Box::new(Pyspy::new(
-        config,
-        backend_config,
-        dynamic_tags.clone(),
-    )));
-
     let mut agent_builder = pyroscope::PyroscopeConfig::new(
         server_address,
         application_name,
@@ -212,7 +205,7 @@ fn initialize_agent(
 
     let result = ffikit::run(
         py,
-        PyroscopeAgentBuilder::new(agent_builder, pyspy, dynamic_tags),
+        PyroscopeAgentBuilder::new(agent_builder, config, backend_config, dynamic_tags),
     );
     match result {
         Ok(_) => {
