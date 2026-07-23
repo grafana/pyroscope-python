@@ -35,6 +35,7 @@ def main():
         application_name=os.environ["PYROSCOPE_APPLICATION_NAME"],
         server_address=os.environ["PYROSCOPE_SERVER_ADDRESS"],
         enable_logging=True,
+        cpu_enabled=False,
         mem_enabled=True,
         tags={
             "canary": os.environ["CANARY"],

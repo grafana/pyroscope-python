@@ -94,6 +94,10 @@ func testPythonMemoryProfiler(t *testing.T) {
 			return true
 		}, 3*time.Minute, 5*time.Second, "expected memhog samples in %s", profile.name)
 	}
+
+	collapsed, err := queryProfile(pyroscopeURL, cpuProfileTypeID, labelSelector)
+	require.NoError(t, err)
+	require.Equal(t, "", collapsed)
 }
 
 func testPythonConcurrentConfigureShutdown(t *testing.T) {
