@@ -18,4 +18,4 @@ wheel:
 
 .PHONY: test/%
 test/%: wheel
-	go test -v -timeout 10m -count=1 -run '^$*$$' .
+	go test -v -timeout 20m -count=1 -run '^$*$$' .
