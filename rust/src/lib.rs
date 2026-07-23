@@ -153,6 +153,14 @@ fn initialize_agent(
     mem_enable_mem_domain: bool,
     cpu_enabled: bool,
 ) -> bool {
+    if !cpu_enabled && !mem_enabled {
+        log::error!(
+            target: "pyroscope-python",
+            "at least one of CPU or memory profiling must be enabled"
+        );
+        return false;
+    }
+
     let backend_config = BackendConfig {
         report_thread_id,
         report_thread_name,
