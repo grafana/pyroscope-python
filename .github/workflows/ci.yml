@@ -147,6 +147,85 @@ jobs:
           PYTHON_IMAGE_SUFFIX: ${{ matrix.image-suffix }}
           PYROSCOPE_WHEEL_TARGET: ${{ matrix.wheel-target }}
 
+  python-linux-configuration-test:
+    name: Python Linux Configuration Test - ${{ matrix.configuration }}
+    runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [debug, release, asan, tsan]
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: stable
+          cache-dependency-path: integration-test/go.mod
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Reduce ASLR entropy for TSan
+        if: matrix.configuration == 'tsan'
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+
+      - name: Build test image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --file docker/test.Dockerfile \
+            --build-arg BUILD_CONFIG=${{ matrix.configuration }} \
+            --cache-from type=gha,scope=python-native-${{ matrix.configuration }} \
+            --cache-to type=gha,mode=max,scope=python-native-${{ matrix.configuration }} \
+            --load \
+            --tag pyroscope-python-test:${{ matrix.configuration }} \
+            .
+
+      - name: Extract test wheel
+        run: |
+          set -euo pipefail
+          wheel_dir="${RUNNER_TEMP}/pyroscope-wheel-${{ matrix.configuration }}"
+          mkdir -p "${wheel_dir}"
+          container_id="$(docker create pyroscope-python-test:${{ matrix.configuration }})"
+          trap 'docker rm -f "${container_id}" >/dev/null' EXIT
+          docker cp "${container_id}:/wheels/." "${wheel_dir}/"
+          echo "PYROSCOPE_TEST_WHEEL_DIR=${wheel_dir}" >> "${GITHUB_ENV}"
+
+      - name: Run Rust unit tests
+        run: |
+          docker run --rm \
+            pyroscope-python-test:${{ matrix.configuration }} \
+            make test/unit/${{ matrix.configuration }} PYTHON=/usr/local/bin/python3
+
+      - name: Check extension linkage
+        run: |
+          docker run --rm \
+            pyroscope-python-test:${{ matrix.configuration }} \
+            sh -euc '
+              python3 -m pip install --no-index --find-links /wheels pyroscope-io
+              extension="$(python3 -c "import pyroscope._native as native; print(native.__file__)")"
+              if nm --defined-only "${extension}" | grep -Eq " (Py_Initialize|_PyRuntime)"; then
+                echo "CPython runtime symbols were bundled into ${extension}" >&2
+                exit 1
+              fi
+              case "${PYROSCOPE_SANITIZER:-}" in
+                address) nm -D --undefined-only "${extension}" | grep -q __asan_ ;;
+                thread) nm -D --undefined-only "${extension}" | grep -q __tsan_ ;;
+              esac
+            '
+
+      - name: Run integration tests
+        run: go test -v -timeout 40m -count=1 .
+        working-directory: integration-test
+        env:
+          PYTHON_IMAGE: pyroscope-python-test:${{ matrix.configuration }}
+          PYROSCOPE_WHEEL_DIR: ${{ env.PYROSCOPE_TEST_WHEEL_DIR }}
+          PYROSCOPE_WHEEL_PATTERN: "*.whl"
+          PYROSCOPE_WHEEL_TARGET: linux/amd64
+
   sdist-build:
     name: sdist
     runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
