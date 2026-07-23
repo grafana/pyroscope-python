@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
@@ -44,6 +45,9 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 /// [`mutex`]: LeakableMutex::mutex
 pub struct LeakableMutex<T> {
     state: AtomicPtr<Mutex<T>>,
+    // AtomicPtr does not inherit T's Send/Sync bounds. Model ownership of the
+    // guarded value so LeakableMutex has the same auto-traits as Mutex<T>.
+    _marker: PhantomData<Mutex<T>>,
 }
 impl<T: Default> LeakableMutex<T> {
     /// Creates an empty (uninitialized) `LeakableMutex`.
@@ -53,6 +57,7 @@ impl<T: Default> LeakableMutex<T> {
     pub const fn new() -> Self {
         Self {
             state: AtomicPtr::new(std::ptr::null_mut()),
+            _marker: PhantomData,
         }
     }
 
@@ -103,5 +108,66 @@ impl<T: Default> LeakableMutex<T> {
 
     fn new_static() -> *mut Mutex<T> {
         Box::into_raw(Box::new(Mutex::new(T::default())))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LeakableMutex;
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    #[test]
+    fn initializes_lazily_once() {
+        let state = LeakableMutex::<usize>::new();
+
+        assert_eq!(*state.mutex().lock().unwrap(), 0);
+        *state.mutex().lock().unwrap() = 42;
+        assert_eq!(*state.mutex().lock().unwrap(), 42);
+    }
+
+    #[test]
+    fn concurrent_initialization_uses_one_mutex() {
+        const THREADS: usize = 4;
+
+        let state = Arc::new(LeakableMutex::<usize>::new());
+        let barrier = Arc::new(Barrier::new(THREADS));
+        let mut handles = Vec::with_capacity(THREADS);
+
+        for _ in 0..THREADS {
+            let state = Arc::clone(&state);
+            let barrier = Arc::clone(&barrier);
+            handles.push(thread::spawn(move || {
+                barrier.wait();
+                *state.mutex().lock().unwrap() += 1;
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(*state.mutex().lock().unwrap(), THREADS);
+    }
+
+    #[test]
+    fn reset_preserves_old_reference_and_uses_fresh_default() {
+        let state = LeakableMutex::<usize>::new();
+        let old = state.mutex();
+        *old.lock().unwrap() = 42;
+
+        state.leak_and_reset();
+
+        let new = state.mutex();
+        assert!(!std::ptr::eq(old, new));
+        assert_eq!(*new.lock().unwrap(), 0);
+        assert_eq!(*old.lock().unwrap(), 42);
+    }
+
+    #[test]
+    fn is_send_and_sync_for_send_values() {
+        fn assert_send_sync<T: Send + Sync>() {}
+
+        assert_send_sync::<LeakableMutex<usize>>();
     }
 }
