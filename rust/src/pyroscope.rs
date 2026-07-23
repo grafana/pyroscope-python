@@ -22,6 +22,7 @@ use std::sync::mpsc::SyncSender;
 use std::time::{Duration, SystemTime};
 
 const LOG_TAG: &str = "Pyroscope::Agent";
+const DEFAULT_UPLOAD_INTERVAL: Duration = Duration::from_secs(10);
 #[derive(Clone)]
 pub struct PyroscopeConfig {
     /// Pyroscope Server Address
@@ -43,6 +44,8 @@ pub struct PyroscopeConfig {
     pub basic_auth: Option<BasicAuth>,
     pub tenant_id: Option<String>,
     pub http_headers: HashMap<String, String>,
+    /// How often the agent snapshots and uploads profile data.
+    pub upload_interval: Duration,
     pub mem_config: crate::memory::Config,
 }
 
@@ -73,6 +76,7 @@ impl PyroscopeConfig {
             basic_auth: None,
             tenant_id: None,
             http_headers: HashMap::new(),
+            upload_interval: DEFAULT_UPLOAD_INTERVAL,
             mem_config,
         }
     }
@@ -114,6 +118,13 @@ impl PyroscopeConfig {
     pub fn http_headers(self, http_headers: HashMap<String, String>) -> Self {
         Self {
             http_headers,
+            ..self
+        }
+    }
+
+    pub fn upload_interval(self, upload_interval: Duration) -> Self {
+        Self {
+            upload_interval,
             ..self
         }
     }
@@ -283,7 +294,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
             log::trace!(target: LOG_TAG, "Main Thread started");
             let mut sw = StopWatch::new();
             loop {
-                match rx.recv_timeout(Duration::from_secs(10)) {
+                match rx.recv_timeout(config.upload_interval) {
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         Self::snapshot(&backend, config.clone(), &stx, &mut sw)?;
                     }

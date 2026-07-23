@@ -78,6 +78,7 @@ def main():
         report_pid=True,
         report_thread_id=True,
         report_thread_name=True,
+        upload_interval=1,
         tags={
             "oncpu": str(oncpu).lower(),
             "gil_only": str(gil_only).lower(),
