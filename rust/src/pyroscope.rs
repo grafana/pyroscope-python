@@ -28,8 +28,6 @@ pub struct PyroscopeConfig {
     pub tags: HashMap<String, String>,
     /// Sample Rate
     pub sample_rate: u32,
-    /// Whether CPU profiling is enabled
-    pub cpu_enabled: bool,
     /// Spy Name
     pub spy_name: String,
     /// Spy Version
@@ -66,7 +64,6 @@ impl PyroscopeConfig {
             application_name: application_name.as_ref().to_owned(),
             tags: HashMap::new(),
             sample_rate,
-            cpu_enabled: true,
             spy_name: spy_name.as_ref().to_owned(),
             spy_version: spy_version.as_ref().to_owned(),
             runtime_name: String::new(),
@@ -102,13 +99,6 @@ impl PyroscopeConfig {
         Self {
             runtime_name,
             runtime_version,
-            ..self
-        }
-    }
-
-    pub fn cpu_enabled(self, cpu_enabled: bool) -> Self {
-        Self {
-            cpu_enabled,
             ..self
         }
     }
