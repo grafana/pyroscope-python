@@ -42,6 +42,9 @@ def configure(
     if native is not None:
         warnings.warn("native is deprecated and not supported", DeprecationWarning)
 
+    if not cpu_enabled and not mem_enabled:
+        raise ValueError("at least one of cpu_enabled or mem_enabled must be enabled")
+
     LOGGER.disabled = not enable_logging
     if enable_logging:
         log_level = LOGGER.getEffectiveLevel()
