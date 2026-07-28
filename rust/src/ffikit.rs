@@ -1,6 +1,6 @@
 use crate::backend::Tag;
 use crate::error::{PyroscopeError, Result};
-use crate::pyroscope::{PyroscopeAgentBuilder, PyroscopeAgentRunning};
+use crate::pyroscope::PyroscopeAgentBuilder;
 use crate::{PyroscopeAgent, ThreadId};
 use crate::{forksafety, memory};
 use pyo3::Python;
@@ -12,7 +12,7 @@ enum State {
     #[default]
     Idle,
     Busy,
-    Running(Box<PyroscopeAgent<PyroscopeAgentRunning>>),
+    Running(Box<PyroscopeAgent>),
 }
 
 fn create_http_client() -> Result<reqwest::blocking::Client> {
@@ -43,7 +43,7 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
         State::Running(_) => return Err(PyroscopeError::AgentAlreadyRunning),
     }
     let mem_config = agent.config.mem_config.clone();
-    let start_agent = || -> Result<PyroscopeAgent<PyroscopeAgentRunning>> {
+    let start_agent = || -> Result<PyroscopeAgent> {
         // Create the client only after the Idle check, so an already-running or
         // busy agent doesn't build (and, on macOS, spawn a thread for) a client
         // that would just be thrown away.

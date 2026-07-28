@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    marker::PhantomData,
     sync::mpsc::{self, Sender},
     thread::JoinHandle,
 };
@@ -147,10 +146,7 @@ impl PyroscopeAgentBuilder {
         }
     }
 
-    pub fn build(
-        self,
-        http_client: reqwest::blocking::Client,
-    ) -> Result<PyroscopeAgent<PyroscopeAgentReady>> {
+    pub fn build(self, http_client: reqwest::blocking::Client) -> Result<PyroscopeAgent> {
         let config = self.config;
 
         // Set Global Tags
@@ -176,34 +172,12 @@ impl PyroscopeAgentBuilder {
             session_manager,
             terminate_channel: None,
             handle: None,
-            _state: PhantomData,
             ruleset: self.ruleset,
         })
     }
 }
 
-/// This trait is used to encode the state of the agent.
-pub trait PyroscopeAgentState {}
-
-/// Marker struct for an Uninitialized state.
-#[derive(Debug)]
-pub struct PyroscopeAgentBare;
-
-/// Marker struct for a Ready state.
-#[derive(Debug)]
-pub struct PyroscopeAgentReady;
-
-/// Marker struct for a Running state.
-#[derive(Debug)]
-pub struct PyroscopeAgentRunning;
-
-impl PyroscopeAgentState for PyroscopeAgentBare {}
-
-impl PyroscopeAgentState for PyroscopeAgentReady {}
-
-impl PyroscopeAgentState for PyroscopeAgentRunning {}
-
-pub struct PyroscopeAgent<S: PyroscopeAgentState> {
+pub struct PyroscopeAgent {
     session_manager: SessionManager,
     terminate_channel: Option<Sender<()>>,
     /// Handle to the thread that runs the Pyroscope Agent
@@ -212,28 +186,11 @@ pub struct PyroscopeAgent<S: PyroscopeAgentState> {
     pub backend: Option<Pyspy>,
     /// Configuration Object
     pub config: PyroscopeConfig,
-    /// PyroscopeAgent State
-    _state: PhantomData<S>,
 
     ruleset: ThreadTagsSet,
 }
 
-impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
-    /// Transition the PyroscopeAgent to a new state.
-    fn transition<D: PyroscopeAgentState>(self) -> PyroscopeAgent<D> {
-        PyroscopeAgent {
-            session_manager: self.session_manager,
-            terminate_channel: self.terminate_channel,
-            handle: self.handle,
-            backend: self.backend,
-            config: self.config,
-            _state: PhantomData,
-            ruleset: self.ruleset,
-        }
-    }
-}
-
-impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
+impl PyroscopeAgent {
     fn shutdown(mut self) {
         log::debug!(target: LOG_TAG, "PyroscopeAgent::drop()");
 
@@ -263,8 +220,8 @@ impl<S: PyroscopeAgentState> PyroscopeAgent<S> {
     }
 }
 
-impl PyroscopeAgent<PyroscopeAgentReady> {
-    pub fn start(mut self) -> Result<PyroscopeAgent<PyroscopeAgentRunning>> {
+impl PyroscopeAgent {
+    pub fn start(mut self) -> Result<PyroscopeAgent> {
         log::debug!(target: LOG_TAG, "Starting");
 
         let reporter = self.backend.as_ref().map(Pyspy::reporter);
@@ -297,7 +254,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
             }
         }));
 
-        Ok(self.transition())
+        Ok(self)
     }
 
     fn snapshot(
@@ -334,7 +291,7 @@ impl PyroscopeAgent<PyroscopeAgentReady> {
     }
 }
 
-impl PyroscopeAgent<PyroscopeAgentRunning> {
+impl PyroscopeAgent {
     pub fn stop(mut self) -> Result<()> {
         log::debug!(target: LOG_TAG, "Stopping");
 
