@@ -79,6 +79,10 @@ where
 /// fork: after `leak_and_reset` it points at the abandoned parent-era mutex.
 /// Always re-fetch it via `STATE.mutex()` at the point of use.
 ///
+/// The accessors take `&'static self`, so the type is only usable from a
+/// `static` (or another never-dropped location such as a leaked allocation);
+/// non-static usage does not compile.
+///
 /// [`mutex`]: LeakableMutex::mutex
 pub struct LeakableMutex<T> {
     state: AtomicPtr<Mutex<T>>,
@@ -104,7 +108,11 @@ impl<T: Default> LeakableMutex<T> {
     /// Call this at every point of use instead of caching the returned
     /// reference, so that after [`leak_and_reset`](LeakableMutex::leak_and_reset)
     /// you observe the fresh mutex rather than the abandoned one.
-    pub fn mutex(&self) -> &Mutex<T> {
+    ///
+    /// Takes `&'static self`: this type is only meant to live in a `static`
+    /// (its leak-instead-of-drop contract assumes the instance itself is
+    /// never dropped), so non-static usage is rejected at compile time.
+    pub fn mutex(&'static self) -> &'static Mutex<T> {
         unsafe {
             let cur = self.state.load(Ordering::SeqCst);
             if !cur.is_null() {
@@ -139,8 +147,11 @@ impl<T: Default> LeakableMutex<T> {
     /// process is effectively single-threaded. Callers racing with this from
     /// other threads may still hold references to the old mutex, which stays
     /// valid (it is leaked, not freed), but their updates will be lost.
+    ///
+    /// Takes `&'static self` for the same reason as
+    /// [`mutex`](LeakableMutex::mutex).
     #[cfg(not(miri))]
-    pub fn leak_and_reset(&self) {
+    pub fn leak_and_reset(&'static self) {
         self.leak_and_reset_impl();
     }
 
@@ -150,7 +161,7 @@ impl<T: Default> LeakableMutex<T> {
     /// or `None` if the mutex was never initialized.
     #[cfg(miri)]
     #[must_use = "reclaim the returned allocation or Miri reports a leak"]
-    pub fn leak_and_reset(&self) -> Option<std::ptr::NonNull<Mutex<T>>> {
+    pub fn leak_and_reset(&'static self) -> Option<std::ptr::NonNull<Mutex<T>>> {
         std::ptr::NonNull::new(self.leak_and_reset_impl())
     }
 
@@ -163,23 +174,15 @@ impl<T: Default> LeakableMutex<T> {
     }
 }
 
-// Frees the current mutex and its contents (allocations abandoned by
-// `leak_and_reset` stay leaked). This must never run in a fork child on state
-// inherited from the parent: dropping `T` there could block on threads that
-// don't exist after fork — the exact hazard this type exists to avoid. In
-// practice it only runs for non-static instances (tests); the real instance
-// is a `static` and is never dropped.
-impl<T> Drop for LeakableMutex<T> {
-    fn drop(&mut self) {
-        let v = *self.state.get_mut();
-        if !v.is_null() {
-            unsafe {
-                drop(Box::from_raw(v));
-            }
-        }
-    }
-}
+// No `Drop` impl on purpose: `mutex` takes `&'static self`, so an instance
+// that could be dropped can never have allocated its inner mutex — there is
+// nothing to free. Dropping inherited state is the exact hazard this type
+// exists to avoid, so leaking on drop is the correct default anyway.
 
+// Each test declares its own `static` because the accessors take
+// `&'static self`. The mutex still reachable through a static at process
+// exit is not a leak for Miri (its leak checker is reachability-based);
+// only allocations abandoned by `leak_and_reset` need reclaiming.
 #[cfg(test)]
 mod tests {
     use super::LeakableMutex;
@@ -188,27 +191,26 @@ mod tests {
 
     #[test]
     fn initializes_lazily_once() {
-        let state = LeakableMutex::<usize>::new();
+        static STATE: LeakableMutex<usize> = LeakableMutex::new();
 
-        assert_eq!(*state.mutex().lock().unwrap(), 0);
-        *state.mutex().lock().unwrap() = 42;
-        assert_eq!(*state.mutex().lock().unwrap(), 42);
+        assert_eq!(*STATE.mutex().lock().unwrap(), 0);
+        *STATE.mutex().lock().unwrap() = 42;
+        assert_eq!(*STATE.mutex().lock().unwrap(), 42);
     }
 
     #[test]
     fn concurrent_initialization_uses_one_mutex() {
         const THREADS: usize = 4;
+        static STATE: LeakableMutex<usize> = LeakableMutex::new();
 
-        let state = Arc::new(LeakableMutex::<usize>::new());
         let barrier = Arc::new(Barrier::new(THREADS));
         let mut handles = Vec::with_capacity(THREADS);
 
         for _ in 0..THREADS {
-            let state = Arc::clone(&state);
             let barrier = Arc::clone(&barrier);
             handles.push(thread::spawn(move || {
                 barrier.wait();
-                *state.mutex().lock().unwrap() += 1;
+                *STATE.mutex().lock().unwrap() += 1;
             }));
         }
 
@@ -216,21 +218,22 @@ mod tests {
             handle.join().unwrap();
         }
 
-        assert_eq!(*state.mutex().lock().unwrap(), THREADS);
+        assert_eq!(*STATE.mutex().lock().unwrap(), THREADS);
     }
 
     #[test]
     fn reset_preserves_old_reference_and_uses_fresh_default() {
-        let state = LeakableMutex::<usize>::new();
-        let old = state.mutex();
+        static STATE: LeakableMutex<usize> = LeakableMutex::new();
+
+        let old = STATE.mutex();
         *old.lock().unwrap() = 42;
 
         #[cfg(miri)]
-        let leaked = state.leak_and_reset();
+        let leaked = STATE.leak_and_reset();
         #[cfg(not(miri))]
-        state.leak_and_reset();
+        STATE.leak_and_reset();
 
-        let new = state.mutex();
+        let new = STATE.mutex();
         assert!(!std::ptr::eq(old, new));
         assert_eq!(*new.lock().unwrap(), 0);
         assert_eq!(*old.lock().unwrap(), 42);
