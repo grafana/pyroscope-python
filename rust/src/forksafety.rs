@@ -139,12 +139,34 @@ impl<T: Default> LeakableMutex<T> {
     /// process is effectively single-threaded. Callers racing with this from
     /// other threads may still hold references to the old mutex, which stays
     /// valid (it is leaked, not freed), but their updates will be lost.
+    /// For miri it returns the leaked pointer, for non-miri returns unit.
+    #[cfg(miri)]
+    pub fn leak_and_reset(&self) -> *mut Mutex<T> {
+        self.leak_and_reset_impl()
+    }
+
+    #[cfg(not(miri))]
     pub fn leak_and_reset(&self) {
-        self.state.store(Self::new_static(), Ordering::SeqCst)
+        self.leak_and_reset_impl();
+    }
+
+    fn leak_and_reset_impl(&self) -> *mut Mutex<T> {
+        self.state.swap(Self::new_static(), Ordering::SeqCst)
     }
 
     fn new_static() -> *mut Mutex<T> {
         Box::into_raw(Box::new(Mutex::new(T::default())))
+    }
+}
+
+impl<T> Drop for LeakableMutex<T> {
+    fn drop(&mut self) {
+        let v = self.state.load(Ordering::SeqCst);
+        if !v.is_null() {
+            unsafe {
+                let _ = Box::from_raw(v);
+            }
+        }
     }
 }
 
@@ -193,12 +215,19 @@ mod tests {
         let old = state.mutex();
         *old.lock().unwrap() = 42;
 
-        state.leak_and_reset();
+        let leaked = state.leak_and_reset();
 
         let new = state.mutex();
         assert!(!std::ptr::eq(old, new));
         assert_eq!(*new.lock().unwrap(), 0);
         assert_eq!(*old.lock().unwrap(), 42);
+
+        #[cfg(miri)]
+        unsafe {
+            let _ = Box::from_raw(leaked); // no leaks under miri
+        }
+        #[cfg(not(miri))]
+        let _ = leaked;
     }
 
     #[test]
