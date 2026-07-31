@@ -125,5 +125,11 @@ pub fn at_fork_after_in_child(_py: Python<'_>) {
     // Here we intentionally leak the whole running agent.
     // This runs post-fork in the child, the old agent must never be dropped there (its
     // stop() joins threads that don't survive fork)
+    #[cfg(not(miri))]
     STATE.leak_and_reset();
+    // The miri variant returns the abandoned allocation so tests can reclaim
+    // it. This hook is never exercised under Miri, and leaking is the whole
+    // point here, so discard it.
+    #[cfg(miri)]
+    let _ = STATE.leak_and_reset();
 }

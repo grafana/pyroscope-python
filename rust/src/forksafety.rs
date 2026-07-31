@@ -149,6 +149,7 @@ impl<T: Default> LeakableMutex<T> {
     /// allocation so tests can reclaim it and keep Miri's leak checker happy,
     /// or `None` if the mutex was never initialized.
     #[cfg(miri)]
+    #[must_use = "reclaim the returned allocation or Miri reports a leak"]
     pub fn leak_and_reset(&self) -> Option<std::ptr::NonNull<Mutex<T>>> {
         std::ptr::NonNull::new(self.leak_and_reset_impl())
     }
@@ -162,12 +163,18 @@ impl<T: Default> LeakableMutex<T> {
     }
 }
 
+// Frees the current mutex and its contents (allocations abandoned by
+// `leak_and_reset` stay leaked). This must never run in a fork child on state
+// inherited from the parent: dropping `T` there could block on threads that
+// don't exist after fork — the exact hazard this type exists to avoid. In
+// practice it only runs for non-static instances (tests); the real instance
+// is a `static` and is never dropped.
 impl<T> Drop for LeakableMutex<T> {
     fn drop(&mut self) {
         let v = *self.state.get_mut();
         if !v.is_null() {
             unsafe {
-                let _ = Box::from_raw(v);
+                drop(Box::from_raw(v));
             }
         }
     }
