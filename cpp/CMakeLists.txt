@@ -78,11 +78,10 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../rust/include
 )
 
-# Link libraries Python3::Python target might not exist in all build environments (e.g., manylinux) Python modules
-# should use -undefined dynamic_lookup on macOS and not link to libpython on Linux
-if (TARGET Python3::Python AND NOT APPLE)
-    target_link_libraries(${FULL_EXTENSION_NAME} PRIVATE Python3::Python)
-endif ()
+# Python extension modules resolve CPython symbols from the running
+# interpreter. Do not link Python3::Python here: when it is a static library,
+# BundleStaticLibrary.cmake would merge libpython.a into the extension along
+# with Abseil, producing a second copy of the CPython runtime.
 
 # Compile against absl::flat_hash_map (brings in include dirs and records absl as a link
 # dependency). Since this is a STATIC library, the absl object code is not archived in here;

@@ -44,6 +44,28 @@ fn main() {
     cfg.define("Python3_EXECUTABLE", &python_executable);
     cfg.define("Python3_FIND_STRATEGY", "LOCATION");
 
+    println!("cargo:rerun-if-env-changed=PYROSCOPE_SANITIZER");
+    if let Ok(sanitizer) = env::var("PYROSCOPE_SANITIZER") {
+        let flag = match sanitizer.as_str() {
+            "address" => "-fsanitize=address",
+            "thread" => "-fsanitize=thread",
+            _ => panic!(
+                "PYROSCOPE_SANITIZER must be unset, 'address', or 'thread', got {sanitizer:?}"
+            ),
+        };
+
+        // Keep sanitizer configurations in distinct CMake trees. The cmake
+        // crate otherwise keys only on Cargo's profile, allowing stale native
+        // objects to be reused when switching sanitizers.
+        let out_dir =
+            PathBuf::from(env::var_os("OUT_DIR").unwrap()).join(format!("sanitizer-{sanitizer}"));
+        cfg.out_dir(out_dir);
+        cfg.cflag(flag);
+        cfg.cflag("-fno-omit-frame-pointer");
+        cfg.cxxflag(flag);
+        cfg.cxxflag("-fno-omit-frame-pointer");
+    }
+
     let dst = cfg.build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());

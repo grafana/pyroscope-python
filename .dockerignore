@@ -14,4 +14,6 @@ flamegraph.svg
 perf.data
 perf.data.*
 /cpp/cmake-build-*/
+/docker/test.Dockerfile
 /python/pyroscope_io.egg-info/
+/python/pyroscope_python_extension/

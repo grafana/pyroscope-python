@@ -1,4 +1,5 @@
 python/pyroscope/__pycache__/
+python/pyroscope_python_extension/
 python/pyroscope_io.egg-info/
 build/
 dist/
