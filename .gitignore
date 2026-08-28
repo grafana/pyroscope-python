@@ -5,6 +5,7 @@ dist/
 
 .venv/
 .env/
+**/__pycache__/
 
 .idea/
 **/target/
