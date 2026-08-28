@@ -93,6 +93,8 @@ fn build_memalloc(manifest_dir: &Path, out_dir: &Path) {
 fn build_gcp(manifest_dir: &Path, out_dir: &Path) {
     let gcp_dir = manifest_dir.join("../gcp").canonicalize().unwrap();
     rerun_if_sources_changed(&gcp_dir, GCP_SOURCES);
+    let ffi_header = manifest_dir.join("include/pyroscope_ffi.h");
+    println!("cargo:rerun-if-changed={}", ffi_header.display());
 
     let mut cfg = Config::new(&gcp_dir);
     configure_python(&mut cfg);

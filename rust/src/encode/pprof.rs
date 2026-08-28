@@ -135,6 +135,43 @@ impl PProfBuilder {
         self.profile.sample.push(sample);
     }
 
+    pub fn add_cpu_sample<'a, I>(
+        &mut self,
+        strings: &mut StringTable,
+        frames: I,
+        value: usize,
+        labels: &[(StringID, StringID)],
+    ) where
+        I: ExactSizeIterator<Item = (&'a str, &'a str, i32)>,
+    {
+        let mut location_id = Vec::with_capacity(frames.len());
+        for (name, filename, line) in frames {
+            let name = strings.add(name);
+            let filename = strings.add(filename);
+            let function_id = self.add_function_mirror(FunctionMirror { name, filename });
+            location_id.push(self.add_location_mirror(LocationMirror {
+                function_id,
+                line: i64::from(line.max(0)),
+            }));
+        }
+
+        let mut sample_labels = Vec::with_capacity(labels.len());
+        for (key, value) in labels {
+            sample_labels.push(Label {
+                key: key.pprof(),
+                str: value.pprof(),
+                num: 0,
+                num_unit: 0,
+            });
+        }
+
+        self.profile.sample.push(Sample {
+            location_id,
+            value: vec![value as i64 * self.profile.period],
+            label: sample_labels,
+        });
+    }
+
     pub fn add_ffi_sample(&mut self, frames: &[FFIFrame], values: &FFIHeapSampleValues) {
         let mut location_ids = std::mem::take(&mut self.ffi_locations_scratch);
         location_ids.clear();
@@ -246,6 +283,23 @@ impl PProfBuilder {
         }
         self.set_time_range(time_range);
         st.clone_pprof_table(&mut self.profile.string_table);
+        let profile = std::mem::take(&mut self.profile);
+        self.reset();
+        Some(profile)
+    }
+
+    pub fn take_profile_and_reset_owned(
+        &mut self,
+        st: StringTable,
+        time_range: &TimeRange,
+    ) -> Option<Profile> {
+        self.flush_memory_samples();
+        if self.profile.sample.is_empty() {
+            self.reset();
+            return None;
+        }
+        self.set_time_range(time_range);
+        self.profile.string_table = st.into_pprof_table();
         let profile = std::mem::take(&mut self.profile);
         self.reset();
         Some(profile)
@@ -365,6 +419,21 @@ impl StringTable {
                 next_id
             }
         }
+    }
+
+    pub fn add_owned(&mut self, s: String) -> StringID {
+        if let Some((existing, _)) = self.set.get_key_value(s.as_str()) {
+            return existing.index.clone();
+        }
+        let index = StringID::new(&self.set);
+        self.set.insert(
+            StringSetKey {
+                str: s,
+                index: index.clone(),
+            },
+            (),
+        );
+        index
     }
 
     #[cfg(debug_assertions)]

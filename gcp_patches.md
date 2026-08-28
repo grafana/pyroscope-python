@@ -50,6 +50,24 @@ notice pointing to this document.
 No Python-version compatibility code has been added. The collector retains
 upstream's CPython support and implementation unchanged.
 
+## Patch 2: emit resolved traces without Python containers
+
+Files: `gcp/profiler.h`, `gcp/profiler.cc`
+
+Adds `CPUProfiler::CollectSamples()` and a trace callback that resolve the
+already-aggregated native samples while the GIL is held. Pyroscope's bridge
+uses this path to pass each trace directly to the Rust pprof builder without
+constructing Python frame tuples or a `PyDict`.
+
+The callback uses the collector's fixed 128-frame maximum as stack storage.
+Live code-object strings and saved deallocation-hook strings are passed as
+borrowed views, avoiding per-trace frame buffers and per-frame string copies.
+
+The upstream `Collect()` and `PythonTraces()` APIs remain available and retain
+their original behavior. The timer, signal handler, frame collection, flush
+interval, stack order, and code-object lifetime hook are shared unchanged by
+both output paths.
+
 ## Behavior retained
 
 Collection remains synchronous: `CPUProfiler::Collect()` releases the GIL,

@@ -8,10 +8,8 @@
 extern "C" {
 #endif
 
-// The caller must hold the GIL. Returns a new reference, or nullptr with a
-// Python exception set.
-PyObject *gcp_cpu_profiler_collect(int64_t duration_nanos,
-                                   int64_t period_nanos);
+// The caller must hold the GIL. Returns 0 on success and -1 on failure.
+int gcp_cpu_profiler_collect(int64_t duration_nanos, int64_t period_nanos);
 
 #ifdef __cplusplus
 }  // extern "C"

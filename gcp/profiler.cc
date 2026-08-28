@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// Modified by Grafana Labs; see ../gcp_patches.md.
 
 #include "profiler.h"
 
@@ -89,6 +91,14 @@ bool CodeDeallocHook::Find(PyCodeObject *pointer, FuncLoc *func_loc) {
   }
   *func_loc = recorded_code->second;
   return true;
+}
+
+const FuncLoc *CodeDeallocHook::FindView(PyCodeObject *pointer) {
+  auto recorded_code = deallocated_code_->find(pointer);
+  if (recorded_code == deallocated_code_->end()) {
+    return nullptr;
+  }
+  return &recorded_code->second;
 }
 
 // This method schedules the SIGPROF timer to go off every specified interval.
@@ -264,6 +274,59 @@ PyObject *Profiler::PythonTraces() {
   return py_traces.release();
 }
 
+// Must be called when GIL is held.
+void Profiler::PushTraces(TraceCallback callback) {
+#if PY_MAJOR_VERSION >= 3
+  // Asserts that GIL is held in debug mode.
+  assert(PyGILState_Check());
+#endif
+  if (unknown_stack_count_ > 0) {
+    CallFrame fake_frame = {kUnknown, nullptr};
+    aggregated_traces_.Add(1, &fake_frame, unknown_stack_count_);
+  }
+
+  for (const auto &trace : aggregated_traces_) {
+    FFIGcpFrame frames[kMaxFramesToCapture];
+    size_t frame_count = 0;
+    for (const auto &frame : trace.first) {
+      const char *name;
+      size_t name_len;
+      const char *filename;
+      size_t filename_len;
+      PyCodeObject *pointer = frame.py_code;
+      if (pointer == nullptr) {
+        name = CallTraceErrorToName(
+            static_cast<CallTraceErrors>(frame.lineno));
+        name_len = strlen(name);
+        filename = "";
+        filename_len = 0;
+      } else if (const FuncLoc *func_loc =
+                     CodeDeallocHook::FindView(pointer)) {
+        name = func_loc->name.data();
+        name_len = func_loc->name.size();
+        filename = func_loc->filename.data();
+        filename_len = func_loc->filename.size();
+      } else {
+        name = PyUnicode_AsUTF8(pointer->co_name);
+        filename = PyUnicode_AsUTF8(pointer->co_filename);
+        if (name == nullptr) {
+          name = "unknown";
+        }
+        if (filename == nullptr) {
+          filename = "unknown";
+        }
+        name_len = strlen(name);
+        filename_len = strlen(filename);
+      }
+
+      frames[frame_count++] = {{name, name_len}, {filename, filename_len},
+                               frame.lineno};
+    }
+
+    callback({frames, frame_count, trace.second});
+  }
+}
+
 bool AlmostThere(const struct timespec &finish, const struct timespec &lap) {
   // Determine if there is time for another lap before reaching the
   // finish line. Have a margin of multiple laps to ensure we do not
@@ -283,8 +346,28 @@ PyObject *CPUProfiler::Collect() {
   // scope.
   CodeDeallocHook dealloc_hook;
 
-  if (!Start()) {
+  if (!CollectRaw()) {
     return nullptr;
+  }
+
+  return PythonTraces();
+}
+
+bool CPUProfiler::CollectSamples(TraceCallback callback) {
+  Reset();
+  CodeDeallocHook dealloc_hook;
+
+  if (!CollectRaw()) {
+    return false;
+  }
+
+  PushTraces(callback);
+  return true;
+}
+
+bool CPUProfiler::CollectRaw() {
+  if (!Start()) {
+    return false;
   }
   // Releases GIL so that the user threads can execute.
   Py_BEGIN_ALLOW_THREADS;
@@ -309,8 +392,7 @@ PyObject *CPUProfiler::Collect() {
   // Reacquire the GIL.
   Py_END_ALLOW_THREADS;
 
-  PyObject *traces = PythonTraces();
-  return traces;
+  return true;
 }
 
 bool CPUProfiler::Start() {

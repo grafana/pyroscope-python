@@ -11,13 +11,25 @@
 #include <stdlib.h>
 
 typedef struct {
-  uint32_t index;
-} FFIInternedString;
-
-typedef struct {
   const char *data;
   uintptr_t len;
 } FFIStringView;
+
+typedef struct {
+  FFIStringView function_name;
+  FFIStringView file_name;
+  int line;
+} FFIGcpFrame;
+
+typedef struct {
+  const FFIGcpFrame *frames;
+  uintptr_t len;
+  uint64_t count;
+} FFIGcpSample;
+
+typedef struct {
+  uint32_t index;
+} FFIInternedString;
 
 typedef struct {
   FFIInternedString function_name;
@@ -37,6 +49,8 @@ typedef struct {
   uintptr_t len;
   FFIHeapSampleValues values;
 } FFISample;
+
+void pyroscope_gcp_push_sample(FFIGcpSample sample);
 
 extern void memalloc_heap_postfork_child(void);
 

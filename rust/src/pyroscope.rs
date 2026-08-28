@@ -55,9 +55,9 @@ impl CpuReporter {
         matches!(self, Self::Gcp(_))
     }
 
-    fn report(&self, duration: Duration) -> Result<ReportBatch> {
+    fn report(&self, duration: Duration) -> Result<Option<ReportBatch>> {
         match self {
-            Self::Pyspy(reporter) => reporter.report(),
+            Self::Pyspy(reporter) => reporter.report().map(Some),
             Self::Gcp(reporter) => reporter.report(duration),
         }
     }
@@ -292,10 +292,10 @@ impl PyroscopeAgent {
             let mut sw = StopWatch::new();
             if reporter.as_ref().is_some_and(CpuReporter::is_gcp) {
                 loop {
-                    let cpu_report = reporter
-                        .as_ref()
-                        .map(|reporter| reporter.report(config.upload_interval))
-                        .transpose()?;
+                    let cpu_report = match reporter.as_ref() {
+                        Some(reporter) => reporter.report(config.upload_interval)?,
+                        None => None,
+                    };
                     Self::snapshot(cpu_report, config.clone(), &stx, &mut sw)?;
                     match rx.try_recv() {
                         Err(mpsc::TryRecvError::Empty) => {}
@@ -312,17 +312,17 @@ impl PyroscopeAgent {
                 loop {
                     match rx.recv_timeout(config.upload_interval) {
                         Err(mpsc::RecvTimeoutError::Timeout) => {
-                            let cpu_report = reporter
-                                .as_ref()
-                                .map(|reporter| reporter.report(Duration::ZERO))
-                                .transpose()?;
+                            let cpu_report = match reporter.as_ref() {
+                                Some(reporter) => reporter.report(Duration::ZERO)?,
+                                None => None,
+                            };
                             Self::snapshot(cpu_report, config.clone(), &stx, &mut sw)?;
                         }
                         Err(mpsc::RecvTimeoutError::Disconnected) => {
-                            let cpu_report = reporter
-                                .as_ref()
-                                .map(|reporter| reporter.report(Duration::ZERO))
-                                .transpose()?;
+                            let cpu_report = match reporter.as_ref() {
+                                Some(reporter) => reporter.report(Duration::ZERO)?,
+                                None => None,
+                            };
                             Self::snapshot(cpu_report, config.clone(), &stx, &mut sw)?;
                             log::trace!(target: LOG_TAG, "Session Killed");
                             break Ok(());

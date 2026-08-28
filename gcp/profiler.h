@@ -19,6 +19,9 @@
 
 #include <Python.h>
 #include <signal.h>
+extern "C" {
+#include "pyroscope_ffi.h"
+}
 
 #ifdef Py_GIL_DISABLED
 #error "gcp_cpu_profiler requires a GIL-enabled CPython build"
@@ -35,6 +38,8 @@ struct FuncLoc {
   std::string name;
   std::string filename;
 };
+
+typedef void (*TraceCallback)(FFIGcpSample sample);
 
 void GetFuncLoc(PyCodeObject *code_object, FuncLoc *func_loc);
 
@@ -89,6 +94,9 @@ class CodeDeallocHook {
   // allocated_code_ during PyCodeObject deallocation.
   static bool Find(PyCodeObject *pointer, FuncLoc *func_loc);
 
+  // Returns a stable view of recorded function data. Must be called with GIL.
+  static const FuncLoc *FindView(PyCodeObject *pointer);
+
  private:
   // When PyCode_Type.tp_dealloc points to CodeDealloc, a code object is
   // recorded in this map before being deallocated. The map maps a code object
@@ -123,6 +131,9 @@ class Profiler {
   // Returns the traces as a Python dictionary object, which maps a trace to its
   // count.
   PyObject *PythonTraces();
+
+  // Resolves and emits traces directly without creating Python containers.
+  void PushTraces(TraceCallback callback);
 
   // Signal handler, which records the current stack trace.
   static void Handle(int signum, siginfo_t *info, void *context);
@@ -181,7 +192,12 @@ class CPUProfiler : public Profiler {
   // Collects profiling data.
   PyObject *Collect() override;
 
+  // Collects profiling data and emits traces without creating a Python dict.
+  bool CollectSamples(TraceCallback callback);
+
  private:
+  bool CollectRaw();
+
   // Initiates data collection at a fixed interval.
   bool Start();
 
