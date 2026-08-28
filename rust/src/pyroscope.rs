@@ -7,6 +7,7 @@ use std::{
 use crate::{
     backend::{BackendConfig, ReportBatch, ReportData, Tag, ThreadTag, ThreadTagsSet},
     error::Result,
+    gcp_backend::{self, Gcp},
     memory,
     session::{Session, SessionManager, SessionSignal},
 };
@@ -17,6 +18,51 @@ use crate::pyspy_backend::Pyspy;
 use crate::utils::TimeRange;
 const LOG_TAG: &str = "Pyroscope::Agent";
 const DEFAULT_UPLOAD_INTERVAL: Duration = Duration::from_secs(10);
+
+pub enum CpuProfilerConfig {
+    Pyspy(py_spy::config::Config),
+    Gcp(gcp_backend::Config),
+}
+
+pub enum CpuBackend {
+    Pyspy(Box<Pyspy>),
+    Gcp(Gcp),
+}
+
+enum CpuReporter {
+    Pyspy(crate::pyspy_backend::Reporter),
+    Gcp(gcp_backend::Reporter),
+}
+
+impl CpuBackend {
+    fn reporter(&self) -> CpuReporter {
+        match self {
+            Self::Pyspy(backend) => CpuReporter::Pyspy(backend.reporter()),
+            Self::Gcp(backend) => CpuReporter::Gcp(backend.reporter()),
+        }
+    }
+
+    fn shutdown(&mut self) -> Result<()> {
+        match self {
+            Self::Pyspy(backend) => backend.shutdown_thread(),
+            Self::Gcp(_) => Ok(()),
+        }
+    }
+}
+
+impl CpuReporter {
+    fn is_gcp(&self) -> bool {
+        matches!(self, Self::Gcp(_))
+    }
+
+    fn report(&self, duration: Duration) -> Result<ReportBatch> {
+        match self {
+            Self::Pyspy(reporter) => reporter.report(),
+            Self::Gcp(reporter) => reporter.report(duration),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct PyroscopeConfig {
     /// Pyroscope Server Address
@@ -126,7 +172,7 @@ impl PyroscopeConfig {
 
 pub struct PyroscopeAgentBuilder {
     pub config: PyroscopeConfig,
-    pyspy_config: Option<py_spy::config::Config>,
+    cpu_config: Option<CpuProfilerConfig>,
     backend_config: BackendConfig,
     ruleset: ThreadTagsSet,
 }
@@ -134,13 +180,13 @@ pub struct PyroscopeAgentBuilder {
 impl PyroscopeAgentBuilder {
     pub fn new(
         config: PyroscopeConfig,
-        pyspy_config: Option<py_spy::config::Config>,
+        cpu_config: Option<CpuProfilerConfig>,
         backend_config: BackendConfig,
         ruleset: ThreadTagsSet,
     ) -> Self {
         Self {
             config,
-            pyspy_config,
+            cpu_config,
             backend_config,
             ruleset,
         }
@@ -155,8 +201,15 @@ impl PyroscopeAgentBuilder {
         // }
 
         let backend = self
-            .pyspy_config
-            .map(|config| Pyspy::new(config, self.backend_config, self.ruleset.clone()))
+            .cpu_config
+            .map(|config| match config {
+                CpuProfilerConfig::Pyspy(config) => {
+                    Pyspy::new(config, self.backend_config, self.ruleset.clone())
+                        .map(Box::new)
+                        .map(CpuBackend::Pyspy)
+                }
+                CpuProfilerConfig::Gcp(config) => Gcp::new(config).map(CpuBackend::Gcp),
+            })
             .transpose()?;
         if backend.is_some() {
             log::trace!(target: LOG_TAG, "Backend initialized");
@@ -183,7 +236,7 @@ pub struct PyroscopeAgent {
     /// Handle to the thread that runs the Pyroscope Agent
     handle: Option<JoinHandle<Result<()>>>,
     /// Profiler backend
-    pub backend: Option<Pyspy>,
+    pub backend: Option<CpuBackend>,
     /// Configuration Object
     pub config: PyroscopeConfig,
 
@@ -195,7 +248,7 @@ impl PyroscopeAgent {
         log::debug!(target: LOG_TAG, "PyroscopeAgent::drop()");
 
         if let Some(backend) = &mut self.backend {
-            match backend.shutdown_thread() {
+            match backend.shutdown() {
                 Ok(_) => log::debug!(target: LOG_TAG, "Backend shutdown"),
                 Err(e) => log::error!(target: LOG_TAG, "Backend shutdown error: {e}"),
             }
@@ -224,7 +277,7 @@ impl PyroscopeAgent {
     pub fn start(mut self) -> Result<PyroscopeAgent> {
         log::debug!(target: LOG_TAG, "Starting");
 
-        let reporter = self.backend.as_ref().map(Pyspy::reporter);
+        let reporter = self.backend.as_ref().map(CpuBackend::reporter);
 
         let (tx, rx) = mpsc::channel();
         self.terminate_channel = Some(tx);
@@ -237,18 +290,46 @@ impl PyroscopeAgent {
         self.handle = Some(std::thread::spawn(move || {
             log::trace!(target: LOG_TAG, "Main Thread started");
             let mut sw = StopWatch::new();
-            loop {
-                match rx.recv_timeout(config.upload_interval) {
-                    Err(mpsc::RecvTimeoutError::Timeout) => {
-                        Self::snapshot(&reporter, config.clone(), &stx, &mut sw)?;
+            if reporter.as_ref().is_some_and(CpuReporter::is_gcp) {
+                loop {
+                    let cpu_report = reporter
+                        .as_ref()
+                        .map(|reporter| reporter.report(config.upload_interval))
+                        .transpose()?;
+                    Self::snapshot(cpu_report, config.clone(), &stx, &mut sw)?;
+                    match rx.try_recv() {
+                        Err(mpsc::TryRecvError::Empty) => {}
+                        Err(mpsc::TryRecvError::Disconnected) => {
+                            log::trace!(target: LOG_TAG, "Session Killed");
+                            break Ok(());
+                        }
+                        Ok(_) => {
+                            // unreachable: nothing is ever sent
+                        }
                     }
-                    Err(mpsc::RecvTimeoutError::Disconnected) => {
-                        Self::snapshot(&reporter, config.clone(), &stx, &mut sw)?;
-                        log::trace!(target: LOG_TAG, "Session Killed");
-                        break Ok(());
-                    }
-                    Ok(_) => {
-                        // unreachable: nothing is ever sent;
+                }
+            } else {
+                loop {
+                    match rx.recv_timeout(config.upload_interval) {
+                        Err(mpsc::RecvTimeoutError::Timeout) => {
+                            let cpu_report = reporter
+                                .as_ref()
+                                .map(|reporter| reporter.report(Duration::ZERO))
+                                .transpose()?;
+                            Self::snapshot(cpu_report, config.clone(), &stx, &mut sw)?;
+                        }
+                        Err(mpsc::RecvTimeoutError::Disconnected) => {
+                            let cpu_report = reporter
+                                .as_ref()
+                                .map(|reporter| reporter.report(Duration::ZERO))
+                                .transpose()?;
+                            Self::snapshot(cpu_report, config.clone(), &stx, &mut sw)?;
+                            log::trace!(target: LOG_TAG, "Session Killed");
+                            break Ok(());
+                        }
+                        Ok(_) => {
+                            // unreachable: nothing is ever sent
+                        }
                     }
                 }
             }
@@ -258,7 +339,7 @@ impl PyroscopeAgent {
     }
 
     fn snapshot(
-        reporter: &Option<crate::pyspy_backend::Reporter>,
+        cpu_report: Option<ReportBatch>,
         config: PyroscopeConfig,
         stx: &SyncSender<SessionSignal>,
         stop_watch: &mut StopWatch,
@@ -278,8 +359,7 @@ impl PyroscopeAgent {
         }
         log::trace!(target: LOG_TAG, "Sending session {:?}",  time_range);
 
-        if let Some(reporter) = reporter {
-            let report = reporter.report()?;
+        if let Some(report) = cpu_report {
             batch.push(report);
         }
 
