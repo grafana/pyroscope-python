@@ -11,12 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// Modified by Grafana Labs; see ../gcp_patches.md.
 
 #ifndef GOOGLECLOUDPROFILER_SRC_PROFILER_H_
 #define GOOGLECLOUDPROFILER_SRC_PROFILER_H_
 
 #include <Python.h>
 #include <signal.h>
+
+#ifdef Py_GIL_DISABLED
+#error "gcp_cpu_profiler requires a GIL-enabled CPython build"
+#endif
 
 #include <atomic>
 #include <memory>
