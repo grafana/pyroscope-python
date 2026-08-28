@@ -57,3 +57,19 @@ check/tag-version:
 		exit 1; \
 	fi; \
 	echo "tag version ($$TAG_VERSION) matches Cargo.toml version ($$CARGO_VERSION)"
+
+.PHONY: benchmark/overhead/build
+benchmark/overhead/build:
+	docker build --tag pyroscope-profiler-overhead:local --file perf/profiler_overhead/Dockerfile .
+
+.PHONY: benchmark/overhead/test
+benchmark/overhead/test:
+	python3 -m unittest discover -s perf/profiler_overhead/tests -v
+
+.PHONY: benchmark/overhead/smoke
+benchmark/overhead/smoke:
+	python3 perf/profiler_overhead/run.py --smoke
+
+.PHONY: benchmark/overhead/run
+benchmark/overhead/run:
+	python3 perf/profiler_overhead/run.py

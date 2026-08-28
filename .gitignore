@@ -5,6 +5,7 @@ dist/
 
 .venv/
 .env/
+**/__pycache__/
 
 .idea/
 **/target/
@@ -17,3 +18,4 @@ perf.data
 perf.data.*
 /cpp/cmake-build-*/
 python/pyroscope_io.egg-info/
+/perf/profiler_overhead/results/
