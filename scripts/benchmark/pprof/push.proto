@@ -1,0 +1,24 @@
+syntax = "proto3";
+package push.v1;
+
+// Minimal transcription of the fields the agent actually sends, taken from
+// rust/src/encode/gen/push.rs and rust/src/encode/gen/types.rs. Only the tags
+// matter for decoding.
+message LabelPair {
+  string name = 1;
+  string value = 2;
+}
+
+message RawSample {
+  bytes raw_profile = 1;
+  string id = 2;
+}
+
+message RawProfileSeries {
+  repeated LabelPair labels = 1;
+  repeated RawSample samples = 2;
+}
+
+message PushRequest {
+  repeated RawProfileSeries series = 1;
+}
