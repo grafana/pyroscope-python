@@ -27,8 +27,10 @@ const (
 )
 
 type profileConfig struct {
-	onCPU   bool
-	gilOnly bool
+	onCPU       bool
+	gilOnly     bool
+	cpuProfiler string
+	memEnabled  bool
 }
 
 func TestPythonProfilerOnCPUWithGILOnly(t *testing.T) {
@@ -45,6 +47,18 @@ func TestPythonProfilerOffCPUWithGILOnly(t *testing.T) {
 
 func TestPythonProfilerOffCPUWithoutGILOnly(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: false, gilOnly: false})
+}
+
+func TestPythonGCPProfiler(t *testing.T) {
+	pythonVersion := envOrDefault("PYTHON_VERSION", "3.11")
+	if pythonVersion != "3.10" && pythonVersion != "3.11" {
+		t.Skipf("GCP CPU profiler is not supported on Python %s", pythonVersion)
+	}
+	testPythonProfilerConfiguration(t, profileConfig{
+		onCPU:       true,
+		cpuProfiler: "gcp",
+		memEnabled:  true,
+	})
 }
 
 func TestPythonNonCPUIntegrationSuites(t *testing.T) {
@@ -195,6 +209,10 @@ func startPyroscope(t *testing.T, net *dockertest.Network) string {
 
 func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string, cfg profileConfig, wheelDir string) *dockertest.Container {
 	t.Helper()
+	cpuProfiler := cfg.cpuProfiler
+	if cpuProfiler == "" {
+		cpuProfiler = "pyspy"
+	}
 	return dockertest.StartContainer(t, dockertest.ContainerRequest{
 		Image:    pythonImage(),
 		Platform: wheelDockerPlatform(),
@@ -206,6 +224,8 @@ func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string
 			"PYROSCOPE_SERVER_ADDRESS":      "http://pyroscope:4040",
 			"ONCPU":                         boolString(cfg.onCPU),
 			"GIL_ONLY":                      boolString(cfg.gilOnly),
+			"CPU_PROFILER":                  cpuProfiler,
+			"MEM_ENABLED":                   boolString(cfg.memEnabled),
 			"CANARY":                        canary,
 			"PIP_DISABLE_PIP_VERSION_CHECK": "1",
 		},

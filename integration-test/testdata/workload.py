@@ -57,16 +57,19 @@ def main():
 
     oncpu = env_bool("ONCPU")
     gil_only = env_bool("GIL_ONLY")
+    cpu_profiler = os.environ["CPU_PROFILER"]
+    mem_enabled = env_bool("MEM_ENABLED")
     canary = os.environ["CANARY"]
     application_name = os.environ["PYROSCOPE_APPLICATION_NAME"]
     server_address = os.environ["PYROSCOPE_SERVER_ADDRESS"]
 
     logger.info(
-        "starting workload application_name=%s server_address=%s oncpu=%s gil_only=%s canary=%s",
+        "starting workload application_name=%s server_address=%s oncpu=%s gil_only=%s cpu_profiler=%s canary=%s",
         application_name,
         server_address,
         oncpu,
         gil_only,
+        cpu_profiler,
         canary,
     )
     pyroscope.configure(
@@ -75,6 +78,8 @@ def main():
         enable_logging=True,
         oncpu=oncpu,
         gil_only=gil_only,
+        cpu_profiler=cpu_profiler,
+        mem_enabled=mem_enabled,
         report_pid=True,
         report_thread_id=True,
         report_thread_name=True,
@@ -82,6 +87,7 @@ def main():
         tags={
             "oncpu": str(oncpu).lower(),
             "gil_only": str(gil_only).lower(),
+            "cpu_profiler": cpu_profiler,
             "canary": canary,
         },
     )
