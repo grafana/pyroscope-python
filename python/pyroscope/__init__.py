@@ -9,6 +9,7 @@ from contextlib import contextmanager
 LOGGER = logging.getLogger(__name__)
 
 LineNo = lib.LineNo
+CpuProfiler = lib.CpuProfiler
 
 def configure(
         app_name=None,
@@ -34,6 +35,7 @@ def configure(
         mem_heap_sample_size=512 * 1024,
         mem_enable_mem_domain=True,
         cpu_enabled=True,
+        cpu_profiler=None,
 ):
     if app_name is not None:
         warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
@@ -41,6 +43,9 @@ def configure(
 
     if native is not None:
         warnings.warn("native is deprecated and not supported", DeprecationWarning)
+
+    if cpu_profiler is None:
+        cpu_profiler = CpuProfiler.PySpy
 
     LOGGER.disabled = not enable_logging
     if enable_logging:
@@ -70,6 +75,7 @@ def configure(
         mem_heap_sample_size,
         mem_enable_mem_domain,
         cpu_enabled,
+        cpu_profiler,
     )
 
 def shutdown():
