@@ -20,6 +20,9 @@ including each Gunicorn request handler. The configured depth is recorded in
 `metadata.json` and the generated report. The collector decodes the uploaded
 pprof payloads, counts each sample's location IDs, and fails a profiled trial
 unless at least one uploaded sample contains the full configured depth.
+Both modes run the same short CPU-active depth probe before cgroup measurement;
+this guarantees a sample even for mostly blocked `oncpu=True` I/O workloads
+without charging the probe to benchmark CPU or memory results.
 
 The Gunicorn application is not preloaded, so each profiled worker initializes
 Pyroscope after `fork()`. Profiles and standalone I/O requests go to separate

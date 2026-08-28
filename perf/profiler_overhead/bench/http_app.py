@@ -5,7 +5,12 @@ import time
 from collections.abc import Callable, Iterable
 
 from .profilers import start_profiler
-from .workloads import STACK_TRACE_DEPTH, cpu_step, run_with_stack_depth
+from .workloads import (
+    STACK_TRACE_DEPTH,
+    cpu_step,
+    exercise_stack_depth_probe,
+    run_with_stack_depth,
+)
 
 
 # Gunicorn imports the application in each worker because preload_app is disabled.
@@ -15,6 +20,7 @@ _STOP_PROFILER = start_profiler(
     "overhead-gunicorn",
     os.environ.get("BENCH_COLLECTOR", "http://collector:4040"),
 )
+exercise_stack_depth_probe()
 
 
 def application(

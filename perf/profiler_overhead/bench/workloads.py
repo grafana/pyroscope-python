@@ -21,6 +21,17 @@ def run_with_stack_depth(
     return run_with_stack_depth(depth - 1, function, *arguments)
 
 
+def exercise_stack_depth_probe(duration: float = 0.25) -> None:
+    """Keep the controlled stack CPU-active long enough for sampling."""
+
+    def probe(deadline: float) -> None:
+        value = 1
+        while time.perf_counter() < deadline:
+            value = cpu_step(value)
+
+    run_with_stack_depth(STACK_TRACE_DEPTH, probe, time.perf_counter() + duration)
+
+
 def cpu_step(seed: int) -> int:
     """One deterministic unit of Python interpreter-heavy integer work."""
     value = seed | 1

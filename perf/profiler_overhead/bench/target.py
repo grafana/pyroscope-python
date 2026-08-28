@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from .profilers import MODES, start_profiler
-from .workloads import ThreadedWorkload, run_threaded
+from .workloads import ThreadedWorkload, exercise_stack_depth_probe, run_threaded
 
 
 def write_json(path: Path, value: object) -> None:
@@ -53,6 +53,7 @@ def main() -> None:
         args.collector,
     )
     try:
+        exercise_stack_depth_probe()
         io_url = f"{args.io_server}/io?delay_ms=1"
         if args.warmup > 0:
             warmup = run_threaded(kind, thread_count, args.warmup, io_url)
