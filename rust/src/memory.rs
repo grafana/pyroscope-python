@@ -109,7 +109,9 @@ mod implementation {
             return StringID::empty_ffi_string();
         }
         let unsafe_str = unsafe {
-            let s = std::slice::from_raw_parts(s.data as *const u8, s.len);
+            // See the note in cpu/native.rs: c_char signedness is
+            // target-dependent, so cast() rather than `as *const u8`.
+            let s = std::slice::from_raw_parts(s.data.cast::<u8>(), s.len);
             std::str::from_utf8_unchecked(s)
         };
         match STRING_TABLE.lock() {
