@@ -31,6 +31,13 @@ Intentionally omitted:
 - all non-native Python client and packaging files
 - wall-profiler code; none is copied or introduced
 
+New integration files, not copied from upstream:
+
+- `gcp/CMakeLists.txt`
+- `gcp/bridge.h`
+- `gcp/bridge.cc`
+- this `gcp_patches.md`
+
 ## Patch 1: reject free-threaded CPython
 
 File: `gcp/profiler.h`
