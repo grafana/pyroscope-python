@@ -3,7 +3,17 @@ ARG PLATFORM=x86_64
 FROM quay.io/pypa/manylinux2014_${PLATFORM} AS builder
 ARG OPENSSL_VERSION=3.5.7
 
-RUN yum -y install gcc perl-core glibc-devel make
+# manylinux2014 is CentOS 7, whose repos now live on vault.centos.org, which
+# intermittently answers with "HTTPS Error 403 - Forbidden". Retry a few times
+# so a transient archive hiccup does not fail the whole wheel build.
+RUN for attempt in 1 2 3 4 5; do \
+        yum -y --setopt=timeout=60 --setopt=retries=5 install gcc perl-core glibc-devel make && exit 0; \
+        echo "yum install failed (attempt $attempt/5), retrying in $((attempt * 15))s" >&2; \
+        yum clean all; \
+        sleep $((attempt * 15)); \
+    done; \
+    echo "yum install failed after 5 attempts" >&2; \
+    exit 1
 
 # Build OpenSSL from source
 RUN curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
