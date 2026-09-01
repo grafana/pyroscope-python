@@ -145,10 +145,7 @@ mod implementation {
         Ok(profile.map(|profile| profile.encode_to_vec()))
     }
 
-    unsafe fn string_from_view<'a>(
-        data: *const std::ffi::c_char,
-        len: usize,
-    ) -> Option<&'a str> {
+    unsafe fn string_from_view<'a>(data: *const std::ffi::c_char, len: usize) -> Option<&'a str> {
         if data.is_null() {
             return (len == 0).then_some("");
         }
@@ -174,8 +171,8 @@ mod implementation {
         };
         let frames = ffi_frames.iter().map(|frame| unsafe {
             (
-                string_from_view(frame.function_name_data, frame.function_name_len).unwrap_or(""),
-                string_from_view(frame.file_name_data, frame.file_name_len).unwrap_or(""),
+                string_from_view(frame.function_name.data, frame.function_name.len).unwrap_or(""),
+                string_from_view(frame.file_name.data, frame.file_name.len).unwrap_or(""),
                 frame.line,
             )
         });
