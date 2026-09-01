@@ -1,3 +1,4 @@
+mod gcp_backend;
 mod memory;
 mod pyspy_backend;
 
@@ -24,7 +25,7 @@ use std::{
 };
 
 use crate::backend::{BackendConfig, Tag, ThreadTagsSet};
-use crate::pyroscope::PyroscopeAgentBuilder;
+use crate::pyroscope::{CpuProfilerConfig, PyroscopeAgentBuilder};
 use pyo3::exceptions::{PyDeprecationWarning, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -32,6 +33,7 @@ use pyo3::wrap_pyfunction;
 
 const PYSPY_NAME: &str = "pyspy";
 const PYSPY_VERSION: &str = env!("CARGO_PKG_VERSION");
+const GCP_NAME: &str = "gcp";
 
 static AGENT_RUNNING: AtomicBool = AtomicBool::new(false);
 
@@ -152,6 +154,7 @@ fn initialize_agent(
     mem_heap_sample_size: u64,
     mem_enable_mem_domain: bool,
     cpu_enabled: bool,
+    cpu_profiler: String,
 ) -> bool {
     if !cpu_enabled && !mem_enabled {
         log::error!(
@@ -167,19 +170,56 @@ fn initialize_agent(
         report_pid,
     };
 
-    let pyspy_config = cpu_enabled.then(|| py_spy::Config {
-        blocking: py_spy::config::LockingStrategy::NonBlocking,
-        native: false,
-        pid: Some(std::process::id().try_into().unwrap()),
-        sampling_rate: sample_rate.into(),
-        include_idle: !oncpu,
-        include_thread_ids: true,
-        subprocesses: false,
-        gil_only,
-        lineno: line_no.into(),
-        duration: py_spy::config::RecordDuration::Unlimited,
-        ..py_spy::Config::default()
-    });
+    let cpu_config = if cpu_enabled {
+        match cpu_profiler.as_str() {
+            PYSPY_NAME => Some(CpuProfilerConfig::Pyspy(py_spy::Config {
+                blocking: py_spy::config::LockingStrategy::NonBlocking,
+                native: false,
+                pid: Some(std::process::id().try_into().unwrap()),
+                sampling_rate: sample_rate.into(),
+                include_idle: !oncpu,
+                include_thread_ids: true,
+                subprocesses: false,
+                gil_only,
+                lineno: line_no.into(),
+                duration: py_spy::config::RecordDuration::Unlimited,
+                ..py_spy::Config::default()
+            })),
+            GCP_NAME => {
+                if !oncpu {
+                    log::error!(
+                        target: "pyroscope-python",
+                        "the GCP CPU profiler does not support wall profiling; oncpu must be true"
+                    );
+                    return false;
+                }
+                if !gcp_backend::is_available() {
+                    log::error!(
+                        target: "pyroscope-python",
+                        "the GCP CPU profiler is only available in Linux builds with the GIL"
+                    );
+                    return false;
+                }
+                if let Err(error) = gcp_backend::period_nanos(sample_rate) {
+                    log::error!(target: "pyroscope-python", "{error}");
+                    return false;
+                }
+                Some(CpuProfilerConfig::Gcp(gcp_backend::Config {
+                    sample_rate,
+                    backend_config,
+                }))
+            }
+            other => {
+                log::error!(
+                    target: "pyroscope-python",
+                    "unknown CPU profiler {other:?}; expected \"pyspy\" or \"gcp\""
+                );
+                return false;
+            }
+        }
+    } else {
+        None
+    };
 
     let dynamic_tags = ThreadTagsSet::new();
 
@@ -187,7 +227,11 @@ fn initialize_agent(
         server_address,
         application_name,
         sample_rate,
-        PYSPY_NAME,
+        if cpu_enabled {
+            cpu_profiler.as_str()
+        } else {
+            PYSPY_NAME
+        },
         PYSPY_VERSION,
         memory::Config {
             enabled: mem_enabled,
@@ -210,7 +254,7 @@ fn initialize_agent(
 
     let result = ffikit::run(
         py,
-        PyroscopeAgentBuilder::new(agent_builder, pyspy_config, backend_config, dynamic_tags),
+        PyroscopeAgentBuilder::new(agent_builder, cpu_config, backend_config, dynamic_tags),
     );
     match result {
         Ok(_) => {

@@ -23,10 +23,14 @@ include = [
   "FFIFrame",
   "FFIHeapSampleValues",
   "FFISample",
+  "FFIGcpFrame",
+  "FFIGcpSample",
   "pyroscope_memprof_string_table_intern_string",
   "pyroscope_memprof_push_sample",
+  "pyroscope_gcp_push_sample",
 ]
 exclude = [
+  "gcp_cpu_profiler_collect",
   "memalloc_start",
   "memalloc_stop",
   "memalloc_heap_py",

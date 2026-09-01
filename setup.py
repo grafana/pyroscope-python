@@ -24,6 +24,8 @@ env.update({
 features = []
 if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
     features.append("memory")
+    if sys.platform.startswith("linux") and sys.version_info < (3, 12):
+        features.append("gcp")
 
 setup(
     rust_extensions=[
