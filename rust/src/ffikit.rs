@@ -124,6 +124,10 @@ pub fn stop(py: Python<'_>) -> Result<()> {
 pub fn at_fork_after_in_child(_py: Python<'_>) {
     // Here we intentionally leak the whole running agent.
     // This runs post-fork in the child, the old agent must never be dropped there (its
-    // stop() joins threads that don't survive fork)
+    // stop() joins threads that don't survive fork).
+    //
+    // Leaking the agent means CpuBackend::drop never runs, so a native sampler
+    // would stay armed in the child. crate::cpu::postfork_child() disarms it
+    // directly; it is called from the fork handler in lib.rs before this.
     STATE.leak_and_reset();
 }

@@ -112,8 +112,15 @@ impl Metadata {
 /// (which will be encoded into pprof by the session layer) or pre-encoded
 /// pprof bytes produced directly by a backend (e.g. jemalloc).
 pub enum ReportData {
-    /// Structured stack-trace reports that must be pprof-encoded before sending.
+    /// Structured stack-trace reports whose values are counts of sampling
+    /// ticks, each worth one sampling period of CPU.
     Reports(Vec<Report>),
+    /// Structured stack-trace reports whose values are already CPU nanoseconds.
+    ///
+    /// Samplers that measure per-thread CPU time directly use this. Encoding
+    /// them as tick counts would multiply by the sampling period a second time
+    /// and report far more CPU than the process consumed.
+    ReportsCpuNanos(Vec<Report>),
     /// Pre-encoded pprof bytes (may already be gzipped). Used by backends
     /// like jemalloc that produce a complete pprof profile directly.
     RawPprof(Vec<u8>),

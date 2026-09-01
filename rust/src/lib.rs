@@ -1,3 +1,4 @@
+pub mod cpu;
 mod memory;
 mod pyspy_backend;
 
@@ -24,8 +25,9 @@ use std::{
 };
 
 use crate::backend::{BackendConfig, Tag, ThreadTagsSet};
+use crate::cpu::{CpuConfig, CpuProfiler};
 use crate::pyroscope::PyroscopeAgentBuilder;
-use pyo3::exceptions::{PyDeprecationWarning, PyValueError};
+use pyo3::exceptions::{PyDeprecationWarning, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
@@ -44,6 +46,9 @@ fn at_fork_after_in_parent(py: Python<'_>) -> PyResult<()> {
 fn at_fork_after_in_child(py: Python<'_>) -> PyResult<()> {
     memory::postfork_child();
     memory::stop(py);
+    // Must run before at_fork_after_in_child, which leaks the whole agent, so
+    // CpuBackend::drop never gets the chance to disarm the native sampler.
+    cpu::postfork_child();
     ffikit::at_fork_after_in_child(py);
     AGENT_RUNNING.store(false, Ordering::Release);
     Ok(())
@@ -152,13 +157,20 @@ fn initialize_agent(
     mem_heap_sample_size: u64,
     mem_enable_mem_domain: bool,
     cpu_enabled: bool,
-) -> bool {
+    cpu_profiler: CpuProfiler,
+) -> PyResult<bool> {
     if !cpu_enabled && !mem_enabled {
         log::error!(
             target: "pyroscope-python",
             "at least one of CPU or memory profiling must be enabled"
         );
-        return false;
+        return Ok(false);
+    }
+
+    // Fail loudly rather than falling back to py-spy: a silent fallback would
+    // report one implementation's profile under another's name.
+    if cpu_enabled && let Err(reason) = cpu_profiler.check_supported(py) {
+        return Err(PyRuntimeError::new_err(reason));
     }
 
     let backend_config = BackendConfig {
@@ -167,18 +179,23 @@ fn initialize_agent(
         report_pid,
     };
 
-    let pyspy_config = cpu_enabled.then(|| py_spy::Config {
-        blocking: py_spy::config::LockingStrategy::NonBlocking,
-        native: false,
-        pid: Some(std::process::id().try_into().unwrap()),
-        sampling_rate: sample_rate.into(),
-        include_idle: !oncpu,
-        include_thread_ids: true,
-        subprocesses: false,
-        gil_only,
-        lineno: line_no.into(),
-        duration: py_spy::config::RecordDuration::Unlimited,
-        ..py_spy::Config::default()
+    let cpu_config = cpu_enabled.then(|| CpuConfig {
+        profiler: cpu_profiler,
+        sample_rate,
+        backend_config,
+        pyspy: py_spy::Config {
+            blocking: py_spy::config::LockingStrategy::NonBlocking,
+            native: false,
+            pid: Some(std::process::id().try_into().unwrap()),
+            sampling_rate: sample_rate.into(),
+            include_idle: !oncpu,
+            include_thread_ids: true,
+            subprocesses: false,
+            gil_only,
+            lineno: line_no.into(),
+            duration: py_spy::config::RecordDuration::Unlimited,
+            ..py_spy::Config::default()
+        },
     });
 
     let dynamic_tags = ThreadTagsSet::new();
@@ -210,16 +227,16 @@ fn initialize_agent(
 
     let result = ffikit::run(
         py,
-        PyroscopeAgentBuilder::new(agent_builder, pyspy_config, backend_config, dynamic_tags),
+        PyroscopeAgentBuilder::new(agent_builder, cpu_config, dynamic_tags),
     );
     match result {
         Ok(_) => {
             AGENT_RUNNING.store(true, Ordering::Release);
-            true
+            Ok(true)
         }
         Err(e) => {
             log::error!(target: "pyroscope-python", "failed to start agent: {}", e);
-            false
+            Ok(false)
         }
     }
 }
@@ -264,6 +281,7 @@ impl From<LineNo> for py_spy::config::LineNo {
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LineNo>()?;
+    m.add_class::<CpuProfiler>()?;
     m.add_function(wrap_pyfunction!(initialize_logging, m)?)?;
     m.add_function(wrap_pyfunction!(initialize_agent, m)?)?;
     m.add_function(wrap_pyfunction!(drop_agent, m)?)?;
