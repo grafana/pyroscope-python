@@ -225,6 +225,48 @@ This is also why the fix in §8 is a one-line change: swapping `bool` for `u8`
 does not move a single field, it only removes the spare values that rustc is
 allowed to steal.
 
+### 2.5 `#[repr(C)]` does not prevent this
+
+py-spy's bindings are `#[repr(C)]` (bindgen emits it), which is worth being
+explicit about because it is a natural objection:
+
+```rust
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _PyInterpreterFrame { ... }
+```
+
+`repr(C)` pins *that struct's* layout — field order, offsets, size,
+alignment — so the C ABI is matched. It does **not** change its fields'
+validity invariants (a `bool` is still only `0` or `1`), and it does not
+constrain the layout of an enum that happens to wrap it. `Result` is a plain
+`repr(Rust)` enum, and rustc's niche search descends into the payload's
+fields recursively regardless of their `repr`. If anything, `repr(C)` makes
+the niche's position *stable and predictable* (byte 68, always).
+
+`niche_demo.rs` in this directory demonstrates it with no py-spy involved —
+two `repr(C)` structs of identical layout, differing only in `bool` vs `u8`:
+
+```
+$ rustc -O -o /tmp/niche_demo niche_demo.rs && /tmp/niche_demo
+size_of::<Err32>() = 24 (fits inside the Ok payload)
+
+repr(C), field offsets identical in both structs:
+  size_of::<FrameWithBool>()               = 80
+  size_of::<FrameNoBool>()                 = 80
+
+but the enum wrapping them is laid out differently:
+  size_of::<Result<FrameWithBool, Err32>>() = 80  <- niche: tag hidden in the bool
+  size_of::<Result<FrameNoBool,   Err32>>() = 88  <- dedicated tag word
+
+Ok(frame) with byte 68 == 2 is observed as: Err  <-- the bug
+```
+
+Two conditions have to hold for the niche to be chosen at all, and both hold
+here: the payload must contain a niche (`is_entry`), and the other variant
+must fit in the remaining space (`remoteprocess::Error` is 32 bytes, the frame
+is 80).
+
 ### 2.4 Why the bogus `Err` is fatal
 
 py-spy adds a context and ships the error to pyroscope:

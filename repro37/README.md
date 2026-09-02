@@ -97,6 +97,7 @@ seconds (control run with `NO_PROFILER=1` survives).
 | `Dockerfile` | Python 3.11 + `pyroscope-io==1.2.1` + gdb |
 | `Dockerfile.valgrind`, `run-valgrind.sh` | same workload under memcheck |
 | `run-asan.sh` | workload against an ASAN build of `rust/` from this repo |
+| `niche_demo.rs` | 20-line standalone proof that `#[repr(C)]` does not prevent the niche |
 | `poc_niche_confusion.py` | **deterministic reproducer** — plants the bad byte, crashes in seconds |
 | `poc_frame_cycle.py` | makes py-spy's frame walk hit its 4096-frame bound every sample |
 | `poc_ucs4_garbage.py`, `poc_hostile_string.py` | targeted probes of py-spy's UCS-4 decode path |
