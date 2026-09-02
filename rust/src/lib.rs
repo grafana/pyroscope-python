@@ -1,6 +1,12 @@
 mod memory;
 mod pyspy_backend;
 
+#[cfg(feature = "debug-alloc")]
+mod debug_alloc;
+#[cfg(feature = "debug-alloc")]
+#[global_allocator]
+static GLOBAL_ALLOC: debug_alloc::GuardAlloc = debug_alloc::GuardAlloc;
+
 // Re-exports structs
 pub use crate::pyroscope::PyroscopeAgent;
 pub use error::{PyroscopeError, Result};

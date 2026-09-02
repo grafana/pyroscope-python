@@ -32,3 +32,5 @@ cmake = "0.1"
 [features]
 default = []
 memory = []
+# Reproducer-only: guarding global allocator, see src/debug_alloc.rs
+debug-alloc = []
