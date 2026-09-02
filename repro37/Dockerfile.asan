@@ -1,0 +1,47 @@
+# ASAN variant: builds the extension from this repo's rust/ (CPU profiler only,
+# so build.rs skips the C++ memalloc/CMake step) with -Zsanitizer=address, on
+# top of the Python version from the reports.
+#
+# Build from the repository root:
+#   docker build -f repro37/Dockerfile.asan -t pyroscope-repro37:asan .
+FROM python:3.11-slim AS build
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl build-essential pkg-config libssl-dev ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+  | sh -s -- -y --default-toolchain nightly --profile minimal
+ENV PATH=/root/.cargo/bin:$PATH
+
+WORKDIR /src
+COPY rust /src/rust
+COPY pyproject.toml /src/pyproject.toml
+RUN cd rust \
+ && RUSTFLAGS="-Zsanitizer=address -Cdebuginfo=1" \
+    cargo +nightly build --release --locked --target x86_64-unknown-linux-gnu
+
+FROM python:3.11-slim
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libasan8 gdb procps \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=build /src/rust/target/x86_64-unknown-linux-gnu/release/lib_native.so \
+                  /app/asan/pyroscope/_native.so
+COPY python/pyroscope/__init__.py /app/asan/pyroscope/__init__.py
+COPY repro37/sink.py repro37/workload.py repro37/runner.py repro37/forkload.py \
+     repro37/wsgi.py repro37/gunicorn_conf.py /app/
+
+# rustc ships only the static ASAN runtime and the extension is dlopened, so
+# preload gcc's libasan, which exports the same interface.
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONMALLOC=malloc \
+    PYTHONPATH=/app/asan:/app \
+    LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libasan.so.8 \
+    ASAN_OPTIONS=verify_asan_link_order=0:detect_leaks=0:halt_on_error=0:print_stacktrace=1:log_path=/cores/asan \
+    PYROSCOPE_SERVER=http://127.0.0.1:4040 \
+    SAMPLE_RATE=997
+
+ENTRYPOINT ["python", "runner.py"]
+CMD ["--mode", "threads", "--procs", "4", "--duration", "60", "--budget", "3600"]

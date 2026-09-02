@@ -1,0 +1,9 @@
+# Build/run products of the reproducer, not source:
+.venv/
+logs/
+cores/
+artifacts*/
+# extension builds staged for the ASAN / guarding-allocator runs
+asan/
+guard/
+__pycache__/

@@ -1,0 +1,47 @@
+# Guarding-allocator variant: release build of the extension from this repo's rust/ with
+# so build.rs skips the C++ memalloc/CMake step) with -Zsanitizer=address, on
+# full debug info, so a core dump can be read with real types and field names.
+#
+# Build from the repository root:
+#   docker build -f repro37/Dockerfile.debug -t pyroscope-repro37:debug .
+FROM python:3.11-slim AS build
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl build-essential pkg-config libssl-dev ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+  | sh -s -- -y --default-toolchain nightly --profile minimal
+ENV PATH=/root/.cargo/bin:$PATH
+
+WORKDIR /src
+COPY rust /src/rust
+COPY pyproject.toml /src/pyproject.toml
+RUN cd rust \
+ && RUSTFLAGS="-Cforce-frame-pointers=yes" \
+    CARGO_PROFILE_RELEASE_DEBUG=2 \
+    CARGO_PROFILE_RELEASE_STRIP=none \
+    cargo +nightly build --release --locked --features debug-alloc --target x86_64-unknown-linux-gnu
+
+FROM python:3.11-slim
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends gdb procps \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=build /src/rust/target/x86_64-unknown-linux-gnu/release/lib_native.so \
+                  /app/ext/pyroscope/_native.so
+COPY python/pyroscope/__init__.py /app/ext/pyroscope/__init__.py
+COPY repro37/sink.py repro37/workload.py repro37/runner.py repro37/forkload.py \
+     repro37/wsgi.py repro37/gunicorn_conf.py /app/
+
+# Same layout as the wheel, just with debug info kept.
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONMALLOC=malloc \
+    PYTHONPATH=/app/ext:/app \
+    PYROSCOPE_SERVER=http://127.0.0.1:4040 \
+    SAMPLE_RATE=997
+
+ENTRYPOINT ["python", "runner.py"]
+CMD ["--mode", "threads", "--procs", "4", "--duration", "60", "--budget", "3600"]

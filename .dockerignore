@@ -15,3 +15,10 @@ perf.data
 perf.data.*
 /cpp/cmake-build-*/
 /python/pyroscope_io.egg-info/
+repro37/artifacts*/
+repro37/.venv/
+repro37/logs/
+repro37/cores/
+repro37/asan/
+repro37/guard/
+repro37/__pycache__/
