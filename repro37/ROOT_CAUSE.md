@@ -163,6 +163,68 @@ The same code is in a from-source build of `main`
 `movb $0x2,0x44(%rbx)` at `+104`, caller `movzbl -0x1ac(%rbp)` / `cmp $0x2`),
 so this is not a quirk of one compiler run.
 
+### 2.4 Why `c_char` is not equivalent (same layout, different validity)
+
+`bool` and `c_char` (= `i8` here) have **identical size and alignment** — one
+byte each. The 3.11 frame even has both, adjacent:
+
+```rust
+    pub is_entry: bool,      // offset 68
+    pub owner: c_char,       // offset 69
+```
+
+What differs is the *validity invariant*, i.e. which bit patterns are legal
+values:
+
+| type | size | valid values | spare (niche) values |
+|---|---|---|---|
+| `bool` | 1 | `0`, `1` | 254 |
+| `c_char` / `i8` / `u8` | 1 | all 256 | none |
+
+rustc only needs a separate discriminant when it cannot hide one in a spare
+value of the payload. So the *struct* layout is the same either way, but the
+layout of the enum **wrapping** it is not:
+
+```
+                                       sizeof(frame)   sizeof(Result<frame, remoteprocess::Error>)
+py_spy::python_bindings::v3_11_0        80              80     <- equal: discriminant hidden in `is_entry`
+py_spy::python_bindings::v3_12_0        80              88     <- +8: dedicated tag word
+py_spy::python_bindings::v3_14_0        88              96     <- +8: dedicated tag word
+```
+
+The generated code for a non-3.11 frame shows the dedicated tag (same build,
+same function, different type parameter):
+
+```asm
+remoteprocess::ProcessMemory::copy_pointer<..., v3_14_0::_PyInterpreterFrame>:
+  +30:  mov    $0x58,%edi           ; 0x58 = 88 = sizeof(v3_14_0::_PyInterpreterFrame)
+  +77:  call   *...                 ; Process::read
+  +83:  cmpl   $0xffffffff,-0x40(%rbp)
+  +87:  je     +112                 ; -> Ok
+  ; Err:
+  +89:  movups -0x40(%rbp),%xmm0    ; remoteprocess::Error -> payload area at 0x08
+  +101: movups %xmm0,0x8(%rbx)
+  +105: mov    $0x1,%eax            ; tag = 1
+  +110: jmp    +166
+  ; Ok:
+  +120: movups 0x40(%r14),%xmm0     ; 88 copied bytes -> payload area at 0x08..0x60
+  ...
+  +164: xor    %eax,%eax            ; tag = 0
+  +166: mov    %rax,(%rbx)          ; <<<< tag stored in its OWN word at offset 0
+```
+
+The payload begins at offset `0x08` and the tag is a word of its own, so no
+bit pattern of the copied struct can influence it. Contrast 3.11, where the
+payload occupies offsets `0x00..0x50` — the tag *is* one of the copied bytes:
+
+```asm
+  901015: movb   $0x2,0x44(%rbx)    ; Err lives inside the payload
+```
+
+This is also why the fix in §8 is a one-line change: swapping `bool` for `u8`
+does not move a single field, it only removes the spare values that rustc is
+allowed to steal.
+
 ### 2.4 Why the bogus `Err` is fatal
 
 py-spy adds a context and ships the error to pyroscope:

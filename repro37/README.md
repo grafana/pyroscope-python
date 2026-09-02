@@ -69,6 +69,11 @@ sizeof(Result<_PyInterpreterFrame, remoteprocess::Error>) == 80
 sizeof(_PyInterpreterFrame)                               == 80    # no room for a tag
 ```
 
+`bool` and `c_char` have the same size; what differs is that `bool` has 254
+spare bit patterns for rustc to steal. Hence 3.12+ (`c_char` in that position)
+get a dedicated tag word instead: `sizeof(Result<frame, Error>)` is 88 vs a
+80-byte frame on 3.12, and 96 vs 88 on 3.14.
+
 The shipped wheel encodes `Err` by writing `2` into that byte
 (`movb $0x2,0x44(%rbx)`), and the `Ok` path copies all 80 target bytes
 verbatim. So a stale frame read whose byte 68 is `2` turns into an
