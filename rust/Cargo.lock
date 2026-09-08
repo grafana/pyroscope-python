@@ -108,6 +108,8 @@ dependencies = [
  "cexpr",
  "clang-sys",
  "itertools 0.13.0",
+ "log",
+ "prettyplease",
  "proc-macro2",
  "quote",
  "regex",
@@ -866,6 +868,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "mach2"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dae608c151f68243f2b000364e1f7b186d9c29845f7d2d85bd31b9ad77ad552b"
+
+[[package]]
 name = "mach_o_sys"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1128,7 +1136,21 @@ dependencies = [
  "bindgen 0.70.1",
  "libc",
  "libproc",
- "mach2",
+ "mach2 0.4.3",
+ "winapi",
+]
+
+[[package]]
+name = "proc-maps"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "221de5f6ef11b9be9d59b330c5b81799b3e7c51b18af84c1f235ef88998b00e1"
+dependencies = [
+ "anyhow",
+ "bindgen 0.72.1",
+ "libc",
+ "libproc",
+ "mach2 0.6.0",
  "winapi",
 ]
 
@@ -1158,7 +1180,7 @@ dependencies = [
 [[package]]
 name = "py-spy"
 version = "0.4.2"
-source = "git+https://github.com/benfred/py-spy?rev=32080cc#32080cc0c22bc23938541dfa7dabb6090e40be14"
+source = "git+https://github.com/grafana/pyroscope-py-spy?rev=8065105#80651059d2bc419d0d7c61c9509cccbb54d57088"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1171,7 +1193,7 @@ dependencies = [
  "memmap2",
  "num-traits",
  "page_size",
- "proc-maps",
+ "proc-maps 0.4.0",
  "rand",
  "rand_distr",
  "regex",
@@ -1323,14 +1345,14 @@ dependencies = [
 
 [[package]]
 name = "read-process-memory"
-version = "0.1.6"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8497683b2f0b6887786f1928c118f26ecc6bb3d78bbb6ed23e8e7ba110af3bb0"
+checksum = "98379bd2cb26a9ad7d0af215816348a41279285fd15e40b398af97108207a9d3"
 dependencies = [
  "libc",
  "log",
- "mach",
- "winapi",
+ "mach2 0.6.0",
+ "windows-sys",
 ]
 
 [[package]]
@@ -1364,9 +1386,8 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "remoteprocess"
-version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1861c221cfbe6c963fd804eb56c64c0fa25d133b06537ac6cba7ca56085ae556"
+version = "0.5.3"
+source = "git+https://github.com/grafana/pyroscope-remoteprocess?rev=579e513a5584adc55b9c88e3d5212bb41c328315#579e513a5584adc55b9c88e3d5212bb41c328315"
 dependencies = [
  "addr2line",
  "cfg-if",
@@ -1380,7 +1401,7 @@ dependencies = [
  "memmap2",
  "nix",
  "object",
- "proc-maps",
+ "proc-maps 0.5.0",
  "read-process-memory",
  "regex",
  "winapi",
