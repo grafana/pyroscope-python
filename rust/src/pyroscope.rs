@@ -276,12 +276,20 @@ impl PyroscopeAgent {
                 })
             }
         }
-        log::trace!(target: LOG_TAG, "Sending session {:?}",  time_range);
 
         if let Some(reporter) = reporter {
             let report = reporter.report()?;
-            batch.push(report);
+            if !report.is_empty() {
+                batch.push(report);
+            }
         }
+
+        if batch.is_empty() {
+            log::debug!(target: LOG_TAG, "Skipping empty session {:?}", time_range);
+            return Ok(());
+        }
+
+        log::trace!(target: LOG_TAG, "Sending session {:?}",  time_range);
 
         // Send new Session to SessionManager
         stx.send(SessionSignal::Session(Box::new(Session::new(
