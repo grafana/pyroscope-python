@@ -43,6 +43,7 @@ ADD --chown=builder:builder pyproject.toml \
 ADD --chown=builder:builder rust/ rust/
 ADD --chown=builder:builder python/ python/
 ADD --chown=builder:builder cpp/ cpp/
+ADD --chown=builder:builder gcp/ gcp/
 ADD --chown=builder:builder docker/wheels.sh wheels.sh
 
 RUN --mount=type=cache,target=/home/builder/.cargo/registry,uid=1000,gid=1000 \

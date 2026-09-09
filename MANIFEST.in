@@ -8,3 +8,8 @@ include cpp/BundleStaticLibrary.cmake
 recursive-include cpp/ *.h
 recursive-include cpp/ *.cpp
 recursive-include cpp/ *.hpp
+include gcp_patches.md
+include gcp/CMakeLists.txt
+include gcp/LICENSE
+recursive-include gcp/ *.cc
+recursive-include gcp/ *.h

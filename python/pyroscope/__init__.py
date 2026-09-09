@@ -1,6 +1,7 @@
 import warnings
 import logging
 import sys
+import sysconfig
 
 from . import _native as lib
 
@@ -34,6 +35,7 @@ def configure(
         mem_heap_sample_size=512 * 1024,
         mem_enable_mem_domain=True,
         cpu_enabled=True,
+        cpu_profiler="pyspy",
 ):
     if app_name is not None:
         warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
@@ -41,6 +43,23 @@ def configure(
 
     if native is not None:
         warnings.warn("native is deprecated and not supported", DeprecationWarning)
+
+    if cpu_profiler not in ("pyspy", "gcp"):
+        raise ValueError('cpu_profiler must be either "pyspy" or "gcp"')
+
+    if cpu_enabled and cpu_profiler == "gcp":
+        if not sys.platform.startswith("linux"):
+            raise ValueError("the GCP CPU profiler is supported only on Linux")
+        if sys.version_info[:2] > (3, 11):
+            raise ValueError("the GCP CPU profiler supports CPython 3.11 and earlier")
+        if sysconfig.get_config_var("Py_GIL_DISABLED") == 1:
+            raise ValueError("the GCP CPU profiler requires a GIL-enabled CPython build")
+        if not oncpu:
+            raise ValueError("the GCP CPU profiler does not support wall profiling; oncpu must be true")
+        if not 0 < sample_rate <= 1_000_000:
+            raise ValueError("GCP CPU profiler sample_rate must be between 1 and 1,000,000")
+        if upload_interval <= 0:
+            raise ValueError("GCP CPU profiler upload_interval must be greater than zero")
 
     LOGGER.disabled = not enable_logging
     if enable_logging:
@@ -70,6 +89,7 @@ def configure(
         mem_heap_sample_size,
         mem_enable_mem_domain,
         cpu_enabled,
+        cpu_profiler,
     )
 
 def shutdown():
