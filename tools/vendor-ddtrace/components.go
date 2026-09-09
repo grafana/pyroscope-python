@@ -4,12 +4,14 @@ import "strings"
 
 // A component is one piece of dd-trace-py that this repository vendors.
 //
-// historyPaths is the pathspec for git rev-list, kept narrow with globs so a
-// commit touching unrelated upstream files is never even considered.
-// treePaths is the pathspec for git ls-tree, which does not glob, so it lists
-// directories and lets mapPath do the filtering. ownsPath says which vendored
-// paths belong to the component, so that replaying one component onto the
-// mirror never disturbs another's files.
+// Vendored files keep their upstream paths, so mapPath is close to the identity
+// function: it decides what to keep, not where to put it. historyPaths is the
+// pathspec for git rev-list, kept narrow with globs so a commit touching
+// unrelated upstream files is never even considered; treePaths is the pathspec
+// for git ls-tree, which does not glob, so it lists directories and lets
+// mapPath filter. ownsPath says which vendored paths belong to the component,
+// so that replaying one component onto the mirror never disturbs another's
+// files.
 type component struct {
 	name         string
 	historyPaths []string
@@ -36,41 +38,30 @@ var components = map[string]*component{
 		},
 		treePaths: []string{ddCollector, ddHelpers},
 		mapPath:   mapMemalloc,
-		ownsPath:  ownsMemalloc,
+		ownsPath:  mapMemallocKeeps,
 	},
 }
 
 // mapMemalloc returns the vendored path for an upstream path, or "" to drop it.
-//
-// The memory profiler sits flat in cpp/, so upstream's own renames (notably
-// _memalloc.c -> _memalloc.cpp in 2292a4546d) replay as renames. Everything
-// Python, the upstream build files and the other collectors are dropped.
+// The memory profiler's C++ is vendored where upstream keeps it, so a kept path
+// maps to itself. Everything Python, the upstream build files and the other
+// collectors are dropped.
 func mapMemalloc(p string) string {
+	if !mapMemallocKeeps(p) {
+		return ""
+	}
+	return p
+}
+
+func mapMemallocKeeps(p string) bool {
 	if rel, ok := strings.CutPrefix(p, ddHelpers+"/"); ok {
-		if strings.Contains(rel, "/") {
-			return ""
-		}
-		return "cpp/profiling_helpers/" + rel
+		return !strings.Contains(rel, "/")
 	}
 	rel, ok := strings.CutPrefix(p, ddCollector+"/")
 	if !ok || strings.Contains(rel, "/") {
-		return ""
+		return false
 	}
 	if strings.HasSuffix(rel, ".py") || strings.HasSuffix(rel, ".pyi") || strings.HasSuffix(rel, ".pyx") {
-		return ""
-	}
-	if !strings.HasPrefix(rel, "_memalloc") && rel != "_pymacro.h" {
-		return ""
-	}
-	return "cpp/" + rel
-}
-
-func ownsMemalloc(p string) bool {
-	if rel, ok := strings.CutPrefix(p, "cpp/profiling_helpers/"); ok {
-		return !strings.Contains(rel, "/")
-	}
-	rel, ok := strings.CutPrefix(p, "cpp/")
-	if !ok || strings.Contains(rel, "/") {
 		return false
 	}
 	return strings.HasPrefix(rel, "_memalloc") || rel == "_pymacro.h"

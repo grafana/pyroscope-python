@@ -4,14 +4,14 @@ import "testing"
 
 func TestMapMemalloc(t *testing.T) {
 	cases := []struct{ in, want string }{
-		// kept: the memalloc sources, both before and after the upstream
-		// .c -> .cpp port, so history flows through the rename
-		{ddCollector + "/_memalloc.c", "cpp/_memalloc.c"},
-		{ddCollector + "/_memalloc.cpp", "cpp/_memalloc.cpp"},
-		{ddCollector + "/_memalloc_tb.h", "cpp/_memalloc_tb.h"},
-		{ddCollector + "/_memalloc_gc_guard.hpp", "cpp/_memalloc_gc_guard.hpp"},
-		{ddCollector + "/_pymacro.h", "cpp/_pymacro.h"},
-		{ddHelpers + "/frame_accessors.h", "cpp/profiling_helpers/frame_accessors.h"},
+		// kept, at the upstream path: the memalloc sources, both before and
+		// after the upstream .c -> .cpp port, so history flows through it
+		{ddCollector + "/_memalloc.c", ddCollector + "/_memalloc.c"},
+		{ddCollector + "/_memalloc.cpp", ddCollector + "/_memalloc.cpp"},
+		{ddCollector + "/_memalloc_tb.h", ddCollector + "/_memalloc_tb.h"},
+		{ddCollector + "/_memalloc_gc_guard.hpp", ddCollector + "/_memalloc_gc_guard.hpp"},
+		{ddCollector + "/_pymacro.h", ddCollector + "/_pymacro.h"},
+		{ddHelpers + "/frame_accessors.h", ddHelpers + "/frame_accessors.h"},
 
 		// dropped: python glue, upstream build files, unrelated collectors
 		{ddCollector + "/memalloc.py", ""},
@@ -21,6 +21,7 @@ func TestMapMemalloc(t *testing.T) {
 		{ddCollector + "/stack.pyx", ""},
 		{ddCollector + "/_traceback.c", ""},
 		{ddCollector + "/nested/_memalloc.c", ""},
+		{ddHelpers + "/nested/frame_accessors.h", ""},
 		{"ddtrace/internal/datadog/profiling/stack/src/sampler.cpp", ""},
 		{"tests/profiling/collector/test_memalloc.py", ""},
 	}
@@ -31,47 +32,36 @@ func TestMapMemalloc(t *testing.T) {
 	}
 }
 
-func TestOwnsMemalloc(t *testing.T) {
+// Ownership and mapping must agree: a replay writes what it owns, and owns what
+// it writes. Anything else means one component's replay could drop or claim
+// another's files.
+func TestOwnershipMatchesMapping(t *testing.T) {
 	owned := []string{
-		"cpp/_memalloc.cpp",
-		"cpp/_memalloc_heap.h",
-		"cpp/_pymacro.h",
-		"cpp/profiling_helpers/version_compat.h",
+		ddCollector + "/_memalloc.cpp",
+		ddCollector + "/_memalloc_heap.h",
+		ddCollector + "/_pymacro.h",
+		ddHelpers + "/version_compat.h",
 	}
 	notOwned := []string{
 		"cpp/Pyroscope.h",
 		"cpp/CMakeLists.txt",
 		"cpp/BundleStaticLibrary.cmake",
-		"cpp/ddtrace_stack/src/sampler.cpp",
+		ddCollector + "/memalloc.py",
+		"ddtrace/internal/datadog/profiling/stack/src/sampler.cpp",
 		"rust/src/lib.rs",
 	}
+	c := components["memalloc"]
 	for _, p := range owned {
-		if !ownsMemalloc(p) {
-			t.Errorf("ownsMemalloc(%q) = false, want true", p)
+		if !c.ownsPath(p) {
+			t.Errorf("ownsPath(%q) = false, want true", p)
+		}
+		if got := c.mapPath(p); got != p {
+			t.Errorf("mapPath(%q) = %q, want it unchanged", p, got)
 		}
 	}
 	for _, p := range notOwned {
-		if ownsMemalloc(p) {
-			t.Errorf("ownsMemalloc(%q) = true, want false", p)
-		}
-	}
-}
-
-// Everything mapMemalloc keeps must be owned by the component, otherwise a
-// replay would write files it does not consider its own.
-func TestMapImpliesOwn(t *testing.T) {
-	for _, p := range []string{
-		ddCollector + "/_memalloc.c",
-		ddCollector + "/_memalloc_reentrant.cpp",
-		ddCollector + "/_pymacro.h",
-		ddHelpers + "/linetable_parser.h",
-	} {
-		v := mapMemalloc(p)
-		if v == "" {
-			t.Fatalf("mapMemalloc(%q) dropped a path the test expects kept", p)
-		}
-		if !ownsMemalloc(v) {
-			t.Errorf("mapMemalloc(%q) = %q which ownsMemalloc rejects", p, v)
+		if c.ownsPath(p) {
+			t.Errorf("ownsPath(%q) = true, want false", p)
 		}
 	}
 }

@@ -61,6 +61,9 @@ options:
   -upstream string   dd-trace-py path or URL (default $DDTRACE_REPO, else
                      ~/dd/dd-trace-py if it exists, else `+upstreamURL+`)
   -mirror string     mirror branch (default `+defaultMirror+`)
+  -import-branch     land the replay here instead of on the mirror, so it can
+                     reach the mirror through a pull request. Nothing is
+                     pushed to the mirror directly.
   -graft             merge with -s ours: keep our tree, record the ancestry
                      only. Use when the component is already in the tree from
                      an earlier squashed import.
@@ -72,15 +75,16 @@ options:
 }
 
 type options struct {
-	component   string
-	ref         string
-	upstream    string
-	mirror      string
-	graft       bool
-	noMerge     bool
-	noSign      bool
-	dryRun      bool
-	keepScratch bool
+	component    string
+	ref          string
+	upstream     string
+	mirror       string
+	importBranch string
+	graft        bool
+	noMerge      bool
+	noSign       bool
+	dryRun       bool
+	keepScratch  bool
 }
 
 func parseFlags(name string, args []string) (*options, *component) {
@@ -90,6 +94,7 @@ func parseFlags(name string, args []string) (*options, *component) {
 	fs.StringVar(&o.ref, "ref", "", "upstream tag or commit")
 	fs.StringVar(&o.upstream, "upstream", "", "dd-trace-py path or URL")
 	fs.StringVar(&o.mirror, "mirror", defaultMirror, "mirror branch")
+	fs.StringVar(&o.importBranch, "import-branch", "", "land the replay here, for review via a pull request into the mirror")
 	fs.BoolVar(&o.graft, "graft", false, "merge with -s ours")
 	fs.BoolVar(&o.noMerge, "no-merge", false, "do not merge the mirror")
 	fs.BoolVar(&o.noSign, "no-sign", false, "do not sign commits")
