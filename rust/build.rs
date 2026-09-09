@@ -2,23 +2,27 @@ use cmake::Config;
 use std::env;
 use std::path::{Path, PathBuf};
 
-const NATIVE_SOURCES: &[&str] = &[
-    "CMakeLists.txt",
-    "Pyroscope.h",
-    "_memalloc.cpp",
-    "_memalloc_debug.h",
-    "_memalloc_frame.h",
-    "_memalloc_gc_guard.hpp",
-    "_memalloc_heap.cpp",
-    "_memalloc_heap.h",
-    "_memalloc_reentrant.cpp",
-    "_memalloc_reentrant.h",
-    "_memalloc_tb.cpp",
-    "_memalloc_tb.h",
-    "_pymacro.h",
-    "profiling_helpers/frame_accessors.h",
-    "profiling_helpers/linetable_parser.h",
-    "profiling_helpers/version_compat.h",
+// Ours: the CMake project that compiles the vendored sources.
+const PYROSCOPE_SOURCES: &[&str] = &["CMakeLists.txt", "BundleStaticLibrary.cmake", "Pyroscope.h"];
+
+// Vendored from dd-trace-py, kept at their upstream paths so that the mirror
+// branch and this tree agree file for file. Relative to the repository root,
+// see VENDOR.md.
+const VENDORED_SOURCES: &[&str] = &[
+    "ddtrace/profiling/collector/_memalloc.cpp",
+    "ddtrace/profiling/collector/_memalloc_debug.h",
+    "ddtrace/profiling/collector/_memalloc_frame.h",
+    "ddtrace/profiling/collector/_memalloc_gc_guard.hpp",
+    "ddtrace/profiling/collector/_memalloc_heap.cpp",
+    "ddtrace/profiling/collector/_memalloc_heap.h",
+    "ddtrace/profiling/collector/_memalloc_reentrant.cpp",
+    "ddtrace/profiling/collector/_memalloc_reentrant.h",
+    "ddtrace/profiling/collector/_memalloc_tb.cpp",
+    "ddtrace/profiling/collector/_memalloc_tb.h",
+    "ddtrace/profiling/collector/_pymacro.h",
+    "ddtrace/internal/datadog/profiling/profiling_helpers/frame_accessors.h",
+    "ddtrace/internal/datadog/profiling/profiling_helpers/linetable_parser.h",
+    "ddtrace/internal/datadog/profiling/profiling_helpers/version_compat.h",
 ];
 
 fn main() {
@@ -30,7 +34,8 @@ fn main() {
     let cpp_dir = manifest_dir.join("../cpp");
     let cpp_dir = cpp_dir.canonicalize().unwrap();
 
-    rerun_if_native_sources_changed(&manifest_dir, &cpp_dir);
+    let repo_root = manifest_dir.join("..").canonicalize().unwrap();
+    rerun_if_native_sources_changed(&manifest_dir, &cpp_dir, &repo_root);
 
     let mut cfg = Config::new(&cpp_dir);
 
@@ -58,10 +63,15 @@ fn main() {
     }
 }
 
-fn rerun_if_native_sources_changed(manifest_dir: &Path, cpp_dir: &Path) {
-    for source in NATIVE_SOURCES {
-        let path = cpp_dir.join(source);
-        println!("cargo:rerun-if-changed={}", path.display());
+fn rerun_if_native_sources_changed(manifest_dir: &Path, cpp_dir: &Path, repo_root: &Path) {
+    for source in PYROSCOPE_SOURCES {
+        println!("cargo:rerun-if-changed={}", cpp_dir.join(source).display());
+    }
+    for source in VENDORED_SOURCES {
+        println!(
+            "cargo:rerun-if-changed={}",
+            repo_root.join(source).display()
+        );
     }
 
     let ffi_header = manifest_dir.join("include/pyroscope_ffi.h");

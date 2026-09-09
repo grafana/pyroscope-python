@@ -54,7 +54,13 @@ if (NOT TARGET Python3::Python)
     message(STATUS "Python3::Python target not found, using include dirs only")
 endif ()
 
-set(SOURCE_FILES _memalloc.cpp _memalloc_tb.cpp _memalloc_heap.cpp _memalloc_reentrant.cpp
+# The memalloc sources are vendored from dd-trace-py and kept at their upstream
+# paths, so the mirror branch and this tree agree file for file. See VENDOR.md.
+set(DDTRACE_COLLECTOR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../ddtrace/profiling/collector)
+set(DDTRACE_PROFILING_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../ddtrace/internal/datadog/profiling)
+
+set(SOURCE_FILES ${DDTRACE_COLLECTOR_DIR}/_memalloc.cpp ${DDTRACE_COLLECTOR_DIR}/_memalloc_tb.cpp
+        ${DDTRACE_COLLECTOR_DIR}/_memalloc_heap.cpp ${DDTRACE_COLLECTOR_DIR}/_memalloc_reentrant.cpp
         Pyroscope.h)
 
 set(FULL_EXTENSION_NAME "datadog_mem_profiler")
@@ -76,6 +82,10 @@ target_include_directories(
         PRIVATE ${Python3_INCLUDE_DIRS}
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/../rust/include
+        # the vendored sources include each other by bare name, and reach
+        # profiling_helpers/ the way upstream does, from the profiling root
+        ${DDTRACE_COLLECTOR_DIR}
+        ${DDTRACE_PROFILING_DIR}
 )
 
 # Link libraries Python3::Python target might not exist in all build environments (e.g., manylinux) Python modules
