@@ -105,15 +105,21 @@ impl PProfBuilder {
         });
     }
 
+    /// Add one stack trace with an explicit, final sample value.
+    ///
+    /// `value_nanos` is written to the profile as-is. Callers that count
+    /// sampling ticks must multiply by the period first (see [`encode`]);
+    /// callers whose sampler measures CPU time directly pass that measurement
+    /// through (see [`encode_cpu_nanos`]).
     pub fn add_stacktrace(
         &mut self,
         strings: &mut StringTable,
         stacktrace: StackTrace,
-        value: usize,
+        value_nanos: i64,
     ) {
         let mut sample = Sample {
             location_id: vec![],
-            value: vec![value as i64 * self.profile.period],
+            value: vec![value_nanos],
             label: vec![],
         };
         for sf in stacktrace.frames {
@@ -252,14 +258,44 @@ impl PProfBuilder {
     }
 }
 
+/// Encode reports whose values are counts of sampling ticks.
+///
+/// Each tick is worth one sampling period of CPU. This is correct for a sampler
+/// that fires once per period of CPU actually consumed: py-spy, which with
+/// `gil_only` only ever records the thread holding the GIL.
 pub fn encode(reports: Vec<Report>, sample_rate: u32, time_range: TimeRange) -> Profile {
+    encode_inner(reports, sample_rate, time_range, |value, period| {
+        value as i64 * period
+    })
+}
+
+/// Encode reports whose values are already CPU nanoseconds.
+///
+/// Used by samplers that measure per-thread CPU time themselves rather than
+/// inferring it from a tick count. The distinction matters: a wall-clock
+/// sampler that walks every thread produces one tick per thread per period, so
+/// treating those ticks as CPU would report several times more CPU than the
+/// process actually consumed, and would count blocked threads as busy.
+pub fn encode_cpu_nanos(reports: Vec<Report>, sample_rate: u32, time_range: TimeRange) -> Profile {
+    encode_inner(reports, sample_rate, time_range, |value, _period| {
+        value as i64
+    })
+}
+
+fn encode_inner(
+    reports: Vec<Report>,
+    sample_rate: u32,
+    time_range: TimeRange,
+    to_nanos: impl Fn(usize, i64) -> i64,
+) -> Profile {
     let mut strings: StringTable = StringTable::new();
     let mut b = PProfBuilder::new();
     b.set_time_range(&time_range);
     b.set_cpu_profile_type(&mut strings, sample_rate);
+    let period = b.profile.period;
     for report in reports {
         for (stacktrace, value) in report.data {
-            b.add_stacktrace(&mut strings, stacktrace, value);
+            b.add_stacktrace(&mut strings, stacktrace, to_nanos(value, period));
         }
     }
     b.profile.string_table = strings.into_pprof_table();
@@ -437,6 +473,48 @@ pub mod ffi {
     #[repr(C)]
     pub struct FFIInternedString {
         pub index: u32,
+    }
+
+    /// A single CPU stack frame.
+    ///
+    /// Unlike [`FFIFrame`] (the memory path) the strings are not interned.
+    /// The CPU sink builds owned `String`s so it can feed the existing
+    /// `StackBuffer`/`StackFrame` types unchanged, which is what keeps a
+    /// vendored CPU sampler on the same reporting path as py-spy.
+    ///
+    /// The string data is only borrowed for the duration of the
+    /// `pyroscope_cpu_push_sample` call; the sink copies it.
+    #[repr(C)]
+    pub struct FFICpuFrame {
+        pub function_name: FFIStringView,
+        pub file_name: FFIStringView,
+        pub line: c_int,
+    }
+
+    /// One aggregated CPU stack trace.
+    ///
+    /// `frames` is leaf-first, matching py-spy's ordering.
+    #[repr(C)]
+    pub struct FFICpuSample {
+        pub frames: *const FFICpuFrame,
+        pub len: usize,
+        pub pid: u32,
+        /// `pthread_t` of the sampled thread, so thread tag rules keep working.
+        /// Zero when the sampler cannot attribute the sample to a thread.
+        pub thread_id: u64,
+        /// May be empty when the sampler does not know the thread name.
+        pub thread_name: FFIStringView,
+        /// CPU nanoseconds this sample accounts for.
+        ///
+        /// Deliberately CPU time rather than a tick count. A wall-clock sampler
+        /// that walks every thread produces one tick per thread per period; if
+        /// each of those were credited a full period of CPU, the profile would
+        /// report several times more CPU than the process actually consumed and
+        /// would count blocked threads as busy. A sampler that genuinely fires
+        /// once per period of CPU would simply pass `ticks * period` here.
+        ///
+        /// A sample with zero CPU is dropped.
+        pub cpu_nanos: u64,
     }
 }
 

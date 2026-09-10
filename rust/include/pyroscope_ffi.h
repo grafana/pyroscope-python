@@ -11,13 +11,63 @@
 #include <stdlib.h>
 
 typedef struct {
-  uint32_t index;
-} FFIInternedString;
-
-typedef struct {
   const char *data;
   uintptr_t len;
 } FFIStringView;
+
+/*
+ A single CPU stack frame.
+
+ Unlike [`FFIFrame`] (the memory path) the strings are not interned.
+ The CPU sink builds owned `String`s so it can feed the existing
+ `StackBuffer`/`StackFrame` types unchanged, which is what keeps a
+ vendored CPU sampler on the same reporting path as py-spy.
+
+ The string data is only borrowed for the duration of the
+ `pyroscope_cpu_push_sample` call; the sink copies it.
+ */
+typedef struct {
+  FFIStringView function_name;
+  FFIStringView file_name;
+  int line;
+} FFICpuFrame;
+
+/*
+ One aggregated CPU stack trace.
+
+ `frames` is leaf-first, matching py-spy's ordering.
+ */
+typedef struct {
+  const FFICpuFrame *frames;
+  uintptr_t len;
+  uint32_t pid;
+  /*
+   `pthread_t` of the sampled thread, so thread tag rules keep working.
+   Zero when the sampler cannot attribute the sample to a thread.
+   */
+  uint64_t thread_id;
+  /*
+   May be empty when the sampler does not know the thread name.
+   */
+  FFIStringView thread_name;
+  /*
+   CPU nanoseconds this sample accounts for.
+
+   Deliberately CPU time rather than a tick count. A wall-clock sampler
+   that walks every thread produces one tick per thread per period; if
+   each of those were credited a full period of CPU, the profile would
+   report several times more CPU than the process actually consumed and
+   would count blocked threads as busy. A sampler that genuinely fires
+   once per period of CPU would simply pass `ticks * period` here.
+
+   A sample with zero CPU is dropped.
+   */
+  uint64_t cpu_nanos;
+} FFICpuSample;
+
+typedef struct {
+  uint32_t index;
+} FFIInternedString;
 
 typedef struct {
   FFIInternedString function_name;
@@ -37,6 +87,20 @@ typedef struct {
   uintptr_t len;
   FFIHeapSampleValues values;
 } FFISample;
+
+/*
+ Receives one aggregated stack trace from the vendored C++ sampler.
+
+ # Safety
+
+ `sample.frames` must point to `sample.len` initialised `FFICpuFrame`s, and
+ every string view must point to valid UTF-8 for the duration of this call.
+
+ This function allocates and takes a lock, so it must **never** be called
+ from a signal handler. The vendored sampler calls it from its ordinary
+ sampling thread; preserve that when porting another one.
+ */
+void pyroscope_cpu_push_sample(FFICpuSample sample);
 
 extern void memalloc_heap_postfork_child(void);
 

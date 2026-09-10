@@ -21,9 +21,13 @@ env.update({
     "Python3_EXECUTABLE": sys.executable,
 })
 
+# The C++ memalloc profiler and the vendored native CPU profiler both read
+# version-specific CPython internals and assume the GIL, so neither is built
+# for free-threaded interpreters.
 features = []
 if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
     features.append("memory")
+    features.append("cpu_native")
 
 setup(
     rust_extensions=[
