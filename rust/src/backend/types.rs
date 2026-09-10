@@ -127,6 +127,15 @@ pub struct ReportBatch {
     pub data: ReportData,
 }
 
+impl ReportBatch {
+    pub fn is_empty(&self) -> bool {
+        match &self.data {
+            ReportData::Reports(reports) => reports.iter().all(|report| report.data.is_empty()),
+            ReportData::RawPprof(pprof) => pprof.is_empty(),
+        }
+    }
+}
+
 /// Report
 #[derive(Debug, Default, Clone)]
 pub struct Report {
