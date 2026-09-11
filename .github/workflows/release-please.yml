@@ -60,6 +60,7 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.sha }}
           persist-credentials: false
+          submodules: recursive
       - run: make ${{ matrix.make-target }}
       - name: Upload release artifact
         env:
@@ -98,6 +99,7 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.sha }}
           persist-credentials: false
+          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
@@ -133,6 +135,7 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.sha }}
           persist-credentials: false
+          submodules: recursive
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
