@@ -15,16 +15,12 @@
 static const size_t page_size = []() -> size_t {
     auto v = sysconf(_SC_PAGESIZE);
 
-    // Pyroscope patch: dropped a macOS-only getpagesize fallback here.
-    // getpagesize was removed from POSIX in Issue 6, so Darwin's unistd.h
-    // hides its declaration when _POSIX_C_SOURCE >= 200112L -- and our build
-    // sets _POSIX_C_SOURCE=200809L (cpp/CMakeLists.txt), which made this fail
-    // to compile. _DARWIN_C_SOURCE does not help: that guard tests
-    // _POSIX_C_SOURCE directly rather than __DARWIN_C_LEVEL.
-    //
-    // Nothing is lost. sysconf(_SC_PAGESIZE) is mandatory POSIX and cannot
-    // fail on Darwin, where getpagesize reports the same value anyway, and
-    // the 4096 fallback below already covers a nonpositive result.
+#ifdef PL_DARWIN
+    if (v <= 0) {
+        // Fallback on macOS just in case
+        v = getpagesize();
+    }
+#endif
 
     if (v <= 0) {
         fprintf(stderr, "Failed to detect page size, falling back to 4096\n");
