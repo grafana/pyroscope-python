@@ -146,7 +146,11 @@ namespace Pyroscope
         FFIHeapSampleValues values{};
 
     public:
-        explicit Sample(const size_t max_nframes) : max_nframes{max_nframes}
+        /* The leading underscore matches upstream's Sample(SampleType,
+         * unsigned int _max_nframes) and is load-bearing: pyroscope_stack
+         * compiles with -Wshadow (part of upstream's add_ddup_config warning
+         * set), and a parameter named after the member warns there. */
+        explicit Sample(const size_t _max_nframes) : max_nframes{_max_nframes}
         {
             frames.reserve(max_nframes);
         }
@@ -261,9 +265,85 @@ namespace Pyroscope
             });
         }
 
+        /* Everything from here to incr_dropped_frames is a no-op.
+         *
+         * Upstream these all end up as ddog_prof_Label2 entries or as slots in
+         * Datadog::Sample's values array, and are exported together by
+         * ddog_prof_Profile_add2. Pyroscope's FFISample carries only frames
+         * plus the four memory value slots of FFIHeapSampleValues, so there is
+         * nowhere to put a wall time, a CPU time, a timestamp, thread info, a
+         * span id or a task name.
+         *
+         * TODO(Pyroscope): they are kept as no-ops rather than deleted so the
+         * vendored stack sampler compiles unmodified against upstream call
+         * sites. Making the CPU sampler actually produce data means adding the
+         * corresponding fields to FFISample (or a sibling CPU sample struct),
+         * exporting a push entry point next to pyroscope_memprof_push_sample,
+         * and giving PProfBuilder a CPU accumulator -- add_ffi_sample hardcodes
+         * the memory value slots, though set_cpu_profile_type already exists.
+         * Until then the stack sampler walks stacks and throws them away.
+         *
+         * Signatures mirror dd_wrapper/include/sample.hpp so the call sites
+         * need no patching, with one deviation: upstream's push_* and
+         * flush_sample return bool (whether the value matched the configured
+         * sample type mask). Ours return void, which is safe because no caller
+         * in the vendored tree inspects a result. */
+
         void push_threadinfo([[maybe_unused]] int64_t thread_id,
                              [[maybe_unused]] int64_t thread_native_id,
-                             [[maybe_unused]] const char* name)
+                             [[maybe_unused]] const std::string_view name)
+        {
+            // no-op
+        }
+
+        void push_monotonic_ns([[maybe_unused]] int64_t monotonic_ns)
+        {
+            // no-op
+        }
+
+        void push_walltime([[maybe_unused]] int64_t walltime, [[maybe_unused]] int64_t count)
+        {
+            // no-op
+        }
+
+        void push_cputime([[maybe_unused]] int64_t cputime, [[maybe_unused]] int64_t count)
+        {
+            // no-op
+        }
+
+        void push_span_id([[maybe_unused]] uint64_t span_id)
+        {
+            // no-op
+        }
+
+        void push_local_root_span_id([[maybe_unused]] uint64_t local_root_span_id)
+        {
+            // no-op
+        }
+
+        void push_trace_type([[maybe_unused]] const std::string_view trace_type)
+        {
+            // no-op
+        }
+
+        void push_task_name([[maybe_unused]] const std::string_view task_name)
+        {
+            // no-op
+        }
+
+        /* Upstream flush_sample is export_sample followed by clear. This one
+         * must NOT call export_sample, and the difference is not an oversight:
+         * export_sample pushes through pyroscope_memprof_push_sample into the
+         * memory profile builder. Its only caller is the vendored CPU stack
+         * sampler, so forwarding would splice CPU stacks -- carrying all-zero
+         * alloc and heap values, since nothing on that path calls push_alloc or
+         * push_heap -- into every memory pprof we upload.
+         *
+         * It does not clear either. StackRenderer::render_stack_end calls
+         * flush_sample and then SampleManager::drop_sample, and our
+         * drop_sample's storage is reset by the next start_sample; see
+         * dd_wrapper/include/sample_manager.hpp. */
+        void flush_sample() const
         {
             // no-op
         }

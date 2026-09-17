@@ -79,6 +79,12 @@ set(MEMALLOC_SOURCES
 )
 
 set(STACK_SOURCES
+        # Pyroscope patch: the dd_wrapper half. Upstream builds these into a
+        # separate shared libdd_wrapper that stack_v2 links against; we archive
+        # them straight into the stack object library, since the CPU sampler is
+        # their only consumer (see cpp/dd_wrapper/include/profiler_state.hpp).
+        dd_wrapper/src/native_call_tracker.cpp
+        dd_wrapper/src/profiler_state.cpp
         stack/src/echion/danger.cc
         stack/src/echion/frame.cc
         stack/src/echion/greenlets.cc
@@ -120,6 +126,11 @@ target_link_libraries(pyroscope_memalloc PRIVATE pyroscope_common absl::flat_has
 add_library(pyroscope_stack OBJECT ${STACK_SOURCES})
 target_link_libraries(pyroscope_stack PRIVATE pyroscope_common)
 target_include_directories(pyroscope_stack PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/stack/include)
+# The quoted "dd_wrapper/include/..." includes in cpp/stack resolve through
+# pyroscope_common's ${CMAKE_CURRENT_SOURCE_DIR}; this dir is needed only for
+# stack_renderer.cpp's angle-bracket <ddup_interface.hpp>, which upstream picks
+# up from the imported dd_wrapper target's INTERFACE_INCLUDE_DIRECTORIES.
+target_include_directories(pyroscope_stack PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/dd_wrapper/include)
 target_include_directories(pyroscope_stack SYSTEM PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/stack/echion
         # include/util holds cast_to_pyfunc.hpp, whose whole job is a cast that
@@ -135,9 +146,16 @@ target_compile_definitions(pyroscope_stack PRIVATE
 )
 # Upstream's add_ddup_config warning set, which it applies to stack/ddup but NOT
 # to memalloc -- so neither do we, since memalloc's vendored sources have never
-# been vetted against -Wold-style-cast. Omitted on purpose: -Werror (cpp/stack
-# does not compile yet), -ffunction-sections (the cmake crate already adds it),
-# and the -Os/LTO/linker options, which are the cmake crate's business here.
+# been vetted against -Wold-style-cast. Omitted on purpose: -ffunction-sections
+# (the cmake crate already adds it) and the -Os/LTO/linker options, which are
+# the cmake crate's business here.
+#
+# -Werror is also omitted, but no longer because cpp/stack fails to build -- it
+# now compiles warning-free under both Apple clang and gcc 13 with the flags
+# below. The wheels are built in manylinux and musllinux images on older gcc
+# releases whose diagnostics we have not seen, and a warning we cannot reproduce
+# locally would hard-fail a release build rather than the dev loop. Turn it on
+# once CI has been green across the full image matrix for a while.
 target_compile_options(pyroscope_stack PRIVATE -Wshadow -Wnon-virtual-dtor -Wold-style-cast)
 
 # LINKER_LANGUAGE is required: a target whose only sources are TARGET_OBJECTS
