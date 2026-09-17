@@ -15,11 +15,6 @@ typedef struct {
 } FFIInternedString;
 
 typedef struct {
-  const char *data;
-  uintptr_t len;
-} FFIStringView;
-
-typedef struct {
   FFIInternedString function_name;
   FFIInternedString file_name;
   int line;
@@ -38,7 +33,23 @@ typedef struct {
   FFIHeapSampleValues values;
 } FFISample;
 
-FFIInternedString pyroscope_memprof_string_table_intern_string(FFIStringView s);
+/*
+ Collect the current thread's Python stack into `out`.
+
+ Returns the number of frames written, at most
+ `min(max_nframe, out_cap)`, and 0 if the offsets table could not be
+ validated.
+
+ # Safety
+
+ Called from inside the allocator hook, with the GIL held and the
+ reentrancy guard already taken by the caller. `out` must point at
+ `out_cap` writable `FFIFrame`s. Must not allocate through PyMem, touch
+ refcounts, touch `PyErr`, or unwind.
+ */
+uintptr_t pyroscope_memprof_collect_stack(uint16_t max_nframe,
+                                          FFIFrame *out,
+                                          uintptr_t out_cap);
 
 void pyroscope_memprof_push_sample(FFISample sample);
 

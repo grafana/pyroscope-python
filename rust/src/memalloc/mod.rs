@@ -79,3 +79,6 @@ pub mod runtime;
 
 #[cfg(test)]
 pub mod testing;
+
+#[cfg(test)]
+pub mod tests;

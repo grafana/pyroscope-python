@@ -5,3 +5,4 @@
 //! `cargo miri test --lib --no-default-features` covers it.
 
 pub mod pyapi;
+pub mod reader;

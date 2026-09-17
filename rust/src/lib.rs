@@ -39,7 +39,7 @@ use std::{
 
 use crate::backend::{BackendConfig, Tag, ThreadTagsSet};
 use crate::pyroscope::PyroscopeAgentBuilder;
-use pyo3::exceptions::{PyDeprecationWarning, PyValueError};
+use pyo3::exceptions::{PyDeprecationWarning, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
@@ -258,6 +258,16 @@ fn _debug_offsets_selftest(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     Ok(out)
 }
 
+/// Walk the calling thread's Python stack with the memory profiler's walker.
+///
+/// Temporary diagnostic, paired with `scripts/check_frame_walk.py`. Returns
+/// `(function, file, line)` per frame, innermost first.
+#[pyfunction]
+#[pyo3(signature = (max_nframe = 600))]
+fn _debug_walk_stack(max_nframe: u16) -> PyResult<Vec<(String, String, i32)>> {
+    memory::walk_stack(max_nframe).map_err(PyRuntimeError::new_err)
+}
+
 #[pyfunction]
 fn drop_agent(py: Python<'_>) -> bool {
     let dropped = ffikit::stop(py).is_ok();
@@ -304,6 +314,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(add_thread_tag, m)?)?;
     m.add_function(wrap_pyfunction!(remove_thread_tag, m)?)?;
     m.add_function(wrap_pyfunction!(_debug_offsets_selftest, m)?)?;
+    m.add_function(wrap_pyfunction!(_debug_walk_stack, m)?)?;
     register_fork_handlers(m)?;
     register_atexit_handler(m)?;
     Ok(())

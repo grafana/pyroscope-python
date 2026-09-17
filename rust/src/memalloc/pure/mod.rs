@@ -5,6 +5,7 @@
 //! --no-default-features` covers them. Nothing here may reference `pyo3` or
 //! any libpython symbol.
 
+pub mod frames;
 pub mod linetable;
 pub mod offsets;
 pub mod rng;

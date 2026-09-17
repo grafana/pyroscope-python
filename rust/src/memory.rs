@@ -80,6 +80,19 @@ pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u
 /// and the resolved field offsets.
 pub type OffsetsReport = ((u8, u8), Option<String>, Vec<(&'static str, usize)>);
 
+/// What [`walk_stack`] returns: `(function, file, line)` per frame,
+/// innermost first.
+pub type WalkedStack = Vec<(String, String, i32)>;
+
+/// Walk the calling thread's Python stack with the profiler's own walker.
+///
+/// Diagnostic only. `scripts/check_frame_walk.py` compares the result against
+/// `traceback.extract_stack()`, which is the check that a new CPython version
+/// is actually being read correctly.
+pub fn walk_stack(max_nframe: u16) -> Result<WalkedStack, String> {
+    implementation::walk_stack(max_nframe)
+}
+
 /// Diagnostic report on this interpreter's `_Py_DebugOffsets`.
 ///
 /// Returns the CPython version this extension was built for, an error string
@@ -94,8 +107,11 @@ pub fn offsets_report() -> OffsetsReport {
 #[cfg(feature = "memory")]
 mod implementation {
     use crate::encode::pprof::PProfBuilder;
-    use crate::encode::pprof::ffi::{FFIInternedString, FFISample, FFIStringView};
-    use crate::encode::pprof::{StringID, StringTable};
+    use crate::encode::pprof::StringTable;
+    use crate::encode::pprof::ffi::{FFIFrame, FFISample};
+    use crate::memalloc::pure::frames::{FrameSink, walk_frames};
+    use crate::memalloc::runtime::pyapi;
+    use crate::memalloc::runtime::reader::InProcess;
     use crate::utils::TimeRange;
     use lazy_static::lazy_static;
     use prost::Message;
@@ -122,21 +138,84 @@ mod implementation {
         pub fn memalloc_heap_postfork_child();
     }
 
+    /// Writes collected frames into a caller-provided span, interning their
+    /// strings.
+    struct FfiFrameSink<'a> {
+        out: &'a mut [FFIFrame],
+        written: usize,
+        strings: &'a mut StringTable,
+    }
+
+    impl FrameSink for FfiFrameSink<'_> {
+        fn push_frame(&mut self, function: &str, file: &str, line: i32) {
+            // PANIC-OK: `get_mut` returns None rather than panicking when the
+            // span is full, which the frame cap should already have prevented.
+            let Some(slot) = self.out.get_mut(self.written) else {
+                return;
+            };
+            *slot = FFIFrame {
+                function_name: (&self.strings.add(function)).into(),
+                file_name: (&self.strings.add(file)).into(),
+                line,
+            };
+            self.written = self.written.saturating_add(1);
+        }
+
+        fn note_dropped(&mut self) {
+            // The C++ sample adapter has no field for this; the Rust-owned
+            // sample in a later step will.
+        }
+    }
+
+    /// Collect the current thread's Python stack into `out`.
+    ///
+    /// Returns the number of frames written, at most
+    /// `min(max_nframe, out_cap)`, and 0 if the offsets table could not be
+    /// validated.
+    ///
+    /// # Safety
+    ///
+    /// Called from inside the allocator hook, with the GIL held and the
+    /// reentrancy guard already taken by the caller. `out` must point at
+    /// `out_cap` writable `FFIFrame`s. Must not allocate through PyMem, touch
+    /// refcounts, touch `PyErr`, or unwind.
     #[unsafe(no_mangle)]
-    pub extern "C" fn pyroscope_memprof_string_table_intern_string(
-        s: FFIStringView,
-    ) -> FFIInternedString {
-        if s.data.is_null() || s.len == 0 {
-            return StringID::empty_ffi_string();
+    pub extern "C" fn pyroscope_memprof_collect_stack(
+        max_nframe: u16,
+        out: *mut FFIFrame,
+        out_cap: usize,
+    ) -> usize {
+        if out.is_null() || out_cap == 0 {
+            return 0;
         }
-        let unsafe_str = unsafe {
-            let s = std::slice::from_raw_parts(s.data as *const u8, s.len);
-            std::str::from_utf8_unchecked(s)
+        let Ok(offsets) = pyapi::resolve() else {
+            return 0;
         };
-        match STRING_TABLE.lock() {
-            Ok(mut string_table) => (&string_table.add(unsafe_str)).into(),
-            Err(_) => StringID::empty_ffi_string(),
-        }
+
+        let mut strings = STRING_TABLE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        // SAFETY: the caller guarantees `out` points at `out_cap` writable
+        // `FFIFrame`s, and holds the GIL for the duration of this call so the
+        // span cannot be reallocated underneath us.
+        let span = unsafe { std::slice::from_raw_parts_mut(out, out_cap) };
+
+        let budget = max_nframe.min(u16::try_from(out_cap).unwrap_or(u16::MAX));
+        let mut sink = FfiFrameSink {
+            out: span,
+            written: 0,
+            strings: &mut strings,
+        };
+        walk_frames(
+            &InProcess,
+            &offsets,
+            &pyapi::type_addrs(),
+            pyapi::current_thread_state(),
+            budget,
+            &mut sink,
+        );
+        sink.written
     }
     #[unsafe(no_mangle)]
     pub extern "C" fn pyroscope_memprof_push_sample(sample: FFISample) {
@@ -167,9 +246,24 @@ mod implementation {
         pb.reset();
     }
 
+    pub fn walk_stack(max_nframe: u16) -> Result<super::WalkedStack, String> {
+        use crate::memalloc::pure::frames::CollectedFrames;
+
+        let offsets = pyapi::resolve().map_err(|error| pyapi::describe(&error))?;
+        let mut collected = CollectedFrames::default();
+        walk_frames(
+            &InProcess,
+            &offsets,
+            &pyapi::type_addrs(),
+            pyapi::current_thread_state(),
+            max_nframe,
+            &mut collected,
+        );
+        Ok(collected.frames)
+    }
+
     pub fn offsets_report() -> super::OffsetsReport {
         use crate::memalloc::pure::offsets;
-        use crate::memalloc::runtime::pyapi;
 
         let build = (offsets::build_major(), offsets::build_minor());
         match pyapi::resolve() {
@@ -211,6 +305,10 @@ mod implementation {
 
     pub fn dump_pprof(_heap_sample_size: u64, _time_range: &TimeRange) -> Option<Vec<u8>> {
         None
+    }
+
+    pub fn walk_stack(_max_nframe: u16) -> Result<super::WalkedStack, String> {
+        Err("this build does not include memory profiling support".to_owned())
     }
 
     pub fn offsets_report() -> super::OffsetsReport {

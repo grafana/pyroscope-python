@@ -8,7 +8,6 @@
 #include <Python.h>
 
 #include "_memalloc_debug.h"
-#include "_memalloc_gc_guard.hpp"
 #include "_memalloc_heap.h"
 #include "_memalloc_reentrant.h"
 #include "_memalloc_tb.h"
@@ -373,30 +372,13 @@ memalloc_heap_track_invokes_cpython(uint16_t max_nframe, void* ptr, size_t size,
         return;
     }
 
-    /* PR #14550 — realloc+GC use-after-free crash.
-       Prior to Python 3.12, and particularly in Python 3.11, collecting
-       tracebacks while intercepting allocations is prone to crashes. We
-       currently use the C Python API to collect tracebacks, which can
-       do allocations. These allocations can in turn trigger garbage collection,
-       allowing other code to run. In the past we've seen this lead to
-       GIL release and cause corruption in the memory profiler.
-
-       This can also lead to use-after-free crashes. For example, calling
-       realloc to grow a data structure, we can trigger garbage collection which
-       visits the data structure. The underlying reallocaiton will have already
-       happened (we want to track the new address) but the data structure will
-       still point to old memory since our wrapper hasn't returned.
-
-       Python 3.12 doesn't trigger GC during allocation. Instead, a flag is set
-       for GC to run later, at a safe point in the interpreter. But for earlier
-       versions, we disable GC temporarily. This will allow a small, temporary
-       increase in memory usage during sampling. But it is overall cheap (mostly
-       just toggling a boolean) and the alternative is hard-to-diagnose crashes.
-
-       RAII guard automatically re-enables GC when it goes out of scope. */
-#if defined(_PY310_AND_LATER) && !defined(_PY312_AND_LATER)
-    pygc_temp_disable_guard_t gc_guard;
-#endif // defined(_PY310_AND_LATER) && !defined(_PY312_AND_LATER)
+    /* Pyroscope patch: the GC guard that used to sit here only applied to
+       Python 3.10 and 3.11, where collecting a traceback inside the allocator
+       hook could trigger garbage collection and, through it, a GIL release or
+       a use-after-free (dd-trace-py PR #14550). Python 3.12 onwards does not
+       run GC during allocation; it sets a flag for a later safe point. Memory
+       profiling now requires 3.13+, so the guard is unreachable and has been
+       removed along with _memalloc_gc_guard.hpp. */
 
     /* The weight of the allocation is described above, but briefly: it's the
        count of bytes allocated since the last sample, including this one, which

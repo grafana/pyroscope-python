@@ -7,4 +7,3 @@ include cpp/CMakeLists.txt
 include cpp/BundleStaticLibrary.cmake
 recursive-include cpp/ *.h
 recursive-include cpp/ *.cpp
-recursive-include cpp/ *.hpp

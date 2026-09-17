@@ -3,7 +3,7 @@
 //
 #pragma once
 
-#include <string_view>
+#include <cstdint>
 #include <vector>
 
 
@@ -26,22 +26,19 @@ namespace Pyroscope
         }
 
 
-        void push_frame(const std::string_view function_name, const std::string_view file_name, int _, const int line)
+        /* Hand Rust a writable span and let it fill in the frames.
+         *
+         * Rust walks the frame chain and interns the strings, so this side no
+         * longer needs to know anything about CPython's internals. The vector
+         * is sized to the frame cap up front and then truncated to what was
+         * actually written, so no allocation happens after the first sample
+         * reuses a pooled traceback. */
+        void collect_frames(const uint16_t max_nframe)
         {
-            if (frames.size() == max_nframes)
-            {
-                incr_dropped_frames();
-            }
-            else
-            {
-                frames.emplace_back(
-                    FFIFrame{
-                        .function_name = intern_string(function_name),
-                        .file_name = intern_string(file_name),
-                        .line = line,
-                    }
-                );
-            }
+            frames.resize(max_nframes);
+            const uintptr_t written =
+                pyroscope_memprof_collect_stack(max_nframe, frames.data(), frames.size());
+            frames.resize(written);
         }
 
 
@@ -89,25 +86,5 @@ namespace Pyroscope
             });
         }
 
-        void push_threadinfo([[maybe_unused]] int64_t thread_id,
-                             [[maybe_unused]] int64_t thread_native_id,
-                             [[maybe_unused]] const char* name)
-        {
-            // no-op
-        }
-
-        void incr_dropped_frames()
-        {
-            // no-op
-        }
-
-    private:
-        static FFIInternedString intern_string(std::string_view s)
-        {
-            return pyroscope_memprof_string_table_intern_string(FFIStringView{
-                .data = s.data(),
-                .len = s.length()
-            });
-        }
     };
 }

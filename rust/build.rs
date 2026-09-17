@@ -7,8 +7,6 @@ const NATIVE_SOURCES: &[&str] = &[
     "Pyroscope.h",
     "_memalloc.cpp",
     "_memalloc_debug.h",
-    "_memalloc_frame.h",
-    "_memalloc_gc_guard.hpp",
     "_memalloc_heap.cpp",
     "_memalloc_heap.h",
     "_memalloc_reentrant.cpp",
@@ -16,9 +14,6 @@ const NATIVE_SOURCES: &[&str] = &[
     "_memalloc_tb.cpp",
     "_memalloc_tb.h",
     "_pymacro.h",
-    "profiling_helpers/frame_accessors.h",
-    "profiling_helpers/linetable_parser.h",
-    "profiling_helpers/version_compat.h",
 ];
 
 /// CPython minor versions we have a transcribed `_Py_DebugOffsets` mirror for.

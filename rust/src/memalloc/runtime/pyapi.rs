@@ -9,6 +9,7 @@
 //! Resolution happens once, from `start()`, with the GIL held and before any
 //! allocator hook is installed. Nothing here is called from the hook path.
 
+use crate::memalloc::pure::frames::TypeAddrs;
 use crate::memalloc::pure::offsets::{self, Offsets, OffsetsError};
 use std::ffi::c_void;
 use std::sync::OnceLock;
@@ -16,6 +17,23 @@ use std::sync::OnceLock;
 /// The symbol holding `_PyRuntimeState`, whose first member is the offsets
 /// table.
 const PY_RUNTIME_SYMBOL: &[u8] = b"_PyRuntime\0";
+
+/// Type objects the frame walk compares against, rather than calling
+/// `PyCode_Check` / `PyUnicode_Check`, which are macros over the same
+/// comparison.
+const PY_CODE_TYPE_SYMBOL: &[u8] = b"PyCode_Type\0";
+const PY_UNICODE_TYPE_SYMBOL: &[u8] = b"PyUnicode_Type\0";
+
+/// Returns the current thread state without the fatal-error-on-null behaviour
+/// of `PyThreadState_Get`. Public API since 3.13; the underscore-prefixed name
+/// is the older spelling, kept as a fallback.
+const TSTATE_SYMBOLS: &[&[u8]] = &[
+    b"PyThreadState_GetUnchecked\0",
+    b"_PyThreadState_UncheckedGet\0",
+];
+
+/// Signature of `PyThreadState_GetUnchecked`.
+type TStateGet = unsafe extern "C" fn() -> *mut c_void;
 
 /// Cached result of [`resolve`]. Resolution is idempotent and its inputs
 /// cannot change within a process, so it is computed at most once.
@@ -40,6 +58,46 @@ fn lookup(symbol: &[u8]) -> *mut c_void {
 /// Address of `_PyRuntime`, or null if this interpreter does not export it.
 pub fn py_runtime() -> *const u8 {
     lookup(PY_RUNTIME_SYMBOL).cast_const().cast()
+}
+
+/// Cached addresses of `PyCode_Type` and `PyUnicode_Type`.
+static TYPES: OnceLock<TypeAddrs> = OnceLock::new();
+
+/// Cached `PyThreadState_GetUnchecked`, if this interpreter has it.
+static TSTATE_GET: OnceLock<Option<TStateGet>> = OnceLock::new();
+
+/// Resolve the type objects the frame walk compares against.
+///
+/// A zero address means the symbol was missing, which makes the walk reject
+/// every frame rather than decode something unchecked.
+pub fn type_addrs() -> TypeAddrs {
+    *TYPES.get_or_init(|| TypeAddrs {
+        code: lookup(PY_CODE_TYPE_SYMBOL) as usize,
+        unicode: lookup(PY_UNICODE_TYPE_SYMBOL) as usize,
+    })
+}
+
+/// The current thread state, or 0 if it cannot be determined.
+///
+/// Must only be called with the GIL held.
+pub fn current_thread_state() -> usize {
+    let getter = *TSTATE_GET.get_or_init(|| {
+        TSTATE_SYMBOLS.iter().find_map(|symbol| {
+            let address = lookup(symbol);
+            if address.is_null() {
+                return None;
+            }
+            // SAFETY: both symbols name a `PyThreadState *(void)` function in
+            // libpython, so this is the correct signature for either.
+            Some(unsafe { std::mem::transmute::<*mut c_void, TStateGet>(address) })
+        })
+    });
+    match getter {
+        // SAFETY: the caller holds the GIL, which is this function's
+        // documented requirement.
+        Some(get) => unsafe { get() as usize },
+        None => 0,
+    }
 }
 
 /// Resolve and validate the debug-offsets table for this interpreter.
@@ -130,6 +188,20 @@ mod tests {
 
     use super::*;
     use std::mem::size_of;
+
+    /// Type resolution must be total and cached, whatever the test binary is
+    /// linked against (usually no libpython at all).
+    #[test]
+    fn type_resolution_is_total_and_cached() {
+        assert_eq!(type_addrs(), type_addrs());
+    }
+
+    /// With no interpreter in the test binary there is no thread state, and
+    /// asking for one must return 0 rather than crashing.
+    #[test]
+    fn asking_for_a_thread_state_is_safe() {
+        let _ = current_thread_state();
+    }
 
     #[test]
     fn looking_up_a_missing_symbol_returns_null() {
