@@ -2,8 +2,12 @@
 
 #include "constants.hpp"
 #include "dd_wrapper/include/profiler_state.hpp"
-#include "dd_wrapper/include/sample.hpp"
 #include "thread_span_links.hpp"
+
+// Pyroscope patch: use the Rust-backed Pyroscope sample adapter instead of
+// Datadog's sample.hpp implementation. It supplies the no-op stats surface
+// that the sampling loop reports its per-cycle diagnostics through.
+#include "Pyroscope.h"
 
 #include "echion/danger.h"
 #include "echion/echion_sampler.h"
@@ -189,7 +193,8 @@ Sampler::adapt_sampling_interval()
     }
 
     sample_interval_us.store(new_interval);
-    Sample::profile_borrow().stats().set_sampling_interval_us(new_interval);
+    // Pyroscope patch: use Pyroscope::Sample instead of Datadog::Sample.
+    Pyroscope::Sample::profile_borrow().stats().set_sampling_interval_us(new_interval);
 
     // Update the counters for the next iteration
     process_count = new_process_count;
@@ -330,7 +335,8 @@ Sampler::sampling_thread(const uint64_t seq_num)
                 for_each_thread(*echion, interp, [&](PyThreadState* tstate, ThreadInfo& thread) {
                     auto success = thread.sample(*echion, tstate, wall_time_us);
                     if (success) {
-                        Sample::profile_borrow().stats().increment_sample_count();
+                        // Pyroscope patch: use Pyroscope::Sample instead of Datadog::Sample.
+                        Pyroscope::Sample::profile_borrow().stats().increment_sample_count();
                     }
                 });
             });
@@ -408,7 +414,8 @@ Sampler::sampling_thread(const uint64_t seq_num)
                 }
                 auto success = it->second->sample(*echion, &thread_candidates[i], effective_wall_time_us);
                 if (success) {
-                    Sample::profile_borrow().stats().increment_sample_count();
+                    // Pyroscope patch: use Pyroscope::Sample instead of Datadog::Sample.
+                    Pyroscope::Sample::profile_borrow().stats().increment_sample_count();
                 }
             }
         }
@@ -441,7 +448,8 @@ Sampler::sampling_thread(const uint64_t seq_num)
         // could swap cur_profiler_stats between two separate borrow calls, silently
         // shifting some counters (including sample_capture_cpu_time_us) into the next window.
         {
-            auto borrow = Sample::profile_borrow();
+            // Pyroscope patch: use Pyroscope::Sample instead of Datadog::Sample.
+            auto borrow = Pyroscope::Sample::profile_borrow();
 
             borrow.stats().increment_sampling_event_count();
             borrow.stats().set_string_table_count(echion->string_table().size());
@@ -485,7 +493,8 @@ Sampler::set_interval(double new_interval_s)
 {
     microsecond_t new_interval_us = static_cast<microsecond_t>(new_interval_s * 1e6);
     sample_interval_us.store(new_interval_us);
-    Sample::profile_borrow().stats().set_sampling_interval_us(new_interval_us);
+    // Pyroscope patch: use Pyroscope::Sample instead of Datadog::Sample.
+    Pyroscope::Sample::profile_borrow().stats().set_sampling_interval_us(new_interval_us);
 }
 
 Sampler::Sampler()
