@@ -10,6 +10,18 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef enum {
+  PprofBuilderType_Memory,
+  /*
+   py-spy.
+   */
+  PprofBuilderType_Cpu,
+  /*
+   The vendored dd-trace-py stack sampler.
+   */
+  PprofBuilderType_CpuWall,
+} PprofBuilderType;
+
 typedef struct {
   uint32_t index;
 } FFIInternedString;
@@ -21,17 +33,13 @@ typedef struct {
 } FFIFrame;
 
 typedef struct {
-  uintptr_t heap_space;
-  uintptr_t heap_count;
+  int64_t cpu_time;
+  int64_t wall_time;
   uintptr_t alloc_space;
   uintptr_t alloc_count;
-} FFIHeapSampleValues;
-
-typedef struct {
-  const FFIFrame *frames;
-  uintptr_t len;
-  FFIHeapSampleValues values;
-} FFISample;
+  uintptr_t heap_space;
+  uintptr_t heap_count;
+} FFISampleValues;
 
 typedef struct {
   const char *data;
@@ -40,24 +48,11 @@ typedef struct {
 
 extern void memalloc_heap_postfork_child(void);
 
-void pyroscope_memprof_push_sample(FFISample sample);
+void pyroscope_push_sample(PprofBuilderType builder_type,
+                           const FFIFrame *frames,
+                           uintptr_t len,
+                           const FFISampleValues *values);
 
-/*
- Intern `s` and return its index.
-
- Infallible, and callers must not try to detect failure: null data, a zero
- length, and a poisoned lock all yield index 0, which is the index of the
- empty string and therefore a perfectly usable id. This is the one place
- this differs from Datadog's `intern_string`, which returns
- `std::optional` because libdatadog's Profiles Dictionary can fail to
- allocate.
-
- # Safety
-
- `s.data[..s.len]` must be valid UTF-8 and must stay alive for the duration
- of the call. The UTF-8 check is skipped because this runs on the sampling
- path; the strings come from CPython's interned name and filename objects.
- */
 FFIInternedString pyroscope_string_table_intern_string(FFIStringView s);
 
 #endif  /* PYROSCOPE_FFI_H_ */

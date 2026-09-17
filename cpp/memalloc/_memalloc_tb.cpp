@@ -133,7 +133,7 @@ traceback_t::init_sample(size_t size, size_t weighted_size, uint16_t max_nframe)
 // Pyroscope patch: its sample adapter only needs the frame limit; Datadog
 // sample-type flags do not apply to the Rust profile builder.
 traceback_t::traceback_t(size_t size, size_t weighted_size, uint16_t max_nframe)
-  : sample(max_nframe)
+  : sample(max_nframe, PprofBuilderType_Memory)
 {
     if (max_nframe == 0) {
         return;

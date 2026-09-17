@@ -143,48 +143,22 @@ namespace Pyroscope
     {
         std::vector<FFIFrame> frames;
         size_t max_nframes;
-        FFIHeapSampleValues values{};
+        PprofBuilderType builder_type;
+        FFISampleValues values{};
 
     public:
         /* The leading underscore matches upstream's Sample(SampleType,
          * unsigned int _max_nframes) and is load-bearing: pyroscope_stack
          * compiles with -Wshadow (part of upstream's add_ddup_config warning
          * set), and a parameter named after the member warns there. */
-        explicit Sample(const size_t _max_nframes) : max_nframes{_max_nframes}
+        Sample(const size_t _max_nframes, const PprofBuilderType _builder_type)
+            : max_nframes{_max_nframes}, builder_type{_builder_type}
         {
             frames.reserve(max_nframes);
         }
 
 
-        /* Push a frame whose strings are already interned.
-         *
-         * There is deliberately no Pyroscope::intern_function to go with
-         * Pyroscope::intern_string. Upstream needs one because libdatadog's
-         * Profiles Dictionary hands out opaque function handles that its
-         * push_frame consumes; our FFIFrame carries the two string ids
-         * directly, and the Rust encoder already interns functions on exactly
-         * upstream's key -- see PProfBuilder::add_function_mirror, which
-         * dedupes FunctionMirror{name, filename} (and, like upstream, leaves
-         * system_name empty). It also dedupes locations, which upstream does
-         * not intern either: libdatadog dedupes those per profile at add time.
-         *
-         * A process-wide function table would not work the way the string
-         * table does: pprof function ids are per-profile and sequential, and
-         * are written straight into profile.function[].id, so a process-wide
-         * id is not a valid pprof id. Strings get away with it only because
-         * the whole table is copied into every profile.
-         *
-         * This overload is for callers that keep their own id cache and hand
-         * ids in (the vendored stack renderer); the string_view overload below
-         * is for callers that do not (memalloc).
-         *
-         * TODO(Pyroscope): upstream's push_frame also takes a frame address,
-         * which lands in ddog_prof_Location.address. We drop it: FFIFrame has
-         * no field for it and add_location_mirror hardcodes address and
-         * mapping_id to 0. Nothing of value is lost today -- the only caller
-         * that passed a nonzero value used a literal 1 as an undocumented
-         * sentinel for native frames, which stay distinguishable by their name
-         * and filename anyway. */
+
         void push_frame(const string_id function_name, const string_id file_name, const int line)
         {
             if (frames.size() == max_nframes)
@@ -202,13 +176,6 @@ namespace Pyroscope
         }
 
 
-        /* Interning overload, mirroring upstream's
-         * push_frame(name, filename, address, line). The third parameter is
-         * upstream's frame address and is ignored; see the TODO above.
-         *
-         * The capacity check is repeated here rather than left to the overload
-         * above, because interning is not free and is not local: a frame we are
-         * about to drop must not add its strings to the process-wide table. */
         void push_frame(const std::string_view function_name, const std::string_view file_name,
                         [[maybe_unused]] int address, const int line)
         {
@@ -249,45 +216,14 @@ namespace Pyroscope
 
         void clear()
         {
-            values.alloc_space = 0;
-            values.alloc_count = 0;
-            values.heap_space = 0;
-            values.heap_count = 0;
+            values = {};
             frames.clear();
         }
 
         void export_sample() const
         {
-            pyroscope_memprof_push_sample(FFISample{
-                .frames = frames.data(),
-                .len = frames.size(),
-                .values = values,
-            });
+            pyroscope_push_sample(builder_type, frames.data(), frames.size(), &values);
         }
-
-        /* Everything from here to incr_dropped_frames is a no-op.
-         *
-         * Upstream these all end up as ddog_prof_Label2 entries or as slots in
-         * Datadog::Sample's values array, and are exported together by
-         * ddog_prof_Profile_add2. Pyroscope's FFISample carries only frames
-         * plus the four memory value slots of FFIHeapSampleValues, so there is
-         * nowhere to put a wall time, a CPU time, a timestamp, thread info, a
-         * span id or a task name.
-         *
-         * TODO(Pyroscope): they are kept as no-ops rather than deleted so the
-         * vendored stack sampler compiles unmodified against upstream call
-         * sites. Making the CPU sampler actually produce data means adding the
-         * corresponding fields to FFISample (or a sibling CPU sample struct),
-         * exporting a push entry point next to pyroscope_memprof_push_sample,
-         * and giving PProfBuilder a CPU accumulator -- add_ffi_sample hardcodes
-         * the memory value slots, though set_cpu_profile_type already exists.
-         * Until then the stack sampler walks stacks and throws them away.
-         *
-         * Signatures mirror dd_wrapper/include/sample.hpp so the call sites
-         * need no patching, with one deviation: upstream's push_* and
-         * flush_sample return bool (whether the value matched the configured
-         * sample type mask). Ours return void, which is safe because no caller
-         * in the vendored tree inspects a result. */
 
         void push_threadinfo([[maybe_unused]] int64_t thread_id,
                              [[maybe_unused]] int64_t thread_native_id,
@@ -301,14 +237,14 @@ namespace Pyroscope
             // no-op
         }
 
-        void push_walltime([[maybe_unused]] int64_t walltime, [[maybe_unused]] int64_t count)
+        void push_walltime(const int64_t walltime, [[maybe_unused]] const int64_t count)
         {
-            // no-op
+            values.wall_time += walltime;
         }
 
-        void push_cputime([[maybe_unused]] int64_t cputime, [[maybe_unused]] int64_t count)
+        void push_cputime(const int64_t cputime, [[maybe_unused]] const int64_t count)
         {
-            // no-op
+            values.cpu_time += cputime;
         }
 
         void push_span_id([[maybe_unused]] uint64_t span_id)
@@ -331,21 +267,11 @@ namespace Pyroscope
             // no-op
         }
 
-        /* Upstream flush_sample is export_sample followed by clear. This one
-         * must NOT call export_sample, and the difference is not an oversight:
-         * export_sample pushes through pyroscope_memprof_push_sample into the
-         * memory profile builder. Its only caller is the vendored CPU stack
-         * sampler, so forwarding would splice CPU stacks -- carrying all-zero
-         * alloc and heap values, since nothing on that path calls push_alloc or
-         * push_heap -- into every memory pprof we upload.
-         *
-         * It does not clear either. StackRenderer::render_stack_end calls
-         * flush_sample and then SampleManager::drop_sample, and our
-         * drop_sample's storage is reset by the next start_sample; see
-         * dd_wrapper/include/sample_manager.hpp. */
-        void flush_sample() const
+
+        void flush_sample()
         {
-            // no-op
+            export_sample();
+            clear();
         }
 
         void incr_dropped_frames()

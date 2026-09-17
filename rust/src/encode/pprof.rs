@@ -2,14 +2,25 @@ use crate::backend::StackTrace;
 use crate::backend::types::Report;
 use crate::encode::r#gen::google::{Function, Label, Line, Location, Profile, Sample, ValueType};
 use crate::encode::pprof::ffi::FFIInternedString;
-use crate::encode::pprof::ffi::{FFIFrame, FFIHeapSampleValues};
+use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
 use crate::utils::TimeRange;
 use hashbrown::hash_map::EntryRef;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[repr(C)]
+pub enum PprofBuilderType {
+    Memory,
+    /// py-spy.
+    Cpu,
+    /// The vendored dd-trace-py stack sampler.
+    CpuWall,
+}
+
 pub struct PProfBuilder {
+    builder_type: PprofBuilderType,
     profile: Profile,
     functions: HashMap<FunctionMirror, u64>,
     locations: HashMap<LocationMirror, u64>,
@@ -28,15 +39,19 @@ pub struct FunctionMirror {
     pub filename: StringID,
 }
 
-impl Default for PProfBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
+pub fn memory_value_slots(values: &FFISampleValues) -> [i64; 4] {
+    [
+        values.alloc_count as i64,
+        values.alloc_space as i64,
+        values.heap_count as i64,
+        values.heap_space as i64,
+    ]
 }
 
 impl PProfBuilder {
-    pub fn new() -> Self {
+    pub fn new(builder_type: PprofBuilderType) -> Self {
         PProfBuilder {
+            builder_type,
             functions: HashMap::new(),
             locations: HashMap::new(),
             memory_samples: hashbrown::HashMap::new(),
@@ -68,6 +83,7 @@ impl PProfBuilder {
         self.profile.duration_nanos = duration_nanos as i64;
     }
     pub fn set_cpu_profile_type(&mut self, strings: &mut StringTable, sample_rate: u32) {
+        assert_eq!(self.builder_type, PprofBuilderType::Cpu);
         self.profile.sample_type.push(ValueType {
             r#type: strings.add("cpu").pprof(),
             unit: strings.add("nanoseconds").pprof(),
@@ -80,6 +96,7 @@ impl PProfBuilder {
     }
 
     pub fn set_memory_profile_type(&mut self, strings: &mut StringTable, heap_sample_rate: u64) {
+        assert_eq!(self.builder_type, PprofBuilderType::Memory);
         self.profile.sample_type = vec![
             ValueType {
                 r#type: strings.add("alloc_objects").pprof(),
@@ -135,7 +152,7 @@ impl PProfBuilder {
         self.profile.sample.push(sample);
     }
 
-    pub fn add_ffi_sample(&mut self, frames: &[FFIFrame], values: &FFIHeapSampleValues) {
+    pub fn add_ffi_sample(&mut self, frames: &[FFIFrame], sample_values: [i64; 4]) {
         let mut location_ids = std::mem::take(&mut self.ffi_locations_scratch);
         location_ids.clear();
         location_ids.reserve(frames.len());
@@ -149,14 +166,6 @@ impl PProfBuilder {
             location_ids.push(self.add_location_mirror(LocationMirror { function_id, line }));
         }
 
-        // Order must match the sample_type order in set_memory_profile_type:
-        // alloc_objects, alloc_space, inuse_objects, inuse_space.
-        let sample_values = [
-            values.alloc_count as i64,
-            values.alloc_space as i64,
-            values.heap_count as i64,
-            values.heap_space as i64,
-        ];
         match self.memory_samples.entry_ref(location_ids.as_slice()) {
             EntryRef::Occupied(mut entry) => {
                 for (accumulated, value) in entry.get_mut().iter_mut().zip(sample_values) {
@@ -254,7 +263,7 @@ impl PProfBuilder {
 
 pub fn encode(reports: Vec<Report>, sample_rate: u32, time_range: TimeRange) -> Profile {
     let mut strings: StringTable = StringTable::new();
-    let mut b = PProfBuilder::new();
+    let mut b = PProfBuilder::new(PprofBuilderType::Cpu);
     b.set_time_range(&time_range);
     b.set_cpu_profile_type(&mut strings, sample_rate);
     for report in reports {
@@ -420,18 +429,13 @@ pub mod ffi {
     }
 
     #[repr(C)]
-    pub struct FFISample {
-        pub frames: *const FFIFrame,
-        pub len: usize,
-        pub values: FFIHeapSampleValues,
-    }
-
-    #[repr(C)]
-    pub struct FFIHeapSampleValues {
-        pub heap_space: usize,
-        pub heap_count: usize,
+    pub struct FFISampleValues {
+        pub cpu_time: i64,
+        pub wall_time: i64,
         pub alloc_space: usize,
         pub alloc_count: usize,
+        pub heap_space: usize,
+        pub heap_count: usize,
     }
 
     #[repr(C)]
@@ -442,8 +446,11 @@ pub mod ffi {
 
 #[cfg(test)]
 mod tests {
-    use super::ffi::{FFIFrame, FFIHeapSampleValues, FFIInternedString};
-    use super::{FunctionMirror, LocationMirror, PProfBuilder, StringID, StringTable};
+    use super::ffi::{FFIFrame, FFIInternedString, FFISampleValues};
+    use super::{
+        FunctionMirror, LocationMirror, PProfBuilder, PprofBuilderType, StringID, StringTable,
+        memory_value_slots,
+    };
     use crate::utils::TimeRange;
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -462,8 +469,10 @@ mod tests {
         heap_count: usize,
         alloc_space: usize,
         alloc_count: usize,
-    ) -> FFIHeapSampleValues {
-        FFIHeapSampleValues {
+    ) -> FFISampleValues {
+        FFISampleValues {
+            cpu_time: 0,
+            wall_time: 0,
             heap_space,
             heap_count,
             alloc_space,
@@ -473,11 +482,11 @@ mod tests {
 
     #[test]
     fn equal_ffi_stacks_are_accumulated_element_wise() {
-        let mut builder = PProfBuilder::new();
+        let mut builder = PProfBuilder::new(PprofBuilderType::Memory);
         let frames = [frame(1, 2, 10), frame(3, 4, 20)];
 
-        builder.add_ffi_sample(&frames, &values(0, 0, 100, 2));
-        builder.add_ffi_sample(&frames, &values(300, 4, 0, 0));
+        builder.add_ffi_sample(&frames, memory_value_slots(&values(0, 0, 100, 2)));
+        builder.add_ffi_sample(&frames, memory_value_slots(&values(300, 4, 0, 0)));
 
         assert_eq!(builder.memory_samples.len(), 1);
         assert!(builder.profile.sample.is_empty());
@@ -488,12 +497,44 @@ mod tests {
         assert_eq!(builder.profile.sample[0].value, vec![2, 100, 4, 300]);
     }
 
+    /// cpu/wall values are larger than every memory value here, so a leak
+    /// into a memory slot cannot pass for a correct number.
+    #[test]
+    fn memory_projection_reads_only_the_memory_slots() {
+        let mut builder = PProfBuilder::new(PprofBuilderType::Memory);
+        let frames = [frame(1, 2, 10)];
+
+        builder.add_ffi_sample(
+            &frames,
+            memory_value_slots(&FFISampleValues {
+                cpu_time: 7_000_000,
+                wall_time: 9_000_000,
+                alloc_space: 100,
+                alloc_count: 2,
+                heap_space: 300,
+                heap_count: 4,
+            }),
+        );
+
+        builder.flush_memory_samples();
+
+        assert_eq!(builder.profile.sample.len(), 1);
+        // [alloc_objects, alloc_space, inuse_objects, inuse_space]
+        assert_eq!(builder.profile.sample[0].value, vec![2, 100, 4, 300]);
+    }
+
     #[test]
     fn distinct_ffi_stacks_remain_distinct() {
-        let mut builder = PProfBuilder::new();
+        let mut builder = PProfBuilder::new(PprofBuilderType::Memory);
 
-        builder.add_ffi_sample(&[frame(1, 2, 10)], &values(0, 0, 100, 1));
-        builder.add_ffi_sample(&[frame(1, 2, 20)], &values(0, 0, 200, 2));
+        builder.add_ffi_sample(
+            &[frame(1, 2, 10)],
+            memory_value_slots(&values(0, 0, 100, 1)),
+        );
+        builder.add_ffi_sample(
+            &[frame(1, 2, 20)],
+            memory_value_slots(&values(0, 0, 200, 2)),
+        );
         builder.flush_memory_samples();
 
         assert_eq!(builder.profile.sample.len(), 2);
@@ -509,12 +550,15 @@ mod tests {
 
     #[test]
     fn take_profile_and_reset_moves_samples_and_resets() {
-        let mut builder = PProfBuilder::new();
+        let mut builder = PProfBuilder::new(PprofBuilderType::Memory);
         let mut strings = StringTable::new();
         let time_range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
 
         builder.set_memory_profile_type(&mut strings, 512 * 1024);
-        builder.add_ffi_sample(&[frame(1, 2, 10)], &values(300, 2, 100, 1));
+        builder.add_ffi_sample(
+            &[frame(1, 2, 10)],
+            memory_value_slots(&values(300, 2, 100, 1)),
+        );
 
         let profile = builder
             .take_profile_and_reset(&strings, &time_range)
@@ -534,12 +578,12 @@ mod tests {
 
     #[test]
     fn reset_discards_accumulated_ffi_samples() {
-        let mut builder = PProfBuilder::new();
+        let mut builder = PProfBuilder::new(PprofBuilderType::Memory);
         let frames = [frame(1, 2, 10)];
 
-        builder.add_ffi_sample(&frames, &values(0, 0, 100, 1));
+        builder.add_ffi_sample(&frames, memory_value_slots(&values(0, 0, 100, 1)));
         builder.reset();
-        builder.add_ffi_sample(&frames, &values(0, 0, 200, 2));
+        builder.add_ffi_sample(&frames, memory_value_slots(&values(0, 0, 200, 2)));
         builder.flush_memory_samples();
 
         assert_eq!(builder.profile.sample.len(), 1);
@@ -562,7 +606,7 @@ mod tests {
         // resolve in the next, because live tracebacks keep holding them.
         // dump_pprof is feature-gated and needs Python attached, so the
         // property is tested directly here.
-        let mut builder = PProfBuilder::new();
+        let mut builder = PProfBuilder::new(PprofBuilderType::Memory);
         let mut strings = StringTable::new();
         let time_range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
 
@@ -570,7 +614,10 @@ mod tests {
         let len_before = strings.set.len();
 
         builder.set_memory_profile_type(&mut strings, 512 * 1024);
-        builder.add_ffi_sample(&[frame(kept.index, 2, 10)], &values(300, 2, 100, 1));
+        builder.add_ffi_sample(
+            &[frame(kept.index, 2, 10)],
+            memory_value_slots(&values(300, 2, 100, 1)),
+        );
         builder
             .take_profile_and_reset(&strings, &time_range)
             .expect("a profile with one sample");
@@ -590,7 +637,7 @@ mod tests {
         // pushes (name_id, file_id, line) and relies on add_function_mirror
         // deduping on exactly (name, filename) -- upstream's key, modulo
         // system_name, which both sides leave empty.
-        let mut builder = PProfBuilder::new();
+        let mut builder = PProfBuilder::new(PprofBuilderType::Memory);
 
         let a = builder.add_function_mirror(FunctionMirror {
             name: StringID { index: 1 },

@@ -45,7 +45,7 @@ class SampleManager
      * must not leak into the next user. */
     static Sample* start_sample()
     {
-        static thread_local Sample sample{ g_default_max_nframes };
+        static thread_local Sample sample{ g_default_max_nframes, PprofBuilderType_CpuWall };
         sample.clear();
         return &sample;
     }

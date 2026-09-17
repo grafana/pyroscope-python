@@ -72,8 +72,9 @@ pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u
 
 #[cfg(feature = "memory")]
 mod implementation {
-    use crate::encode::pprof::PProfBuilder;
-    use crate::encode::pprof::ffi::FFISample;
+    use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
+    use crate::encode::pprof::memory_value_slots;
+    use crate::encode::pprof::{PProfBuilder, PprofBuilderType};
     use crate::utils::TimeRange;
     use lazy_static::lazy_static;
     use prost::Message;
@@ -82,7 +83,8 @@ mod implementation {
     use std::sync::Mutex;
 
     lazy_static! {
-        static ref PROFILE_BUILDER: Mutex<PProfBuilder> = Mutex::new(PProfBuilder::new());
+        static ref PROFILE_BUILDER: Mutex<PProfBuilder> =
+            Mutex::new(PProfBuilder::new(PprofBuilderType::Memory));
     }
     unsafe extern "C" {
         pub fn memalloc_start(
@@ -97,13 +99,22 @@ mod implementation {
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn pyroscope_memprof_push_sample(sample: FFISample) {
-        if sample.frames.is_null() || sample.len == 0 {
+    pub extern "C" fn pyroscope_push_sample(
+        builder_type: PprofBuilderType,
+        frames: *const FFIFrame,
+        len: usize,
+        values: *const FFISampleValues,
+    ) {
+        if frames.is_null() || len == 0 || values.is_null() {
             return;
         }
-        let frames = unsafe { std::slice::from_raw_parts(sample.frames, sample.len) };
+        if builder_type != PprofBuilderType::Memory {
+            return;
+        }
+        let frames = unsafe { std::slice::from_raw_parts(frames, len) };
+        let values = unsafe { &*values };
         if let Ok(mut pb) = PROFILE_BUILDER.lock() {
-            pb.add_ffi_sample(frames, &sample.values);
+            pb.add_ffi_sample(frames, memory_value_slots(values));
         }
     }
 
