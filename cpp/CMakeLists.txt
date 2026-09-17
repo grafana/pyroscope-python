@@ -54,8 +54,8 @@ if (NOT TARGET Python3::Python)
     message(STATUS "Python3::Python target not found, using include dirs only")
 endif ()
 
-set(SOURCE_FILES _memalloc.cpp _memalloc_tb.cpp _memalloc_heap.cpp _memalloc_reentrant.cpp
-        Pyroscope.h)
+set(SOURCE_FILES memalloc/_memalloc.cpp memalloc/_memalloc_tb.cpp memalloc/_memalloc_heap.cpp memalloc/_memalloc_reentrant.cpp
+        memalloc/Pyroscope.h)
 
 set(FULL_EXTENSION_NAME "datadog_mem_profiler")
 
