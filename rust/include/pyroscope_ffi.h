@@ -15,11 +15,6 @@ typedef struct {
 } FFIInternedString;
 
 typedef struct {
-  const char *data;
-  uintptr_t len;
-} FFIStringView;
-
-typedef struct {
   FFIInternedString function_name;
   FFIInternedString file_name;
   int line;
@@ -38,10 +33,31 @@ typedef struct {
   FFIHeapSampleValues values;
 } FFISample;
 
+typedef struct {
+  const char *data;
+  uintptr_t len;
+} FFIStringView;
+
 extern void memalloc_heap_postfork_child(void);
 
-FFIInternedString pyroscope_memprof_string_table_intern_string(FFIStringView s);
-
 void pyroscope_memprof_push_sample(FFISample sample);
+
+/*
+ Intern `s` and return its index.
+
+ Infallible, and callers must not try to detect failure: null data, a zero
+ length, and a poisoned lock all yield index 0, which is the index of the
+ empty string and therefore a perfectly usable id. This is the one place
+ this differs from Datadog's `intern_string`, which returns
+ `std::optional` because libdatadog's Profiles Dictionary can fail to
+ allocate.
+
+ # Safety
+
+ `s.data[..s.len]` must be valid UTF-8 and must stay alive for the duration
+ of the call. The UTF-8 check is skipped because this runs on the sampling
+ path; the strings come from CPython's interned name and filename objects.
+ */
+FFIInternedString pyroscope_string_table_intern_string(FFIStringView s);
 
 #endif  /* PYROSCOPE_FFI_H_ */

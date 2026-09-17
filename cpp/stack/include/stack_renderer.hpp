@@ -8,10 +8,19 @@
 
 #include "dd_wrapper/include/sample.hpp"
 
+// Pyroscope patch: interned string ids come from Pyroscope's Rust-backed
+// string table instead of libdatadog's Profiles Dictionary.
+#include "Pyroscope.h"
+
 #include "echion/frame.h"
 #include "echion/timing.h"
 
 namespace Datadog {
+
+// Pyroscope patch: upstream gets this typedef from
+// dd_wrapper/include/sample.hpp, where it is an opaque libdatadog handle
+// (ddog_prof_StringId2). Pyroscope's is a { uint32_t index; } struct.
+using string_id = Pyroscope::string_id;
 
 enum class MetricType : std::uint8_t
 {
@@ -21,6 +30,15 @@ enum class MetricType : std::uint8_t
 
 namespace internal {
 
+// Pyroscope patch (pending): PtrPair only works because upstream's string_id is
+// an opaque pointer, which is what makes the static_cast<void*> at the
+// function_id_cache insertions in stack_renderer.cpp legal. Pyroscope's
+// string_id is a { uint32_t index; } struct, so those casts do not compile.
+// Deliberately left as-is until intern_function is shimmed: changing the key
+// type without a Pyroscope function_id is half a change, since the cache's
+// value type is still an undeclared name. When that lands, this key becomes a
+// packed uint64_t -- (name.index << 32) | file.index -- which is smaller, needs
+// no cast, and hashes trivially well.
 struct PtrPair
 {
     void* a;

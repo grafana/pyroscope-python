@@ -101,6 +101,44 @@ namespace Pyroscope
         }
     };
 
+    /* Name the vendored profilers use for an interned string id. Upstream this
+     * is a libdatadog handle typedef (ddog_prof_StringId2) from
+     * dd_wrapper/include/sample.hpp, which Pyroscope does not vendor. Ours is
+     * a plain u32 index into the process-wide table in
+     * rust/src/encode/interner.rs. */
+    using string_id = FFIInternedString;
+
+    /* Stand-in for Datadog's intern_string.
+     *
+     * Interns into one process-wide table shared by every profiler in this
+     * extension, so an id minted here is comparable across the memory
+     * profiler and the vendored CPU stack sampler.
+     *
+     * Infallible, unlike Datadog::intern_string, which returns std::optional
+     * because libdatadog's Profiles Dictionary can fail to allocate. Every
+     * failure mode here -- null or empty input, poisoned table lock -- yields
+     * index 0, the id of the empty string, which is itself a valid id. So
+     * callers must NOT guard the result: there is no failure to handle, and
+     * treating 0 as failure would wrongly discard genuinely empty strings
+     * (an empty module name, say).
+     *
+     * The id stays valid until the table is cleared at agent teardown.
+     * Anything caching ids across samples (see StackRenderer::string_id_cache)
+     * must be discarded whenever the table is, or stale indices will silently
+     * resolve to whatever string later occupies them. The invariant is spelled
+     * out on interner::clear in rust/src/encode/interner.rs.
+     *
+     * `inline` is required: this header is included from several translation
+     * units (memalloc's _memalloc_tb.h, the stack sampler's sampler.cpp and
+     * stack_renderer.cpp), and without it each one emits the symbol. */
+    inline string_id intern_string(const std::string_view s)
+    {
+        return pyroscope_string_table_intern_string(FFIStringView{
+            .data = s.data(),
+            .len = s.length()
+        });
+    }
+
     class Sample
     {
         std::vector<FFIFrame> frames;
@@ -193,15 +231,6 @@ namespace Pyroscope
         static ProfileBorrow profile_borrow()
         {
             return ProfileBorrow{};
-        }
-
-    private:
-        static FFIInternedString intern_string(std::string_view s)
-        {
-            return pyroscope_memprof_string_table_intern_string(FFIStringView{
-                .data = s.data(),
-                .len = s.length()
-            });
         }
     };
 }

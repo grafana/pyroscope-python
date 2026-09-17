@@ -545,4 +545,41 @@ mod tests {
         assert_eq!(builder.profile.sample.len(), 1);
         assert_eq!(builder.profile.sample[0].value, vec![2, 200, 0, 0]);
     }
+
+    #[test]
+    fn new_string_table_interns_empty_at_zero() {
+        // Every "interning failed, so index 0" path in encode::interner (and
+        // the FFI contract documented on Pyroscope::intern_string) depends on
+        // index 0 being the empty string.
+        let mut strings = StringTable::new();
+        assert_eq!(strings.add("").index, 0);
+    }
+
+    #[test]
+    fn take_profile_and_reset_leaves_the_string_table_intact() {
+        // The master table is shared by every profiler and must survive every
+        // upload window: indices handed out to C++ in one window still have to
+        // resolve in the next, because live tracebacks keep holding them.
+        // dump_pprof is feature-gated and needs Python attached, so the
+        // property is tested directly here.
+        let mut builder = PProfBuilder::new();
+        let mut strings = StringTable::new();
+        let time_range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
+
+        let kept = strings.add("some.module:some_function");
+        let len_before = strings.set.len();
+
+        builder.set_memory_profile_type(&mut strings, 512 * 1024);
+        builder.add_ffi_sample(&[frame(kept.index, 2, 10)], &values(300, 2, 100, 1));
+        builder
+            .take_profile_and_reset(&strings, &time_range)
+            .expect("a profile with one sample");
+
+        // The table only ever grows here. set_memory_profile_type adds seven
+        // distinct strings -- alloc_objects, alloc_space, inuse_objects,
+        // inuse_space, count, bytes, space -- with "count" and "bytes" reused
+        // across the four value types rather than re-added.
+        assert_eq!(strings.set.len(), len_before + 7);
+        assert_eq!(strings.add("some.module:some_function").index, kept.index);
+    }
 }

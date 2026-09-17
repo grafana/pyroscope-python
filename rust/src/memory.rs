@@ -42,7 +42,7 @@ pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
             (0, None) => Ok(()),
             (0, Some(err)) => {
                 implementation::memalloc_stop();
-                implementation::clear_state();
+                implementation::clear_samples();
                 Err(err)
             }
             (_, Some(err)) => Err(err),
@@ -57,7 +57,7 @@ pub fn stop(_py: Python<'_>) {
     unsafe {
         implementation::memalloc_stop();
     }
-    implementation::clear_state();
+    implementation::clear_samples();
 }
 
 pub fn postfork_child() {
@@ -73,18 +73,13 @@ pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u
 #[cfg(feature = "memory")]
 mod implementation {
     use crate::encode::pprof::PProfBuilder;
-    use crate::encode::pprof::ffi::{FFIInternedString, FFISample, FFIStringView};
-    use crate::encode::pprof::{StringID, StringTable};
+    use crate::encode::pprof::ffi::FFISample;
     use crate::utils::TimeRange;
     use lazy_static::lazy_static;
     use prost::Message;
     use pyo3::prelude::*;
     use std::ops::{Deref, DerefMut};
     use std::sync::Mutex;
-
-    lazy_static! {
-        static ref STRING_TABLE: Mutex<StringTable> = Mutex::new(StringTable::new());
-    }
 
     lazy_static! {
         static ref PROFILE_BUILDER: Mutex<PProfBuilder> = Mutex::new(PProfBuilder::new());
@@ -102,22 +97,6 @@ mod implementation {
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn pyroscope_memprof_string_table_intern_string(
-        s: FFIStringView,
-    ) -> FFIInternedString {
-        if s.data.is_null() || s.len == 0 {
-            return StringID::empty_ffi_string();
-        }
-        let unsafe_str = unsafe {
-            let s = std::slice::from_raw_parts(s.data as *const u8, s.len);
-            std::str::from_utf8_unchecked(s)
-        };
-        match STRING_TABLE.lock() {
-            Ok(mut string_table) => (&string_table.add(unsafe_str)).into(),
-            Err(_) => StringID::empty_ffi_string(),
-        }
-    }
-    #[unsafe(no_mangle)]
     pub extern "C" fn pyroscope_memprof_push_sample(sample: FFISample) {
         if sample.frames.is_null() || sample.len == 0 {
             return;
@@ -128,20 +107,23 @@ mod implementation {
         }
     }
 
-    /// Discard all interned strings and buffered samples.
+    /// Discard the samples buffered for the next memory profile.
     ///
     /// Called from `stop()` after the allocator hooks are uninstalled. Every
     /// hook runs with the GIL held and `stop()` itself holds the GIL, so no
-    /// hook can be mid-push here and no live C++ traceback references the
-    /// interned string IDs anymore. Without this, samples buffered by a
-    /// stopped session (or inherited from the parent after fork, since the
-    /// fork-child handler also goes through `stop()`) would leak into the
-    /// next session's first profile, and the string table would grow for the
-    /// lifetime of the process.
-    pub fn clear_state() {
-        let mut st = STRING_TABLE.lock().unwrap_or_else(|e| e.into_inner());
-        *st = StringTable::new();
-        drop(st);
+    /// hook can be mid-push here. Without this, samples buffered by a stopped
+    /// session (or inherited from the parent after fork, since the fork-child
+    /// handler also goes through `stop()`) would leak into the next session's
+    /// first profile.
+    ///
+    /// Note the asymmetry with the shared string table
+    /// (`crate::encode::interner`): interned strings are deliberately *not*
+    /// dropped here. This is also reached from `start()`'s rollback path,
+    /// where no agent-level teardown follows, and the table is shared with
+    /// profilers this module knows nothing about. Leaving strings in the table
+    /// is always safe -- an index only becomes stale when the table is
+    /// cleared, which is `ffikit::stop_profilers`' job.
+    pub fn clear_samples() {
         let mut pb = PROFILE_BUILDER.lock().unwrap_or_else(|e| e.into_inner());
         pb.reset();
     }
@@ -153,7 +135,7 @@ mod implementation {
             unsafe {
                 memalloc_heap_py();
             }
-            let st = STRING_TABLE.lock();
+            let st = crate::encode::interner::string_table().lock();
             let pb = PROFILE_BUILDER.lock();
             match (st, pb) {
                 (Ok(mut st), Ok(mut pb)) => {
@@ -175,7 +157,7 @@ mod implementation {
 
     pub unsafe fn memalloc_heap_postfork_child() {}
 
-    pub fn clear_state() {}
+    pub fn clear_samples() {}
 
     pub fn dump_pprof(_heap_sample_size: u64, _time_range: &TimeRange) -> Option<Vec<u8>> {
         None

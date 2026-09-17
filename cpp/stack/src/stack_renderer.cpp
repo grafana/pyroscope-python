@@ -8,6 +8,10 @@
 
 #include "echion/echion_sampler.h"
 #include "echion/strings.h"
+
+// Pyroscope patch: intern strings into Pyroscope's Rust-backed string table
+// instead of libdatadog's Profiles Dictionary.
+#include "Pyroscope.h"
 #include <ddup_interface.hpp>
 #include <unordered_map>
 
@@ -155,11 +159,9 @@ StackRenderer::render_frame(Frame& frame)
             name_str = missing_name;
         }
 
-        auto maybe_interned_name_id = Datadog::intern_string(name_str);
-        if (!maybe_interned_name_id) {
-            return;
-        }
-        name_id = *maybe_interned_name_id;
+        // Pyroscope patch: Pyroscope::intern_string is infallible (index 0, the
+        // empty string, on any failure), so upstream's nullopt guard is gone.
+        name_id = Pyroscope::intern_string(name_str);
         string_id_cache.insert({ frame.name, name_id });
     } else {
         name_id = maybe_name_id->second;
@@ -176,11 +178,8 @@ StackRenderer::render_frame(Frame& frame)
             filename_str = missing_filename;
         }
 
-        auto maybe_interned_filename_id = Datadog::intern_string(filename_str);
-        if (!maybe_interned_filename_id) {
-            return;
-        }
-        filename_id = *maybe_interned_filename_id;
+        // Pyroscope patch: infallible; see the name_id case above.
+        filename_id = Pyroscope::intern_string(filename_str);
         string_id_cache.insert({ frame.filename, filename_id });
     } else {
         filename_id = maybe_filename_id->second;
@@ -209,17 +208,10 @@ StackRenderer::render_native_frame(const std::string& name, const std::string& m
         return;
     }
 
-    auto maybe_name_id = Datadog::intern_string(name);
-    if (!maybe_name_id) {
-        return;
-    }
-    auto name_id = *maybe_name_id;
-
-    auto maybe_filename_id = Datadog::intern_string(module);
-    if (!maybe_filename_id) {
-        return;
-    }
-    auto filename_id = *maybe_filename_id;
+    // Pyroscope patch: infallible; see render_frame. Guarding on index 0 here
+    // would drop native frames that legitimately have an empty module.
+    auto name_id = Pyroscope::intern_string(name);
+    auto filename_id = Pyroscope::intern_string(module);
 
     // Reuse the same function_id_cache as render_frame to avoid redundant intern_function calls
     function_id fid;
