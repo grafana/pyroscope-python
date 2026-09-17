@@ -55,11 +55,34 @@ if (NOT TARGET Python3::Python)
 endif ()
 
 set(SOURCE_FILES memalloc/_memalloc.cpp memalloc/_memalloc_tb.cpp memalloc/_memalloc_heap.cpp memalloc/_memalloc_reentrant.cpp
-        memalloc/Pyroscope.h)
+        memalloc/Pyroscope.h
+
+        stack/src/echion/danger.cc
+        stack/src/echion/frame.cc
+        stack/src/echion/greenlets.cc
+        stack/src/echion/interp.cc
+        stack/src/echion/long.cc
+        stack/src/echion/mirrors.cc
+        stack/src/echion/stack_chunk.cc
+        stack/src/echion/stacks.cc
+        stack/src/echion/strings.cc
+        stack/src/echion/tasks.cc
+        stack/src/echion/threads.cc
+        stack/src/echion/vm.cc
+        stack/src/sampler.cpp
+        stack/src/stack.cpp
+        stack/src/stack_renderer.cpp
+        stack/src/thread_span_links.cpp
+)
 
 set(FULL_EXTENSION_NAME "datadog_mem_profiler")
 
 add_library(${FULL_EXTENSION_NAME} STATIC ${SOURCE_FILES})
+if(APPLE)
+    target_compile_definitions(${FULL_EXTENSION_NAME} PRIVATE PL_DARWIN)
+elseif(UNIX)
+    target_compile_definitions(${FULL_EXTENSION_NAME} PRIVATE PL_LINUX)
+endif()
 
 
 # Set properties to prevent CMake from adding any prefix or suffix
@@ -76,6 +99,8 @@ target_include_directories(
         PRIVATE ${Python3_INCLUDE_DIRS}
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/../rust/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/stack/echion
+        ${CMAKE_CURRENT_SOURCE_DIR}/stack/include
 )
 
 # Link libraries Python3::Python target might not exist in all build environments (e.g., manylinux) Python modules
