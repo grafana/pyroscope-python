@@ -1,3 +1,4 @@
+use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
 use crate::utils::TimeRange;
 #[cfg(feature = "memory")]
 use pyo3::exceptions::PyRuntimeError;
@@ -66,6 +67,10 @@ pub fn postfork_child() {
     }
 }
 
+pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
+    implementation::push_sample(frames, values);
+}
+
 pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u8>> {
     implementation::dump_pprof(heap_sample_size, time_range)
 }
@@ -98,21 +103,7 @@ mod implementation {
         pub fn memalloc_heap_postfork_child();
     }
 
-    #[unsafe(no_mangle)]
-    pub extern "C" fn pyroscope_push_sample(
-        builder_type: PprofBuilderType,
-        frames: *const FFIFrame,
-        len: usize,
-        values: *const FFISampleValues,
-    ) {
-        if frames.is_null() || len == 0 || values.is_null() {
-            return;
-        }
-        if builder_type != PprofBuilderType::Memory {
-            return;
-        }
-        let frames = unsafe { std::slice::from_raw_parts(frames, len) };
-        let values = unsafe { &*values };
+    pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
         if let Ok(mut pb) = PROFILE_BUILDER.lock() {
             pb.add_ffi_sample(frames, memory_value_slots(values));
         }
@@ -162,11 +153,14 @@ mod implementation {
 
 #[cfg(not(feature = "memory"))]
 mod implementation {
+    use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
     use crate::utils::TimeRange;
 
     pub unsafe fn memalloc_stop() {}
 
     pub unsafe fn memalloc_heap_postfork_child() {}
+
+    pub fn push_sample(_frames: &[FFIFrame], _values: &FFISampleValues) {}
 
     pub fn clear_samples() {}
 

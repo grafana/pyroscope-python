@@ -1,3 +1,4 @@
+mod ffi;
 mod memory;
 mod pyspy_backend;
 

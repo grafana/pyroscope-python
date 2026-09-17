@@ -21,10 +21,10 @@ the `PprofBuilderType` it was constructed with, and `flush_sample()` forwards to
 because the type tells Rust which profile the sample belongs to -- it is the
 memory *projection*, not the value struct, that was ever memory-specific.
 
-`pyroscope_push_sample` then early-returns for anything but
-`PprofBuilderType::Memory`, so a CPU sample dies one frame later than it used
-to. (In practice `flush_sample` never runs yet either, because nothing imports
-the extension -- see "Nothing imports the extension" below.)
+`pyroscope_push_sample` dispatches on that type, and the `Cpu`/`CpuWall` arm is
+an empty no-op, so a CPU sample dies one frame later than it used to. (In
+practice `flush_sample` never runs yet either, because nothing imports the
+extension -- see "Nothing imports the extension" below.)
 
 Still to do, in order:
 
@@ -35,9 +35,12 @@ Still to do, in order:
   the sample tally is whatever the encoder counts merging into a pprof row.
 - ~~**A push entry point carrying the profile type.**~~ Done.
   `pyroscope_push_sample` replaces `pyroscope_memprof_push_sample` and takes a
-  `PprofBuilderType` first argument. One caveat: it still lives in
-  `rust/src/memory.rs` behind the `memory` feature, and a cpu/wall sink must
-  not -- see section 3. Moving it out is the next step.
+  `PprofBuilderType` first argument. It lives in `rust/src/ffi.rs`, ungated, and
+  is the only place that handles the raw pointers; it dispatches to
+  `memory::push_sample` on `Memory` and no-ops on `Cpu`/`CpuWall`. The dispatch
+  is an exhaustive `match`, so adding a variant without a sink is a compile
+  error rather than a silently dropped profile -- give `CpuWall` its arm here
+  once the accumulator below exists.
 - **A CPU accumulator in `PProfBuilder`.** `add_ffi_sample` takes already
   projected `[i64; 4]` slots, so it can be reused rather than duplicated; what
   a cpu/wall profile needs is its own projection alongside
@@ -230,11 +233,12 @@ and memalloc does not get this warning set upstream either.
 
 `rust/build.rs` early-returns under `cfg!(not(feature = "memory"))`, and
 `setup.py` only sets that feature when `Py_GIL_DISABLED != 1` -- so on
-free-threaded builds no C++ is compiled at all, CPU sampler included. The
-interner was already moved out of `crate::memory` into
-`rust/src/encode/interner.rs` in anticipation of exactly this. Decide whether
-the CPU sampler ships on free-threaded builds and, if so, split the feature gate
-so the stack half builds without `memory`.
+free-threaded builds no C++ is compiled at all, CPU sampler included. Both FFI
+entry points are already out of `crate::memory` and ungated in anticipation of
+exactly this: the interner in `rust/src/encode/interner.rs` and the push path in
+`rust/src/ffi.rs`. What is still behind the gate is the memory accumulator and
+dump path. Decide whether the CPU sampler ships on free-threaded builds and, if
+so, split the feature gate so the stack half builds without `memory`.
 
 ## 4. TODOs inherited from the vendored code
 

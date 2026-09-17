@@ -46,12 +46,12 @@ typedef struct {
   uintptr_t len;
 } FFIStringView;
 
-extern void memalloc_heap_postfork_child(void);
-
 void pyroscope_push_sample(PprofBuilderType builder_type,
                            const FFIFrame *frames,
                            uintptr_t len,
                            const FFISampleValues *values);
+
+extern void memalloc_heap_postfork_child(void);
 
 FFIInternedString pyroscope_string_table_intern_string(FFIStringView s);
 
