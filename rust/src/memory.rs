@@ -19,9 +19,14 @@ pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
     #[cfg(not(feature = "memory"))]
     {
         let _ = py;
+        // Built without the `memory` feature. setup.py enables it only on
+        // CPython 3.13+ with the GIL enabled; see MEMORY_MIN_PYTHON there for
+        // why. Accept and ignore rather than failing, so a caller passing
+        // mem_enabled still gets CPU profiling.
         log::warn!(
             target: "pyroscope-python",
-            "Memory profiling was enabled, but this build does not include memory profiling support; mem_enabled will be ignored."
+            "Memory profiling was enabled, but this build does not include memory profiling support \
+             (it requires CPython 3.13+ with the GIL enabled); mem_enabled will be ignored."
         );
         Ok(())
     }

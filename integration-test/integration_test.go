@@ -24,6 +24,8 @@ const (
 	cpuProfileTypeID              = "process_cpu:cpu:nanoseconds:cpu:nanoseconds"
 	memoryAllocSpaceProfileTypeID = "memory:alloc_space:bytes:space:bytes"
 	memoryInuseSpaceProfileTypeID = "memory:inuse_space:bytes:space:bytes"
+
+	defaultPythonVersion = "3.11"
 )
 
 type profileConfig struct {
@@ -54,6 +56,8 @@ func TestPythonNonCPUIntegrationSuites(t *testing.T) {
 }
 
 func testPythonMemoryProfiler(t *testing.T) {
+	skipBelowPython(t, 3, 13)
+
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -373,7 +377,7 @@ func pythonImage() string {
 	}
 	return fmt.Sprintf(
 		"python:%s-%s",
-		envOrDefault("PYTHON_VERSION", "3.11"),
+		envOrDefault("PYTHON_VERSION", defaultPythonVersion),
 		pythonImageSuffix(),
 	)
 }
@@ -402,6 +406,32 @@ func randomHex(t *testing.T, n int) string {
 		t.Fatalf("failed to generate random canary: %v", err)
 	}
 	return hex.EncodeToString(b)
+}
+
+// skipBelowPython skips the test when the interpreter under test is older than
+// major.minor.
+//
+// Memory profiling requires CPython 3.13+ (see the feature gate in setup.py),
+// and below that mem_enabled is accepted and ignored. A memory-only workload
+// would therefore upload nothing at all, so without this the test would poll
+// for its full timeout before failing.
+//
+// PYTHON_IMAGE overrides the image wholesale, so its version cannot be derived
+// from PYTHON_VERSION; in that case the test is left to run.
+func skipBelowPython(t *testing.T, major, minor int) {
+	t.Helper()
+	if os.Getenv("PYTHON_IMAGE") != "" {
+		return
+	}
+	version := envOrDefault("PYTHON_VERSION", defaultPythonVersion)
+	var gotMajor, gotMinor int
+	if _, err := fmt.Sscanf(version, "%d.%d", &gotMajor, &gotMinor); err != nil {
+		t.Fatalf("could not parse PYTHON_VERSION %q: %v", version, err)
+	}
+	if gotMajor < major || (gotMajor == major && gotMinor < minor) {
+		t.Skipf("needs python >= %d.%d, have %s; rerun with PYTHON_VERSION=%d.%d",
+			major, minor, version, major, minor)
+	}
 }
 
 func envOrDefault(key, defaultValue string) string {

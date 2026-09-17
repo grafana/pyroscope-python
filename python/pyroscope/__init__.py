@@ -29,6 +29,10 @@ def configure(
         http_headers=None,
         line_no=LineNo.LastInstruction,
         upload_interval=10,
+        # Memory profiling requires CPython 3.13+ with the GIL enabled. On
+        # older versions and on free-threaded builds the wheel is built without
+        # memory profiling support, so mem_enabled (and the other mem_* options)
+        # are ignored and a warning is logged; CPU profiling is unaffected.
         mem_enabled=False,
         mem_max_nframe=128,
         mem_heap_sample_size=512 * 1024,

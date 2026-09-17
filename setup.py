@@ -21,8 +21,28 @@ env.update({
     "Python3_EXECUTABLE": sys.executable,
 })
 
+# Memory profiling requires CPython 3.13+ with the GIL enabled.
+#
+# The C++ memalloc profiler still works on 3.10-3.12 today; the floor is set
+# ahead of the in-progress rewrite to Rust. Rust cannot include CPython's
+# internal headers, so the Rust profiler locates the interpreter frame and code
+# object fields through _Py_DebugOffsets -- the self-describing offset table
+# that is the first member of _PyRuntimeState. CPython only exports it from
+# 3.13 onwards, and there is no equivalent on 3.10-3.12.
+#
+# Free-threaded builds are excluded because the allocator hook relies on
+# running with the GIL held; see the #error in cpp/_memalloc_frame.h.
+#
+# With the feature off, mem_enabled is accepted and ignored with a warning (see
+# memory::start in rust/src/memory.rs), so those wheels still build and still
+# do CPU profiling.
+MEMORY_MIN_PYTHON = (3, 13)
+
 features = []
-if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
+if (
+    sys.version_info >= MEMORY_MIN_PYTHON
+    and sysconfig.get_config_var("Py_GIL_DISABLED") != 1
+):
     features.append("memory")
 
 setup(
