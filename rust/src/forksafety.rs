@@ -251,3 +251,198 @@ mod tests {
         assert_send_sync::<LeakableMutex<usize>>();
     }
 }
+
+/// A `static` owning a `Box<T>` that a forked child abandons rather than
+/// frees.
+///
+/// The sibling of [`LeakableMutex`], for state that is not behind a mutex
+/// because something else already serialises it. The memory profiler's heap
+/// tracker is the motivating case: it is only ever touched from an allocator
+/// hook with the GIL held, so a mutex would add an atomic round trip to the
+/// hottest path in the process and, worse, a self-deadlock hazard. If anything
+/// on the sampling path ever allocated through PyMem, re-entering while a
+/// `MutexGuard` was alive would hang the interpreter with the GIL held.
+/// Publishing through an [`AtomicPtr`] instead makes the same mistake degrade
+/// to a skipped sample.
+///
+/// [`leak`](LeakablePtr::leak) exists for the same reason as
+/// `LeakableMutex::leak_and_reset`: after `fork()` the child must not drop
+/// state inherited from the parent. Here that matters twice over, because
+/// dropping frees through libc and **macOS libmalloc is not fork-safe** in a
+/// `fork()`-without-`exec()` child.
+///
+/// # How to use it
+///
+/// ```ignore
+/// static TRACKER: LeakablePtr<Tracker> = LeakablePtr::new();
+///
+/// // Publish (once, at start-up):
+/// TRACKER.publish(Box::new(Tracker::new()));
+///
+/// // Use, from anywhere:
+/// let ptr = TRACKER.load(Ordering::Acquire);
+/// if !ptr.is_null() { /* ... */ }
+///
+/// // Tear down, dropping the value:
+/// let old = TRACKER.take();
+///
+/// // In the post-fork child hook: abandon it instead.
+/// TRACKER.leak();
+/// ```
+///
+/// The accessors take `&'static self` for the same reason as
+/// [`LeakableMutex`]: this type is only meant to live in a `static`.
+// The only user is the memory profiler's heap tracker, which is behind the
+// `memory` feature. Keep the type compiled in every configuration so it is
+// type-checked and its tests run either way.
+#[cfg_attr(not(feature = "memory"), allow(dead_code))]
+pub struct LeakablePtr<T> {
+    state: AtomicPtr<T>,
+    // AtomicPtr does not inherit T's auto-traits. Model ownership of the
+    // pointee so LeakablePtr has the same ones as Box<T>.
+    _marker: PhantomData<Box<T>>,
+}
+
+#[cfg_attr(not(feature = "memory"), allow(dead_code))]
+impl<T> LeakablePtr<T> {
+    /// Creates an empty `LeakablePtr`.
+    ///
+    /// `const`, so it can be used in a `static`.
+    pub const fn new() -> Self {
+        Self {
+            state: AtomicPtr::new(std::ptr::null_mut()),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Publishes `value`, returning the raw pointer now stored.
+    ///
+    /// A `Release` store, so everything written into `value` before publishing
+    /// is visible to any thread that subsequently loads the pointer with
+    /// `Acquire`. Any previously published pointer is returned to the caller
+    /// to dispose of.
+    #[must_use = "the previously published pointer must be dropped or leaked"]
+    pub fn publish(&'static self, value: Box<T>) -> *mut T {
+        self.state.swap(Box::into_raw(value), Ordering::AcqRel)
+    }
+
+    /// Loads the published pointer, or null if there is none.
+    ///
+    /// Callers must use `Acquire` to pair with [`publish`](LeakablePtr::publish).
+    pub fn load(&'static self, ordering: Ordering) -> *mut T {
+        self.state.load(ordering)
+    }
+
+    /// Unpublishes and returns the current pointer, so the caller can drop it.
+    ///
+    /// `AcqRel`, so writes made through the pointer by other threads are
+    /// visible to whoever drops it.
+    #[must_use = "the returned pointer must be dropped or leaked"]
+    pub fn take(&'static self) -> *mut T {
+        self.state.swap(std::ptr::null_mut(), Ordering::AcqRel)
+    }
+
+    /// Abandons the published value without dropping it.
+    ///
+    /// Intended only for a post-fork child hook. The allocation is
+    /// deliberately leaked: freeing memory inherited from the parent is the
+    /// exact hazard this exists to avoid.
+    #[cfg(not(miri))]
+    pub fn leak(&'static self) {
+        let _ = self.state.swap(std::ptr::null_mut(), Ordering::AcqRel);
+    }
+
+    /// Miri-only variant of [`leak`](LeakablePtr::leak) (see that item for the
+    /// full contract). It hands back the abandoned allocation so tests can
+    /// reclaim it and keep Miri's leak checker happy, or `None` if nothing was
+    /// published.
+    #[cfg(miri)]
+    #[must_use = "reclaim the returned allocation or Miri reports a leak"]
+    pub fn leak(&'static self) -> Option<std::ptr::NonNull<T>> {
+        std::ptr::NonNull::new(self.state.swap(std::ptr::null_mut(), Ordering::AcqRel))
+    }
+}
+
+// No `Drop` impl, for the same reason as LeakableMutex: `publish` takes
+// `&'static self`, so an instance that could be dropped can never have
+// published anything.
+
+#[cfg(test)]
+mod leakable_ptr_tests {
+    use super::LeakablePtr;
+    use std::sync::atomic::Ordering;
+
+    /// Each test needs its own `static`, because the accessors take
+    /// `&'static self`. A value still reachable through a static at exit is
+    /// not a leak for Miri, whose checker is reachability-based; only what
+    /// `leak` abandons needs reclaiming.
+    #[test]
+    fn starts_empty() {
+        static PTR: LeakablePtr<u32> = LeakablePtr::new();
+        assert!(PTR.load(Ordering::Acquire).is_null());
+    }
+
+    #[test]
+    fn publish_then_load_then_take() {
+        static PTR: LeakablePtr<u32> = LeakablePtr::new();
+        let previous = PTR.publish(Box::new(7));
+        assert!(previous.is_null(), "nothing was published before");
+
+        let loaded = PTR.load(Ordering::Acquire);
+        assert!(!loaded.is_null());
+        // SAFETY: we published this pointer and have not taken it back.
+        assert_eq!(unsafe { *loaded }, 7);
+
+        let taken = PTR.take();
+        assert_eq!(taken, loaded);
+        assert!(PTR.load(Ordering::Acquire).is_null());
+        // SAFETY: `take` transferred ownership back to us.
+        drop(unsafe { Box::from_raw(taken) });
+    }
+
+    #[test]
+    fn publishing_again_returns_the_old_pointer() {
+        static PTR: LeakablePtr<u32> = LeakablePtr::new();
+        let first = PTR.publish(Box::new(1));
+        assert!(first.is_null());
+        let replaced = PTR.publish(Box::new(2));
+        assert!(!replaced.is_null());
+        // SAFETY: `publish` handed ownership of the old value back to us.
+        assert_eq!(unsafe { *replaced }, 1);
+        drop(unsafe { Box::from_raw(replaced) });
+
+        let current = PTR.take();
+        // SAFETY: `take` transferred ownership back to us.
+        assert_eq!(unsafe { *current }, 2);
+        drop(unsafe { Box::from_raw(current) });
+    }
+
+    #[test]
+    fn leak_abandons_without_dropping() {
+        static PTR: LeakablePtr<u32> = LeakablePtr::new();
+        let previous = PTR.publish(Box::new(99));
+        assert!(previous.is_null());
+
+        #[cfg(miri)]
+        let leaked = PTR.leak();
+        #[cfg(not(miri))]
+        PTR.leak();
+
+        assert!(
+            PTR.load(Ordering::Acquire).is_null(),
+            "leak did not unpublish"
+        );
+
+        // Under Miri, reclaim what was abandoned so the leak checker stays
+        // quiet; in production leaking is the whole point.
+        #[cfg(miri)]
+        // SAFETY: `leak` handed back the allocation it abandoned.
+        drop(unsafe { Box::from_raw(leaked.expect("something was published").as_ptr()) });
+    }
+
+    #[test]
+    fn taking_from_an_empty_slot_is_null() {
+        static PTR: LeakablePtr<u32> = LeakablePtr::new();
+        assert!(PTR.take().is_null());
+    }
+}

@@ -407,6 +407,7 @@ pub mod ffi {
     use std::ffi::{c_char, c_int};
 
     #[repr(C)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct FFIFrame {
         pub function_name: FFIInternedString,
         pub file_name: FFIInternedString,
@@ -414,12 +415,14 @@ pub mod ffi {
     }
 
     #[repr(C)]
+    #[derive(Clone, Copy)]
     pub struct FFIStringView {
         pub data: *const c_char,
         pub len: usize,
     }
 
     #[repr(C)]
+    #[derive(Clone, Copy)]
     pub struct FFISample {
         pub frames: *const FFIFrame,
         pub len: usize,
@@ -427,6 +430,7 @@ pub mod ffi {
     }
 
     #[repr(C)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct FFIHeapSampleValues {
         pub heap_space: usize,
         pub heap_count: usize,
@@ -435,6 +439,7 @@ pub mod ffi {
     }
 
     #[repr(C)]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
     pub struct FFIInternedString {
         pub index: u32,
     }

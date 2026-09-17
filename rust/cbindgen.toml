@@ -27,8 +27,11 @@ include = [
   "FFIFrame",
   "FFIHeapSampleValues",
   "FFISample",
-  "pyroscope_memprof_collect_stack",
-  "pyroscope_memprof_push_sample",
+  "pyroscope_memprof_heap_init",
+  "pyroscope_memprof_heap_deinit",
+  "pyroscope_memprof_heap_track",
+  "pyroscope_memprof_heap_untrack",
+  "pyroscope_memprof_heap_flush",
 ]
 # Symbols Rust *imports* from the C++ profiler. They are declared in the C++
 # headers that define them, so re-declaring them here would be a duplicate.
@@ -36,5 +39,7 @@ exclude = [
   "memalloc_start",
   "memalloc_stop",
   "memalloc_heap_py",
-  "memalloc_heap_postfork_child",
+  # Called from Rust, not from C++.
+  "pyroscope_memprof_heap_postfork_child",
+  "pyroscope_memprof_push_sample",
 ]

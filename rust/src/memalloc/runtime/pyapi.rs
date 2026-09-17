@@ -11,7 +11,7 @@
 
 use crate::memalloc::pure::frames::TypeAddrs;
 use crate::memalloc::pure::offsets::{self, Offsets, OffsetsError};
-use std::ffi::c_void;
+use std::ffi::{c_int, c_void};
 use std::sync::OnceLock;
 
 /// The symbol holding `_PyRuntimeState`, whose first member is the offsets
@@ -32,8 +32,14 @@ const TSTATE_SYMBOLS: &[&[u8]] = &[
     b"_PyThreadState_UncheckedGet\0",
 ];
 
+/// Whether the calling thread holds the GIL. Used only by debug assertions.
+const PY_GIL_STATE_CHECK_SYMBOL: &[u8] = b"PyGILState_Check\0";
+
 /// Signature of `PyThreadState_GetUnchecked`.
 type TStateGet = unsafe extern "C" fn() -> *mut c_void;
+
+/// Signature of `PyGILState_Check`.
+type GilCheck = unsafe extern "C" fn() -> c_int;
 
 /// Cached result of [`resolve`]. Resolution is idempotent and its inputs
 /// cannot change within a process, so it is computed at most once.
@@ -75,6 +81,30 @@ pub fn type_addrs() -> TypeAddrs {
         code: lookup(PY_CODE_TYPE_SYMBOL) as usize,
         unicode: lookup(PY_UNICODE_TYPE_SYMBOL) as usize,
     })
+}
+
+/// Cached `PyGILState_Check`.
+static GIL_CHECK: OnceLock<Option<GilCheck>> = OnceLock::new();
+
+/// Whether the calling thread holds the GIL.
+///
+/// Returns `true` when the symbol is unavailable, so a debug assertion built
+/// on this cannot fire spuriously in a test binary with no interpreter.
+pub fn gil_held() -> bool {
+    let check = *GIL_CHECK.get_or_init(|| {
+        let address = lookup(PY_GIL_STATE_CHECK_SYMBOL);
+        if address.is_null() {
+            return None;
+        }
+        // SAFETY: the symbol names an `int PyGILState_Check(void)` in
+        // libpython, which is this signature.
+        Some(unsafe { std::mem::transmute::<*mut c_void, GilCheck>(address) })
+    });
+    match check {
+        // SAFETY: `PyGILState_Check` is safe to call from any thread.
+        Some(check) => unsafe { check() != 0 },
+        None => true,
+    }
 }
 
 /// The current thread state, or 0 if it cannot be determined.

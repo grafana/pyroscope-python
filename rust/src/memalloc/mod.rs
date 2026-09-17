@@ -73,6 +73,7 @@ compile_error!(
 pub mod limits;
 pub mod pure;
 pub mod reentrancy;
+pub mod sink;
 
 #[cfg(feature = "memory")]
 pub mod runtime;

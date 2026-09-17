@@ -51,6 +51,7 @@ func TestPythonProfilerOffCPUWithoutGILOnly(t *testing.T) {
 
 func TestPythonNonCPUIntegrationSuites(t *testing.T) {
 	t.Run("memory profiler", testPythonMemoryProfiler)
+	t.Run("memory profiler stress", testPythonMemoryStress)
 	t.Run("concurrent configure shutdown", testPythonConcurrentConfigureShutdown)
 	t.Run("atexit shutdown", testPythonAtexitShutdown)
 }
@@ -102,6 +103,58 @@ func testPythonMemoryProfiler(t *testing.T) {
 	collapsed, err := queryProfile(pyroscopeURL, cpuProfileTypeID, labelSelector)
 	require.NoError(t, err)
 	require.Equal(t, "", collapsed)
+}
+
+// testPythonMemoryStress exercises the allocator-hook paths that unit tests
+// cannot reach: realloc(ptr, 0), many threads allocating at once, fork with
+// the profiler running, and repeated configure/shutdown cycles under
+// continuous allocation.
+//
+// A subtest rather than a top-level Test func on purpose: `make ci-matrix`
+// discovers top-level tests, so a new one would multiply out across every
+// Python version and wheel variant. This way it still runs everywhere at no
+// extra matrix cost.
+func testPythonMemoryStress(t *testing.T) {
+	skipBelowPython(t, 3, 13)
+
+	wheelDir := ensureWheel(t)
+
+	net := dockertest.CreateNetwork(t)
+	pyroscopeURL := startPyroscope(t, net)
+	appName := fmt.Sprintf("pyroscopers.python.test.memstress.%d", time.Now().UnixNano())
+	canary := randomHex(t, 16)
+	workload := startPythonTestContainer(t, net, wheelDir, "memory_stress.py", map[string]string{
+		"PYROSCOPE_APPLICATION_NAME": appName,
+		"CANARY":                     canary,
+	})
+	t.Cleanup(func() {
+		workload.Stop(t, 30*time.Second)
+	})
+
+	// The workload prints a marker once every stress phase has survived, and
+	// exits non-zero if any did not.
+	require.Eventually(t, func() bool {
+		logs := workload.Logs(t)
+		if strings.Contains(logs, "STRESS FAILED") {
+			t.Fatalf("stress workload reported a failure:\n%s", logs)
+		}
+		return strings.Contains(logs, "STRESS all ok")
+	}, 4*time.Minute, 5*time.Second, "expected the stress phases to pass")
+
+	// And the profiler must still be producing usable profiles afterwards.
+	labelSelector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
+	require.Eventually(t, func() bool {
+		collapsed, err := queryProfile(pyroscopeURL, memoryInuseSpaceProfileTypeID, labelSelector)
+		if err != nil {
+			t.Logf("query failed: %v", err)
+			return false
+		}
+		if !strings.Contains(collapsed, "memhog") {
+			t.Logf("inuse_space does not contain memhog yet:\n%s", collapsed)
+			return false
+		}
+		return true
+	}, 3*time.Minute, 5*time.Second, "expected memhog samples after the stress phases")
 }
 
 func testPythonConcurrentConfigureShutdown(t *testing.T) {

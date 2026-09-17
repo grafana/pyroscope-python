@@ -4,5 +4,6 @@
 //! [`super::pure`] is deliberately kept out so that
 //! `cargo miri test --lib --no-default-features` covers it.
 
+pub mod heap;
 pub mod pyapi;
 pub mod reader;

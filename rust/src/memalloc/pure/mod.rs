@@ -6,6 +6,7 @@
 //! any libpython symbol.
 
 pub mod frames;
+pub mod heap;
 pub mod linetable;
 pub mod offsets;
 pub mod rng;

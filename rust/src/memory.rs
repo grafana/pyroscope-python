@@ -66,9 +66,7 @@ pub fn stop(_py: Python<'_>) {
 }
 
 pub fn postfork_child() {
-    unsafe {
-        implementation::memalloc_heap_postfork_child();
-    }
+    implementation::postfork_child();
 }
 
 pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u8>> {
@@ -106,26 +104,14 @@ pub fn offsets_report() -> OffsetsReport {
 
 #[cfg(feature = "memory")]
 mod implementation {
-    use crate::encode::pprof::PProfBuilder;
-    use crate::encode::pprof::StringTable;
-    use crate::encode::pprof::ffi::{FFIFrame, FFISample};
-    use crate::memalloc::pure::frames::{FrameSink, walk_frames};
-    use crate::memalloc::runtime::pyapi;
+    use crate::memalloc::pure::frames::walk_frames;
     use crate::memalloc::runtime::reader::InProcess;
+    use crate::memalloc::runtime::{heap, pyapi};
+    use crate::memalloc::sink::{self, MemSink};
     use crate::utils::TimeRange;
-    use lazy_static::lazy_static;
     use prost::Message;
     use pyo3::prelude::*;
-    use std::ops::{Deref, DerefMut};
-    use std::sync::Mutex;
 
-    lazy_static! {
-        static ref STRING_TABLE: Mutex<StringTable> = Mutex::new(StringTable::new());
-    }
-
-    lazy_static! {
-        static ref PROFILE_BUILDER: Mutex<PProfBuilder> = Mutex::new(PProfBuilder::new());
-    }
     unsafe extern "C" {
         pub fn memalloc_start(
             max_nframe: u16,
@@ -133,117 +119,26 @@ mod implementation {
             enable_mem_domain: bool,
         ) -> i32;
         pub fn memalloc_stop();
-        // flush heap inuse samples
-        pub fn memalloc_heap_py();
-        pub fn memalloc_heap_postfork_child();
-    }
-
-    /// Writes collected frames into a caller-provided span, interning their
-    /// strings.
-    struct FfiFrameSink<'a> {
-        out: &'a mut [FFIFrame],
-        written: usize,
-        strings: &'a mut StringTable,
-    }
-
-    impl FrameSink for FfiFrameSink<'_> {
-        fn push_frame(&mut self, function: &str, file: &str, line: i32) {
-            // PANIC-OK: `get_mut` returns None rather than panicking when the
-            // span is full, which the frame cap should already have prevented.
-            let Some(slot) = self.out.get_mut(self.written) else {
-                return;
-            };
-            *slot = FFIFrame {
-                function_name: (&self.strings.add(function)).into(),
-                file_name: (&self.strings.add(file)).into(),
-                line,
-            };
-            self.written = self.written.saturating_add(1);
-        }
-
-        fn note_dropped(&mut self) {
-            // The C++ sample adapter has no field for this; the Rust-owned
-            // sample in a later step will.
-        }
-    }
-
-    /// Collect the current thread's Python stack into `out`.
-    ///
-    /// Returns the number of frames written, at most
-    /// `min(max_nframe, out_cap)`, and 0 if the offsets table could not be
-    /// validated.
-    ///
-    /// # Safety
-    ///
-    /// Called from inside the allocator hook, with the GIL held and the
-    /// reentrancy guard already taken by the caller. `out` must point at
-    /// `out_cap` writable `FFIFrame`s. Must not allocate through PyMem, touch
-    /// refcounts, touch `PyErr`, or unwind.
-    #[unsafe(no_mangle)]
-    pub extern "C" fn pyroscope_memprof_collect_stack(
-        max_nframe: u16,
-        out: *mut FFIFrame,
-        out_cap: usize,
-    ) -> usize {
-        if out.is_null() || out_cap == 0 {
-            return 0;
-        }
-        let Ok(offsets) = pyapi::resolve() else {
-            return 0;
-        };
-
-        let mut strings = STRING_TABLE
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        // SAFETY: the caller guarantees `out` points at `out_cap` writable
-        // `FFIFrame`s, and holds the GIL for the duration of this call so the
-        // span cannot be reallocated underneath us.
-        let span = unsafe { std::slice::from_raw_parts_mut(out, out_cap) };
-
-        let budget = max_nframe.min(u16::try_from(out_cap).unwrap_or(u16::MAX));
-        let mut sink = FfiFrameSink {
-            out: span,
-            written: 0,
-            strings: &mut strings,
-        };
-        walk_frames(
-            &InProcess,
-            &offsets,
-            &pyapi::type_addrs(),
-            pyapi::current_thread_state(),
-            budget,
-            &mut sink,
-        );
-        sink.written
-    }
-    #[unsafe(no_mangle)]
-    pub extern "C" fn pyroscope_memprof_push_sample(sample: FFISample) {
-        if sample.frames.is_null() || sample.len == 0 {
-            return;
-        }
-        let frames = unsafe { std::slice::from_raw_parts(sample.frames, sample.len) };
-        if let Ok(mut pb) = PROFILE_BUILDER.lock() {
-            pb.add_ffi_sample(frames, &sample.values);
-        }
     }
 
     /// Discard all interned strings and buffered samples.
     ///
     /// Called from `stop()` after the allocator hooks are uninstalled. Every
     /// hook runs with the GIL held and `stop()` itself holds the GIL, so no
-    /// hook can be mid-push here and no live C++ traceback references the
-    /// interned string IDs anymore. Without this, samples buffered by a
-    /// stopped session (or inherited from the parent after fork, since the
-    /// fork-child handler also goes through `stop()`) would leak into the
-    /// next session's first profile, and the string table would grow for the
-    /// lifetime of the process.
+    /// hook can be mid-push here.
+    ///
+    /// Must run *after* the heap tracker is torn down: its live samples hold
+    /// interned string IDs, which this invalidates. Without it, samples
+    /// buffered by a stopped session (or inherited from the parent after a
+    /// fork, since that handler also goes through `stop()`) would leak into
+    /// the next session's first profile, and the string table would grow for
+    /// the lifetime of the process.
     pub fn clear_state() {
-        let mut st = STRING_TABLE.lock().unwrap_or_else(|e| e.into_inner());
-        *st = StringTable::new();
-        drop(st);
-        let mut pb = PROFILE_BUILDER.lock().unwrap_or_else(|e| e.into_inner());
-        pb.reset();
+        sink::lock().reset();
+    }
+
+    pub fn postfork_child() {
+        heap::pyroscope_memprof_heap_postfork_child();
     }
 
     pub fn walk_stack(max_nframe: u16) -> Result<super::WalkedStack, String> {
@@ -276,19 +171,14 @@ mod implementation {
         // try_attach skips the flush while finalizing on 3.13+ only; on
         // older Pythons the atexit hook is the actual protection.
         let profile = Python::try_attach(|_| {
-            unsafe {
-                memalloc_heap_py();
-            }
-            let st = STRING_TABLE.lock();
-            let pb = PROFILE_BUILDER.lock();
-            match (st, pb) {
-                (Ok(mut st), Ok(mut pb)) => {
-                    pb.set_memory_profile_type(st.deref_mut(), heap_sample_size);
-                    pb.take_profile_and_reset(st.deref(), time_range)
-                }
-                _ => None,
-            }
+            heap::pyroscope_memprof_heap_flush();
+            let mut guard = sink::lock();
+            let MemSink { strings, builder } = &mut *guard;
+            builder.set_memory_profile_type(strings, heap_sample_size);
+            builder.take_profile_and_reset(strings, time_range)
         })??;
+        // Deliberately outside the lock: serialising a multi-megabyte profile
+        // while holding it would block every allocator hook in the process.
         Some(profile.encode_to_vec())
     }
 }
@@ -299,7 +189,7 @@ mod implementation {
 
     pub unsafe fn memalloc_stop() {}
 
-    pub unsafe fn memalloc_heap_postfork_child() {}
+    pub fn postfork_child() {}
 
     pub fn clear_state() {}
 

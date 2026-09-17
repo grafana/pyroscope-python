@@ -7,33 +7,21 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-#include "_memalloc_debug.h"
-#include "_memalloc_heap.h"
-#include "_memalloc_reentrant.h"
-#include "_memalloc_tb.h"
 #include "_pymacro.h"
+
+extern "C" {
+#include "pyroscope_ffi.h"
+}
 
 // Pyroscope patch: Pyroscope uses its Rust profile builder and does not provide
 // Datadog's ddup interface.
 // #include "ddup_interface.hpp"
 
-typedef struct
-{
-    /* The domain we are tracking */
-    PyMemAllocatorDomain domain;
-    /* The maximum number of frames collected in stack traces */
-    uint16_t max_nframe;
-
-} memalloc_context_t;
-
-/* We only support being started once, so we use a global context for the whole
-   module. If we ever want to be started multiple times, we'd need a more
-   object-oriented approach and allocate a context per object.
-*/
-static memalloc_context_t global_memalloc_ctx;
-#ifdef _PY312_AND_LATER
-static memalloc_context_t global_memalloc_ctx_mem;
-#endif // _PY312_AND_LATER
+/* Pyroscope patch: the per-domain context struct is gone. It carried
+   max_nframe, which now lives in the Rust heap tracker and is passed once to
+   pyroscope_memprof_heap_init, and a domain field the C++ never read. The
+   hooks are installed with a null ctx; the OBJ and MEM domains are still
+   distinguished by having separate hook functions, as before. */
 
 static bool memalloc_enabled = false;
 #ifdef _PY312_AND_LATER
@@ -72,15 +60,6 @@ memalloc_free(void* Py_UNUSED(ctx), void* ptr)
     if (ptr == NULL)
         return;
 
-#ifdef MEMALLOC_ASSERT_ON_REENTRY
-    /* Abort in test builds if we're re-entering from the malloc hook.
-     * In production we can't abort or skip untrack (skipping would leak
-     * heap tracker entries), so we just let it proceed — direct struct
-     * access frame walking avoids calling CPython APIs that could free and is thus safe. */
-    if (_MEMALLOC_ON_THREAD) {
-        _memalloc_abort_free_reentry();
-    }
-#endif // MEMALLOC_ASSERT_ON_REENTRY
 
     /* Load atomically so we see a consistent slot written by start() even if
      * a concurrent restart is in progress.  A NULL guard matches alloc and
@@ -91,15 +70,14 @@ memalloc_free(void* Py_UNUSED(ctx), void* ptr)
     PyMemAllocatorEx alloc = *saved;
     if (!alloc.free)
         return;
-    memalloc_heap_untrack_no_cpython(ptr);
+    pyroscope_memprof_heap_untrack(ptr);
     alloc.free(alloc.ctx, ptr);
 }
 
 static void*
-memalloc_alloc(int use_calloc, void* ctx, size_t nelem, size_t elsize)
+memalloc_alloc(int use_calloc, void* Py_UNUSED(ctx), size_t nelem, size_t elsize)
 {
     void* ptr;
-    memalloc_context_t* memalloc_ctx = (memalloc_context_t*)ctx;
 
     /* Load the saved allocator atomically.  g_saved_alloc_pub points into a
      * two-slot buffer; start() always writes to the slot that no in-flight
@@ -121,7 +99,7 @@ memalloc_alloc(int use_calloc, void* ctx, size_t nelem, size_t elsize)
     }
 
     if (ptr) {
-        memalloc_heap_track_invokes_cpython(memalloc_ctx->max_nframe, ptr, nelem * elsize, memalloc_ctx->domain);
+        pyroscope_memprof_heap_track(ptr, nelem * elsize);
     }
 
     return ptr;
@@ -140,9 +118,8 @@ memalloc_calloc(void* ctx, size_t nelem, size_t elsize)
 }
 
 static void*
-memalloc_realloc(void* ctx, void* ptr, size_t new_size)
+memalloc_realloc(void* Py_UNUSED(ctx), void* ptr, size_t new_size)
 {
-    memalloc_context_t* memalloc_ctx = (memalloc_context_t*)ctx;
     /* Load atomically — same two-slot scheme as memalloc_alloc. */
     const PyMemAllocatorEx* const saved = g_saved_alloc_pub.load(std::memory_order_acquire);
     if (!saved)
@@ -155,15 +132,15 @@ memalloc_realloc(void* ctx, void* ptr, size_t new_size)
     // TODO(dsn): With Python free-threading, allocators must be thread-safe even for non-RAW domains.
     // We may need to add synchronization here in the future to avoid races between realloc and untrack.
     if (ptr2) {
-        memalloc_heap_untrack_no_cpython(ptr);
-        memalloc_heap_track_invokes_cpython(memalloc_ctx->max_nframe, ptr2, new_size, memalloc_ctx->domain);
+        pyroscope_memprof_heap_untrack(ptr);
+        pyroscope_memprof_heap_track(ptr2, new_size);
     } else if (new_size == 0 && ptr != NULL) {
         // realloc(ptr, 0) is implementation-defined: some allocators (including
         // glibc) free ptr and return NULL.  In that case ptr is gone and must be
         // untracked so allocs_m doesn't keep a dangling/stale entry forever.
         // When new_size > 0 and ptr2 == NULL the allocation failed; ptr is
         // still valid and must stay tracked, so we only act on new_size == 0.
-        memalloc_heap_untrack_no_cpython(ptr);
+        pyroscope_memprof_heap_untrack(ptr);
     }
 
     return ptr2;
@@ -183,11 +160,6 @@ memalloc_free_mem(void* Py_UNUSED(ctx), void* ptr)
     if (ptr == NULL)
         return;
 
-#ifdef MEMALLOC_ASSERT_ON_REENTRY
-    if (_MEMALLOC_ON_THREAD) {
-        _memalloc_abort_free_reentry();
-    }
-#endif // MEMALLOC_ASSERT_ON_REENTRY
 
     const PyMemAllocatorEx* const saved = g_saved_alloc_mem_pub.load(std::memory_order_acquire);
     if (!saved)
@@ -195,15 +167,14 @@ memalloc_free_mem(void* Py_UNUSED(ctx), void* ptr)
     PyMemAllocatorEx alloc = *saved;
     if (!alloc.free)
         return;
-    memalloc_heap_untrack_no_cpython(ptr);
+    pyroscope_memprof_heap_untrack(ptr);
     alloc.free(alloc.ctx, ptr);
 }
 
 static void*
-memalloc_alloc_mem(int use_calloc, void* ctx, size_t nelem, size_t elsize)
+memalloc_alloc_mem(int use_calloc, void* Py_UNUSED(ctx), size_t nelem, size_t elsize)
 {
     void* ptr;
-    memalloc_context_t* memalloc_ctx = (memalloc_context_t*)ctx;
 
     const PyMemAllocatorEx* const saved = g_saved_alloc_mem_pub.load(std::memory_order_acquire);
     if (!saved)
@@ -221,7 +192,7 @@ memalloc_alloc_mem(int use_calloc, void* ctx, size_t nelem, size_t elsize)
     }
 
     if (ptr) {
-        memalloc_heap_track_invokes_cpython(memalloc_ctx->max_nframe, ptr, nelem * elsize, memalloc_ctx->domain);
+        pyroscope_memprof_heap_track(ptr, nelem * elsize);
     }
 
     return ptr;
@@ -240,9 +211,8 @@ memalloc_calloc_mem(void* ctx, size_t nelem, size_t elsize)
 }
 
 static void*
-memalloc_realloc_mem(void* ctx, void* ptr, size_t new_size)
+memalloc_realloc_mem(void* Py_UNUSED(ctx), void* ptr, size_t new_size)
 {
-    memalloc_context_t* memalloc_ctx = (memalloc_context_t*)ctx;
     const PyMemAllocatorEx* const saved = g_saved_alloc_mem_pub.load(std::memory_order_acquire);
     if (!saved)
         return nullptr;
@@ -251,10 +221,10 @@ memalloc_realloc_mem(void* ctx, void* ptr, size_t new_size)
         return nullptr;
     void* ptr2 = alloc.realloc(alloc.ctx, ptr, new_size);
     if (ptr2) {
-        memalloc_heap_untrack_no_cpython(ptr);
-        memalloc_heap_track_invokes_cpython(memalloc_ctx->max_nframe, ptr2, new_size, memalloc_ctx->domain);
+        pyroscope_memprof_heap_untrack(ptr);
+        pyroscope_memprof_heap_track(ptr2, new_size);
     } else if (new_size == 0 && ptr != NULL) {
-        memalloc_heap_untrack_no_cpython(ptr);
+        pyroscope_memprof_heap_untrack(ptr);
     }
 
     return ptr2;
@@ -299,19 +269,22 @@ extern "C" int memalloc_start(    uint16_t max_nframe,
 
 
 
-    if (max_nframe < 1 || max_nframe > TRACEBACK_MAX_NFRAME) {
-        PyErr_Format(PyExc_ValueError, "the number of frames must be in range [1; %u]", TRACEBACK_MAX_NFRAME);
+    /* Pyroscope patch: kept in sync with TRACEBACK_MAX_NFRAME in
+       rust/src/memalloc/limits.rs, which is now the definition. */
+    static const uint16_t MAX_NFRAME = 600;
+    if (max_nframe < 1 || max_nframe > MAX_NFRAME) {
+        PyErr_Format(PyExc_ValueError, "the number of frames must be in range [1; %u]", MAX_NFRAME);
         return -1;
     }
 
-    global_memalloc_ctx.max_nframe = (uint16_t)max_nframe;
-
-    if (heap_sample_size < 0 || heap_sample_size > MAX_HEAP_SAMPLE_SIZE) {
-        PyErr_Format(PyExc_ValueError, "the heap sample size must be in range [0; %u]", MAX_HEAP_SAMPLE_SIZE);
+    /* Pyroscope patch: kept in sync with MAX_HEAP_SAMPLE_SIZE in
+       rust/src/memalloc/limits.rs. */
+    if (heap_sample_size > UINT32_MAX) {
+        PyErr_Format(PyExc_ValueError, "the heap sample size must be in range [0; %u]", UINT32_MAX);
         return -1;
     }
 
-    if (!memalloc_heap_tracker_init_no_cpython((uint32_t)heap_sample_size)) {
+    if (!pyroscope_memprof_heap_init((uint32_t)heap_sample_size, max_nframe)) {
         PyErr_SetString(PyExc_RuntimeError, "failed to initialize heap tracker");
         return -1;
     }
@@ -323,9 +296,7 @@ extern "C" int memalloc_start(    uint16_t max_nframe,
     alloc.realloc = memalloc_realloc;
     alloc.free = memalloc_free;
 
-    alloc.ctx = &global_memalloc_ctx;
-
-    global_memalloc_ctx.domain = PYMEM_DOMAIN_OBJ;
+    alloc.ctx = nullptr;
 
     /* Write the saved (original) allocator into whichever slot is NOT
      * currently being read by hooks from the previous cycle, then publish the
@@ -345,10 +316,7 @@ extern "C" int memalloc_start(    uint16_t max_nframe,
         alloc_mem.calloc = memalloc_calloc_mem;
         alloc_mem.realloc = memalloc_realloc_mem;
         alloc_mem.free = memalloc_free_mem;
-        alloc_mem.ctx = &global_memalloc_ctx_mem;
-
-        global_memalloc_ctx_mem.max_nframe = (uint16_t)max_nframe;
-        global_memalloc_ctx_mem.domain = PYMEM_DOMAIN_MEM;
+        alloc_mem.ctx = nullptr;
 
         const int mem_slot = g_saved_alloc_mem_slot;
         g_saved_alloc_mem_slot = 1 - mem_slot;
@@ -405,7 +373,7 @@ extern "C" void memalloc_stop()
     }
 #endif // _PY312_AND_LATER
 
-    memalloc_heap_tracker_deinit_no_cpython();
+    pyroscope_memprof_heap_deinit();
 
     memalloc_enabled = false;
 
@@ -420,5 +388,5 @@ extern "C" void memalloc_heap_py()
         return;
     }
 
-    memalloc_heap_no_cpython();
+    pyroscope_memprof_heap_flush();
 }

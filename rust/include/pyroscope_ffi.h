@@ -34,23 +34,60 @@ typedef struct {
 } FFISample;
 
 /*
- Collect the current thread's Python stack into `out`.
+ Create the tracker.
 
- Returns the number of frames written, at most
- `min(max_nframe, out_cap)`, and 0 if the offsets table could not be
- validated.
+ Returns false if one is already published, matching the C++, which refused
+ to reinitialise.
 
  # Safety
 
- Called from inside the allocator hook, with the GIL held and the
- reentrancy guard already taken by the caller. `out` must point at
- `out_cap` writable `FFIFrame`s. Must not allocate through PyMem, touch
- refcounts, touch `PyErr`, or unwind.
+ Must be called with the GIL held and before any hook is installed.
  */
-uintptr_t pyroscope_memprof_collect_stack(uint16_t max_nframe,
-                                          FFIFrame *out,
-                                          uintptr_t out_cap);
+bool pyroscope_memprof_heap_init(uint32_t sample_size, uint16_t max_nframe);
 
-void pyroscope_memprof_push_sample(FFISample sample);
+/*
+ Destroy the tracker and its live samples.
+
+ Must run *before* the sink is reset: live samples hold interned string IDs
+ which would otherwise dangle.
+
+ # Safety
+
+ Must be called with the GIL held and after the hooks are uninstalled.
+ */
+void pyroscope_memprof_heap_deinit(void);
+
+/*
+ Account for an allocation, sampling it if the sampler says so.
+
+ # Safety
+
+ Called from inside the allocator hook with the GIL held. Must not allocate
+ through PyMem, touch refcounts, touch `PyErr`, or unwind.
+ */
+void pyroscope_memprof_heap_track(void *ptr, uintptr_t size);
+
+/*
+ Forget an allocation.
+
+ Deliberately *not* guarded against reentrancy: skipping an untrack would
+ leak a tracker entry forever, so freeing is always allowed to proceed. This
+ only touches the map and never calls into CPython, mirroring the C++, which
+ likewise left its free path unguarded.
+
+ # Safety
+
+ Called from inside the allocator hook with the GIL held.
+ */
+void pyroscope_memprof_heap_untrack(void *ptr);
+
+/*
+ Export every live sampled allocation into the profile.
+
+ # Safety
+
+ Must be called with the GIL held.
+ */
+void pyroscope_memprof_heap_flush(void);
 
 #endif  /* PYROSCOPE_FFI_H_ */

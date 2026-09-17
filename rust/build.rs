@@ -2,19 +2,7 @@ use cmake::Config;
 use std::env;
 use std::path::{Path, PathBuf};
 
-const NATIVE_SOURCES: &[&str] = &[
-    "CMakeLists.txt",
-    "Pyroscope.h",
-    "_memalloc.cpp",
-    "_memalloc_debug.h",
-    "_memalloc_heap.cpp",
-    "_memalloc_heap.h",
-    "_memalloc_reentrant.cpp",
-    "_memalloc_reentrant.h",
-    "_memalloc_tb.cpp",
-    "_memalloc_tb.h",
-    "_pymacro.h",
-];
+const NATIVE_SOURCES: &[&str] = &["CMakeLists.txt", "_memalloc.cpp", "_pymacro.h"];
 
 /// CPython minor versions we have a transcribed `_Py_DebugOffsets` mirror for.
 ///
@@ -56,7 +44,7 @@ fn main() {
     let dst = cfg.build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
-    println!("cargo:rustc-link-lib=static=datadog_mem_profiler_bundled");
+    println!("cargo:rustc-link-lib=static=datadog_mem_profiler");
 
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "macos" {
         println!("cargo:rustc-link-lib=static=c++");
