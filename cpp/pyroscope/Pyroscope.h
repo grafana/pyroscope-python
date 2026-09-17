@@ -152,22 +152,68 @@ namespace Pyroscope
         }
 
 
-        void push_frame(const std::string_view function_name, const std::string_view file_name, int _, const int line)
+        /* Push a frame whose strings are already interned.
+         *
+         * There is deliberately no Pyroscope::intern_function to go with
+         * Pyroscope::intern_string. Upstream needs one because libdatadog's
+         * Profiles Dictionary hands out opaque function handles that its
+         * push_frame consumes; our FFIFrame carries the two string ids
+         * directly, and the Rust encoder already interns functions on exactly
+         * upstream's key -- see PProfBuilder::add_function_mirror, which
+         * dedupes FunctionMirror{name, filename} (and, like upstream, leaves
+         * system_name empty). It also dedupes locations, which upstream does
+         * not intern either: libdatadog dedupes those per profile at add time.
+         *
+         * A process-wide function table would not work the way the string
+         * table does: pprof function ids are per-profile and sequential, and
+         * are written straight into profile.function[].id, so a process-wide
+         * id is not a valid pprof id. Strings get away with it only because
+         * the whole table is copied into every profile.
+         *
+         * This overload is for callers that keep their own id cache and hand
+         * ids in (the vendored stack renderer); the string_view overload below
+         * is for callers that do not (memalloc).
+         *
+         * TODO(Pyroscope): upstream's push_frame also takes a frame address,
+         * which lands in ddog_prof_Location.address. We drop it: FFIFrame has
+         * no field for it and add_location_mirror hardcodes address and
+         * mapping_id to 0. Nothing of value is lost today -- the only caller
+         * that passed a nonzero value used a literal 1 as an undocumented
+         * sentinel for native frames, which stay distinguishable by their name
+         * and filename anyway. */
+        void push_frame(const string_id function_name, const string_id file_name, const int line)
         {
             if (frames.size() == max_nframes)
             {
                 incr_dropped_frames();
+                return;
             }
-            else
+            frames.emplace_back(
+                FFIFrame{
+                    .function_name = function_name,
+                    .file_name = file_name,
+                    .line = line,
+                }
+            );
+        }
+
+
+        /* Interning overload, mirroring upstream's
+         * push_frame(name, filename, address, line). The third parameter is
+         * upstream's frame address and is ignored; see the TODO above.
+         *
+         * The capacity check is repeated here rather than left to the overload
+         * above, because interning is not free and is not local: a frame we are
+         * about to drop must not add its strings to the process-wide table. */
+        void push_frame(const std::string_view function_name, const std::string_view file_name,
+                        [[maybe_unused]] int address, const int line)
+        {
+            if (frames.size() == max_nframes)
             {
-                frames.emplace_back(
-                    FFIFrame{
-                        .function_name = intern_string(function_name),
-                        .file_name = intern_string(file_name),
-                        .line = line,
-                    }
-                );
+                incr_dropped_frames();
+                return;
             }
+            push_frame(intern_string(function_name), intern_string(file_name), line);
         }
 
 

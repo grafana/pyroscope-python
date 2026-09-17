@@ -185,20 +185,11 @@ StackRenderer::render_frame(Frame& frame)
         filename_id = maybe_filename_id->second;
     }
 
-    function_id function_id;
-    auto maybe_function_id = function_id_cache.find({ name_id, filename_id });
-    if (maybe_function_id == function_id_cache.end()) {
-        auto maybe_interned_function_id = Datadog::intern_function(name_id, filename_id);
-        if (!maybe_interned_function_id) {
-            return;
-        }
-        function_id = *maybe_interned_function_id;
-        function_id_cache.insert({ { static_cast<void*>(name_id), static_cast<void*>(filename_id) }, function_id });
-    } else {
-        function_id = maybe_function_id->second;
-    }
-
-    sample->push_frame(function_id, 0, line);
+    // Pyroscope patch: no function-interning step. The Rust encoder dedupes
+    // functions on (name, filename) itself, so the interned string ids are all
+    // the sample needs. Upstream's frame-address argument is dropped; see the
+    // TODO on Pyroscope::Sample::push_frame.
+    sample->push_frame(name_id, filename_id, line);
 }
 
 void
@@ -213,21 +204,10 @@ StackRenderer::render_native_frame(const std::string& name, const std::string& m
     auto name_id = Pyroscope::intern_string(name);
     auto filename_id = Pyroscope::intern_string(module);
 
-    // Reuse the same function_id_cache as render_frame to avoid redundant intern_function calls
-    function_id fid;
-    auto cached = function_id_cache.find({ name_id, filename_id });
-    if (cached == function_id_cache.end()) {
-        auto maybe_fid = Datadog::intern_function(name_id, filename_id);
-        if (!maybe_fid) {
-            return;
-        }
-        fid = *maybe_fid;
-        function_id_cache.insert({ { static_cast<void*>(name_id), static_cast<void*>(filename_id) }, fid });
-    } else {
-        fid = cached->second;
-    }
-
-    sample->push_frame(fid, 1, 0);
+    // Pyroscope patch: see render_frame. Native frames carry no line number, and
+    // upstream's address argument (a literal 1 here, an undocumented sentinel)
+    // is dropped -- these frames stay distinguishable by name and filename.
+    sample->push_frame(name_id, filename_id, 0);
 }
 
 void
@@ -259,8 +239,6 @@ StackRenderer::render_stack_end()
 
 Datadog::StackRenderer::StackRenderer()
 {
-    function_id_cache.reserve(100'000);
-    function_id_cache.max_load_factor(0.7f);
     string_id_cache.reserve(100'000);
     string_id_cache.max_load_factor(0.7f);
 }
@@ -269,11 +247,9 @@ void
 Datadog::StackRenderer::postfork_child()
 {
     // Use placement new instead of clear because the sampling thread may
-    // have been mid-rehash on either cache when fork was called.
+    // have been mid-rehash on the cache when fork was called.
     // Traversing the buckets to free nodes would crash if they were left
     // in an inconsistent state.
     new (&string_id_cache) std::unordered_map<StringTable::Key, string_id>();
-    new (&function_id_cache)
-      std::unordered_map<internal::PtrPair, function_id, internal::PtrPairHash, internal::PtrPairEq>();
     sample = nullptr;
 }

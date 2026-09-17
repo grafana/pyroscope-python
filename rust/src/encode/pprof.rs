@@ -443,7 +443,7 @@ pub mod ffi {
 #[cfg(test)]
 mod tests {
     use super::ffi::{FFIFrame, FFIHeapSampleValues, FFIInternedString};
-    use super::{PProfBuilder, StringTable};
+    use super::{FunctionMirror, LocationMirror, PProfBuilder, StringID, StringTable};
     use crate::utils::TimeRange;
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -581,5 +581,55 @@ mod tests {
         // across the four value types rather than re-added.
         assert_eq!(strings.set.len(), len_before + 7);
         assert_eq!(strings.add("some.module:some_function").index, kept.index);
+    }
+
+    #[test]
+    fn functions_dedupe_on_name_and_filename_while_locations_keep_the_line() {
+        // This is the guarantee that replaces Datadog::intern_function. The
+        // renderer no longer interns functions or caches function ids; it just
+        // pushes (name_id, file_id, line) and relies on add_function_mirror
+        // deduping on exactly (name, filename) -- upstream's key, modulo
+        // system_name, which both sides leave empty.
+        let mut builder = PProfBuilder::new();
+
+        let a = builder.add_function_mirror(FunctionMirror {
+            name: StringID { index: 1 },
+            filename: StringID { index: 2 },
+        });
+        let b = builder.add_function_mirror(FunctionMirror {
+            name: StringID { index: 1 },
+            filename: StringID { index: 2 },
+        });
+        let c = builder.add_function_mirror(FunctionMirror {
+            name: StringID { index: 1 },
+            filename: StringID { index: 3 },
+        });
+
+        assert_eq!(a, b, "same (name, filename) must be one function");
+        assert_ne!(a, c, "a different filename must be a different function");
+        assert_eq!(
+            builder.profile.function.len(),
+            2,
+            "one emitted Function per distinct (name, filename)"
+        );
+
+        // The line lives on the location, not the function, so the same
+        // function at two lines is two locations.
+        let l10 = builder.add_location_mirror(LocationMirror {
+            function_id: a,
+            line: 10,
+        });
+        let l20 = builder.add_location_mirror(LocationMirror {
+            function_id: a,
+            line: 20,
+        });
+        let l10_again = builder.add_location_mirror(LocationMirror {
+            function_id: a,
+            line: 10,
+        });
+
+        assert_ne!(l10, l20, "same function at two lines is two locations");
+        assert_eq!(l10, l10_again, "identical locations must dedupe");
+        assert_eq!(builder.profile.location.len(), 2);
     }
 }
