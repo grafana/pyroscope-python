@@ -58,8 +58,6 @@ jobs:
           set -euo pipefail
           export PYO3_PYTHON="$(which python)"
           cargo clippy --all-targets --no-default-features -- --deny warnings
-          export Python3_ROOT_DIR=$(python -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
-          export Python3_EXECUTABLE="$PYO3_PYTHON"
           cargo clippy --all-targets --all-features -- --deny warnings
         working-directory: rust
 
@@ -99,8 +97,6 @@ jobs:
         run: |
           set -euo pipefail
           export PYO3_PYTHON="$(which python)"
-          export Python3_ROOT_DIR=$(python -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
-          export Python3_EXECUTABLE="$PYO3_PYTHON"
           cargo test --locked --all-features
         working-directory: rust
 

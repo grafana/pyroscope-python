@@ -1,6 +1,4 @@
 use crate::utils::TimeRange;
-#[cfg(feature = "memory")]
-use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
 #[derive(Clone)]
@@ -32,36 +30,14 @@ pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
     }
 
     #[cfg(feature = "memory")]
-    unsafe {
-        if let Some(err) = PyErr::take(py) {
-            return Err(err);
-        }
-
-        let status = implementation::memalloc_start(
-            config.max_nframe,
-            config.heap_sample_size,
-            config.enable_mem_domain,
-        );
-        let err = PyErr::take(py);
-        match (status, err) {
-            (0, None) => Ok(()),
-            (0, Some(err)) => {
-                implementation::memalloc_stop();
-                implementation::clear_state();
-                Err(err)
-            }
-            (_, Some(err)) => Err(err),
-            (_, None) => Err(PyRuntimeError::new_err(
-                "memory profiler failed to start without setting a Python exception",
-            )),
-        }
+    {
+        let _ = py;
+        implementation::start(config)
     }
 }
 
 pub fn stop(_py: Python<'_>) {
-    unsafe {
-        implementation::memalloc_stop();
-    }
+    implementation::stop();
     implementation::clear_state();
 }
 
@@ -104,22 +80,14 @@ pub fn offsets_report() -> OffsetsReport {
 
 #[cfg(feature = "memory")]
 mod implementation {
+    use super::Config;
     use crate::memalloc::pure::frames::walk_frames;
     use crate::memalloc::runtime::reader::InProcess;
-    use crate::memalloc::runtime::{heap, pyapi};
+    use crate::memalloc::runtime::{heap, lifecycle, pyapi};
     use crate::memalloc::sink::{self, MemSink};
     use crate::utils::TimeRange;
     use prost::Message;
     use pyo3::prelude::*;
-
-    unsafe extern "C" {
-        pub fn memalloc_start(
-            max_nframe: u16,
-            heap_sample_size: u64,
-            enable_mem_domain: bool,
-        ) -> i32;
-        pub fn memalloc_stop();
-    }
 
     /// Discard all interned strings and buffered samples.
     ///
@@ -135,6 +103,18 @@ mod implementation {
     /// the lifetime of the process.
     pub fn clear_state() {
         sink::lock().reset();
+    }
+
+    pub fn start(config: &Config) -> PyResult<()> {
+        lifecycle::start(
+            config.max_nframe,
+            config.heap_sample_size,
+            config.enable_mem_domain,
+        )
+    }
+
+    pub fn stop() {
+        lifecycle::stop();
     }
 
     pub fn postfork_child() {
@@ -171,7 +151,7 @@ mod implementation {
         // try_attach skips the flush while finalizing on 3.13+ only; on
         // older Pythons the atexit hook is the actual protection.
         let profile = Python::try_attach(|_| {
-            heap::pyroscope_memprof_heap_flush();
+            lifecycle::flush();
             let mut guard = sink::lock();
             let MemSink { strings, builder } = &mut *guard;
             builder.set_memory_profile_type(strings, heap_sample_size);
@@ -187,7 +167,7 @@ mod implementation {
 mod implementation {
     use crate::utils::TimeRange;
 
-    pub unsafe fn memalloc_stop() {}
+    pub fn stop() {}
 
     pub fn postfork_child() {}
 
