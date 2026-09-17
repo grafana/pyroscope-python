@@ -51,12 +51,24 @@ Still to do, in order:
   type every window.
   `memory_projection_reads_only_the_memory_slots` guards the existing
   projection against slot drift and against a time slot leaking in.
-- **Two profile types, not one.** Decided: `wall` and `process_cpu` become
-  separate `ReportBatch` entries, each its own `RawProfileSeries` with its own
-  `__name__`, matching how Pyroscope keys expected sample types off the profile
-  name -- not upstream's single multi-sample-type profile. Note py-spy already
-  emits `process_cpu` (`rust/src/pyspy_backend.rs`), so the two CPU sources
-  have to be made mutually exclusive, and `wall` is net-new to this repo.
+- **One profile, not two.** Decided (reversing an earlier call): the sampler
+  emits a single pprof carrying both `cpu/nanoseconds` and `wall/nanoseconds`
+  sample types, as upstream dd_wrapper does -- one `ReportBatch`, one
+  `RawProfileSeries`, one `__name__`. This is why `PprofBuilderType` has a
+  single `CpuWall` variant and one `FFISampleValues` carries both times.
+
+  Splitting was rejected on a wrong premise, that Pyroscope keys expected
+  sample types off the profile name. It does not: a profile type ID is
+  `__name__:sample_type:sample_unit:period_type:period_unit`, so one series
+  yields one queryable ID per sample type -- which is exactly how `memory`
+  serves four. See the `*ProfileTypeID` constants in
+  `integration-test/integration_test.go`.
+
+  Still open: the `__name__` value. py-spy already emits `process_cpu`
+  (`rust/src/pyspy_backend.rs`), so either the two CPU sources are made
+  mutually exclusive or this one needs a different name. Also note there is no
+  `samples/count` sample type available, since `FFISampleValues` has no count
+  slots; a tally would have to come from how many stacks merge into a row.
 - **A dump path.** Copy the shape of `memory::implementation::dump_pprof` and
   keep its lock order: `interner::string_table()` **before** the profile
   builder lock, never the reverse. The invariant is spelled out on
