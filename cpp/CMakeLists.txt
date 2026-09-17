@@ -134,10 +134,7 @@ target_include_directories(pyroscope_stack SYSTEM PRIVATE
         # Upstream marks this dir SYSTEM for exactly that reason.
         ${CMAKE_CURRENT_SOURCE_DIR}/stack/include/util
 )
-# UNWIND_NATIVE_DISABLE is upstream fidelity only: no code in dd-trace-py's stack
-# tree references it, it is a leftover from an older echion.
 target_compile_definitions(pyroscope_stack PRIVATE
-        UNWIND_NATIVE_DISABLE
         $<IF:$<BOOL:${APPLE}>,PL_DARWIN,PL_LINUX>
 )
 # Upstream's add_ddup_config warning set, which it applies to stack/ddup but NOT

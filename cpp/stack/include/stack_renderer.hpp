@@ -22,12 +22,6 @@ namespace Datadog {
 // (ddog_prof_StringId2). Pyroscope's is a { uint32_t index; } struct.
 using string_id = Pyroscope::string_id;
 
-enum class MetricType : std::uint8_t
-{
-    Time,
-    Memory
-};
-
 struct ThreadState
 {
     // Current thread info.  Keeping one instance of this per StackRenderer is sufficient because the renderer visits

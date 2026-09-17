@@ -214,12 +214,6 @@ Unrelated blocker for turning it on more broadly: `cpp/memalloc/_memalloc.cpp`
 compares an unsigned `heap_sample_size < 0` (gcc `-Wtype-limits`). Pre-existing,
 and memalloc does not get this warning set upstream either.
 
-### Dead code carried over
-- `MetricType` (`cpp/stack/include/stack_renderer.hpp`) is declared and never
-  used.
-- `UNWIND_NATIVE_DISABLE` (`cpp/CMakeLists.txt`) is upstream fidelity only; no
-  code in dd-trace-py's stack tree references it.
-
 ## 3. Free-threaded builds
 
 `rust/build.rs` early-returns under `cfg!(not(feature = "memory"))`, and
