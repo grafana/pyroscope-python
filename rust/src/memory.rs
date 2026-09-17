@@ -49,11 +49,13 @@ pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u
     implementation::dump_pprof(heap_sample_size, time_range)
 }
 
+#[cfg(feature = "debug-introspection")]
 /// What [`offsets_report`] returns: the CPython version this extension was
 /// built for, an error string if the offsets table could not be validated,
 /// and the resolved field offsets.
 pub type OffsetsReport = ((u8, u8), Option<String>, Vec<(&'static str, usize)>);
 
+#[cfg(feature = "debug-introspection")]
 /// What [`walk_stack`] returns: `(function, file, line)` per frame,
 /// innermost first.
 pub type WalkedStack = Vec<(String, String, i32)>;
@@ -63,6 +65,7 @@ pub type WalkedStack = Vec<(String, String, i32)>;
 /// Diagnostic only. `scripts/check_frame_walk.py` compares the result against
 /// `traceback.extract_stack()`, which is the check that a new CPython version
 /// is actually being read correctly.
+#[cfg(feature = "debug-introspection")]
 pub fn walk_stack(max_nframe: u16) -> Result<WalkedStack, String> {
     implementation::walk_stack(max_nframe)
 }
@@ -74,6 +77,7 @@ pub fn walk_stack(max_nframe: u16) -> Result<WalkedStack, String> {
 /// `scripts/check_debug_offsets.py` compares these against ctypes reads of the
 /// same interpreter, which is what catches a transcription error in a mirror
 /// before it can corrupt a profile.
+#[cfg(feature = "debug-introspection")]
 pub fn offsets_report() -> OffsetsReport {
     implementation::offsets_report()
 }
@@ -81,9 +85,7 @@ pub fn offsets_report() -> OffsetsReport {
 #[cfg(feature = "memory")]
 mod implementation {
     use super::Config;
-    use crate::memalloc::pure::frames::walk_frames;
-    use crate::memalloc::runtime::reader::InProcess;
-    use crate::memalloc::runtime::{heap, lifecycle, pyapi};
+    use crate::memalloc::runtime::{heap, lifecycle};
     use crate::memalloc::sink::{self, MemSink};
     use crate::utils::TimeRange;
     use prost::Message;
@@ -118,11 +120,14 @@ mod implementation {
     }
 
     pub fn postfork_child() {
-        heap::pyroscope_memprof_heap_postfork_child();
+        heap::heap_postfork_child();
     }
 
+    #[cfg(feature = "debug-introspection")]
     pub fn walk_stack(max_nframe: u16) -> Result<super::WalkedStack, String> {
-        use crate::memalloc::pure::frames::CollectedFrames;
+        use crate::memalloc::pure::frames::{CollectedFrames, walk_frames};
+        use crate::memalloc::runtime::pyapi;
+        use crate::memalloc::runtime::reader::InProcess;
 
         let offsets = pyapi::resolve().map_err(|error| pyapi::describe(&error))?;
         let mut collected = CollectedFrames::default();
@@ -137,8 +142,10 @@ mod implementation {
         Ok(collected.frames)
     }
 
+    #[cfg(feature = "debug-introspection")]
     pub fn offsets_report() -> super::OffsetsReport {
         use crate::memalloc::pure::offsets;
+        use crate::memalloc::runtime::pyapi;
 
         let build = (offsets::build_major(), offsets::build_minor());
         match pyapi::resolve() {
@@ -177,10 +184,12 @@ mod implementation {
         None
     }
 
+    #[cfg(feature = "debug-introspection")]
     pub fn walk_stack(_max_nframe: u16) -> Result<super::WalkedStack, String> {
         Err("this build does not include memory profiling support".to_owned())
     }
 
+    #[cfg(feature = "debug-introspection")]
     pub fn offsets_report() -> super::OffsetsReport {
         // The build-time version is recorded by build.rs in every feature
         // configuration, so report it even here: it is what tells a user

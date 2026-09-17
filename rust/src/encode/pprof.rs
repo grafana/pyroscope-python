@@ -1,8 +1,8 @@
 use crate::backend::StackTrace;
 use crate::backend::types::Report;
 use crate::encode::r#gen::google::{Function, Label, Line, Location, Profile, Sample, ValueType};
-use crate::encode::pprof::ffi::FFIInternedString;
-use crate::encode::pprof::ffi::{FFIFrame, FFIHeapSampleValues};
+use crate::encode::pprof::sample::Interned;
+use crate::encode::pprof::sample::{Frame, HeapValues};
 use crate::utils::TimeRange;
 use hashbrown::hash_map::EntryRef;
 use std::borrow::Borrow;
@@ -14,7 +14,7 @@ pub struct PProfBuilder {
     functions: HashMap<FunctionMirror, u64>,
     locations: HashMap<LocationMirror, u64>,
     memory_samples: hashbrown::HashMap<Vec<u64>, [i64; 4]>,
-    ffi_locations_scratch: Vec<u64>,
+    locations_scratch: Vec<u64>,
 }
 #[derive(Hash, PartialEq, Eq, Clone)]
 pub struct LocationMirror {
@@ -40,7 +40,7 @@ impl PProfBuilder {
             functions: HashMap::new(),
             locations: HashMap::new(),
             memory_samples: hashbrown::HashMap::new(),
-            ffi_locations_scratch: Vec::new(),
+            locations_scratch: Vec::new(),
             profile: Profile {
                 sample_type: vec![],
                 sample: vec![],
@@ -135,8 +135,8 @@ impl PProfBuilder {
         self.profile.sample.push(sample);
     }
 
-    pub fn add_ffi_sample(&mut self, frames: &[FFIFrame], values: &FFIHeapSampleValues) {
-        let mut location_ids = std::mem::take(&mut self.ffi_locations_scratch);
+    pub fn add_memory_sample(&mut self, frames: &[Frame], values: &HeapValues) {
+        let mut location_ids = std::mem::take(&mut self.locations_scratch);
         location_ids.clear();
         location_ids.reserve(frames.len());
 
@@ -167,7 +167,7 @@ impl PProfBuilder {
                 entry.insert_entry_with_key(location_ids.clone(), sample_values);
             }
         }
-        self.ffi_locations_scratch = location_ids;
+        self.locations_scratch = location_ids;
     }
 
     fn flush_memory_samples(&mut self) {
@@ -232,7 +232,7 @@ impl PProfBuilder {
         self.locations.clear();
         self.functions.clear();
         self.memory_samples.clear();
-        self.ffi_locations_scratch.clear();
+        self.locations_scratch.clear();
     }
     pub fn take_profile_and_reset(
         &mut self,
@@ -284,18 +284,18 @@ impl StringID {
         let id: u32 = id as u32;
         Self { index: id }
     }
-    pub fn empty_ffi_string() -> FFIInternedString {
-        FFIInternedString { index: 0 }
+    pub fn empty_ffi_string() -> Interned {
+        Interned { index: 0 }
     }
 }
 
-impl From<&FFIInternedString> for StringID {
-    fn from(value: &FFIInternedString) -> Self {
+impl From<&Interned> for StringID {
+    fn from(value: &Interned) -> Self {
         Self { index: value.index }
     }
 }
 
-impl From<&StringID> for FFIInternedString {
+impl From<&StringID> for Interned {
     fn from(value: &StringID) -> Self {
         Self { index: value.index }
     }
@@ -368,7 +368,7 @@ impl StringTable {
     }
 
     #[cfg(debug_assertions)]
-    pub fn debug_get_ffi(&self, id: &FFIInternedString) -> &str {
+    pub fn debug_get_ffi(&self, id: &Interned) -> &str {
         self.set
             .iter()
             .find(|it| it.0.index.index == id.index)
@@ -403,61 +403,51 @@ impl StringTable {
     }
 }
 
-pub mod ffi {
-    use std::ffi::{c_char, c_int};
-
-    #[repr(C)]
+/// The sample shape the memory profiler builds.
+///
+/// These were `#[repr(C)]` and named `FFI*` because they crossed a C ABI into
+/// the C++ profiler. That boundary is gone, so they are ordinary Rust types;
+/// the names are kept short rather than renamed wholesale to keep the
+/// rewrite's history readable.
+pub mod sample {
+    /// An interned string, as an index into the profile's string table.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    pub struct FFIFrame {
-        pub function_name: FFIInternedString,
-        pub file_name: FFIInternedString,
-        pub line: c_int,
+    pub struct Interned {
+        pub index: u32,
     }
 
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    pub struct FFIStringView {
-        pub data: *const c_char,
-        pub len: usize,
-    }
-
-    #[repr(C)]
-    #[derive(Clone, Copy)]
-    pub struct FFISample {
-        pub frames: *const FFIFrame,
-        pub len: usize,
-        pub values: FFIHeapSampleValues,
-    }
-
-    #[repr(C)]
+    /// One frame of a sampled stack.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    pub struct FFIHeapSampleValues {
+    pub struct Frame {
+        pub function_name: Interned,
+        pub file_name: Interned,
+        pub line: i32,
+    }
+
+    /// The four values a memory sample carries, in the order the profile's
+    /// sample types declare them.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct HeapValues {
         pub heap_space: usize,
         pub heap_count: usize,
         pub alloc_space: usize,
         pub alloc_count: usize,
     }
-
-    #[repr(C)]
-    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    pub struct FFIInternedString {
-        pub index: u32,
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ffi::{FFIFrame, FFIHeapSampleValues, FFIInternedString};
+    use super::sample::{Frame, HeapValues, Interned};
     use super::{PProfBuilder, StringTable};
     use crate::utils::TimeRange;
     use std::time::{Duration, UNIX_EPOCH};
 
-    fn frame(function_name: u32, file_name: u32, line: i32) -> FFIFrame {
-        FFIFrame {
-            function_name: FFIInternedString {
+    fn frame(function_name: u32, file_name: u32, line: i32) -> Frame {
+        Frame {
+            function_name: Interned {
                 index: function_name,
             },
-            file_name: FFIInternedString { index: file_name },
+            file_name: Interned { index: file_name },
             line,
         }
     }
@@ -467,8 +457,8 @@ mod tests {
         heap_count: usize,
         alloc_space: usize,
         alloc_count: usize,
-    ) -> FFIHeapSampleValues {
-        FFIHeapSampleValues {
+    ) -> HeapValues {
+        HeapValues {
             heap_space,
             heap_count,
             alloc_space,
@@ -481,8 +471,8 @@ mod tests {
         let mut builder = PProfBuilder::new();
         let frames = [frame(1, 2, 10), frame(3, 4, 20)];
 
-        builder.add_ffi_sample(&frames, &values(0, 0, 100, 2));
-        builder.add_ffi_sample(&frames, &values(300, 4, 0, 0));
+        builder.add_memory_sample(&frames, &values(0, 0, 100, 2));
+        builder.add_memory_sample(&frames, &values(300, 4, 0, 0));
 
         assert_eq!(builder.memory_samples.len(), 1);
         assert!(builder.profile.sample.is_empty());
@@ -497,8 +487,8 @@ mod tests {
     fn distinct_ffi_stacks_remain_distinct() {
         let mut builder = PProfBuilder::new();
 
-        builder.add_ffi_sample(&[frame(1, 2, 10)], &values(0, 0, 100, 1));
-        builder.add_ffi_sample(&[frame(1, 2, 20)], &values(0, 0, 200, 2));
+        builder.add_memory_sample(&[frame(1, 2, 10)], &values(0, 0, 100, 1));
+        builder.add_memory_sample(&[frame(1, 2, 20)], &values(0, 0, 200, 2));
         builder.flush_memory_samples();
 
         assert_eq!(builder.profile.sample.len(), 2);
@@ -519,7 +509,7 @@ mod tests {
         let time_range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
 
         builder.set_memory_profile_type(&mut strings, 512 * 1024);
-        builder.add_ffi_sample(&[frame(1, 2, 10)], &values(300, 2, 100, 1));
+        builder.add_memory_sample(&[frame(1, 2, 10)], &values(300, 2, 100, 1));
 
         let profile = builder
             .take_profile_and_reset(&strings, &time_range)
@@ -542,9 +532,9 @@ mod tests {
         let mut builder = PProfBuilder::new();
         let frames = [frame(1, 2, 10)];
 
-        builder.add_ffi_sample(&frames, &values(0, 0, 100, 1));
+        builder.add_memory_sample(&frames, &values(0, 0, 100, 1));
         builder.reset();
-        builder.add_ffi_sample(&frames, &values(0, 0, 200, 2));
+        builder.add_memory_sample(&frames, &values(0, 0, 200, 2));
         builder.flush_memory_samples();
 
         assert_eq!(builder.profile.sample.len(), 1);

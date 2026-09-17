@@ -163,7 +163,11 @@ def main():
         sys.exit(f"could not import pyroscope._native: {exc}")
 
     if not hasattr(_native, "_debug_offsets_selftest"):
-        sys.exit("this build has no _debug_offsets_selftest; rebuild the extension")
+        sys.exit(
+            "this build has no _debug_offsets_selftest. Rebuild with the\n"
+            "diagnostics compiled in:\n\n"
+            "    PYROSCOPE_DEBUG_INTROSPECTION=1 pip install --force-reinstall .\n"
+        )
 
     report = _native._debug_offsets_selftest()
     print(f"interpreter      : CPython {sys.version.split()[0]}")

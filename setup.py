@@ -37,6 +37,12 @@ if (
 ):
     features.append("memory")
 
+    # Opt-in diagnostics, used by scripts/check_debug_offsets.py and
+    # scripts/check_frame_walk.py when bringing up a new CPython version.
+    # Off in shipped wheels.
+    if os.environ.get("PYROSCOPE_DEBUG_INTROSPECTION") == "1":
+        features.append("debug-introspection")
+
 setup(
     rust_extensions=[
         RustExtension(

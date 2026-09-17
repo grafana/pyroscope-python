@@ -21,7 +21,7 @@
 //! clearing the allocation values, and getting it wrong would silently change
 //! what `inuse_objects` means.
 
-use crate::encode::pprof::ffi::{FFIFrame, FFIHeapSampleValues};
+use crate::encode::pprof::sample::{Frame, HeapValues};
 use crate::memalloc::limits::{
     INITIAL_ALLOC_MAP_CAPACITY, POOL_CAPACITY, TRACEBACK_ARRAY_MAX_COUNT,
 };
@@ -35,15 +35,15 @@ pub trait Samples {
     /// Fill `frames` with the current Python stack, innermost first.
     ///
     /// The buffer arrives cleared and may already have capacity from the pool.
-    fn collect(&mut self, max_nframe: u16, frames: &mut Vec<FFIFrame>);
+    fn collect(&mut self, max_nframe: u16, frames: &mut Vec<Frame>);
 
     /// Export one sample.
-    fn emit(&mut self, frames: &[FFIFrame], values: FFIHeapSampleValues);
+    fn emit(&mut self, frames: &[Frame], values: HeapValues);
 }
 
 /// A sampled allocation that is still live.
 struct LiveSample {
-    frames: Vec<FFIFrame>,
+    frames: Vec<Frame>,
     heap_space: usize,
     heap_count: usize,
 }
@@ -59,7 +59,7 @@ pub struct HeapTracker {
     /// Live sampled allocations, keyed by address.
     allocs: hashbrown::HashMap<usize, LiveSample>,
     /// Recycled frame buffers, so a steady state does no allocation.
-    pool: Vec<Vec<FFIFrame>>,
+    pool: Vec<Vec<Frame>>,
     /// Samples declined because the live map was full.
     declined_map_full: u64,
     /// Addresses that were already tracked when inserted, which means an
@@ -118,7 +118,7 @@ impl HeapTracker {
         // The allocation sample is exported now and not retained.
         samples.emit(
             &frames,
-            FFIHeapSampleValues {
+            HeapValues {
                 alloc_space: space,
                 alloc_count: count,
                 heap_space: 0,
@@ -158,7 +158,7 @@ impl HeapTracker {
         for entry in self.allocs.values() {
             samples.emit(
                 &entry.frames,
-                FFIHeapSampleValues {
+                HeapValues {
                     heap_space: entry.heap_space,
                     heap_count: entry.heap_count,
                     alloc_space: 0,
@@ -195,7 +195,7 @@ impl HeapTracker {
         (self.declined_map_full, self.duplicate_inserts)
     }
 
-    fn recycle(&mut self, mut frames: Vec<FFIFrame>) {
+    fn recycle(&mut self, mut frames: Vec<Frame>) {
         // Clear before pooling so a retained buffer never keeps stale frames
         // alive, and keep the pool bounded.
         frames.clear();
@@ -217,14 +217,14 @@ mod tests {
     )]
 
     use super::*;
-    use crate::encode::pprof::ffi::FFIInternedString;
+    use crate::encode::pprof::sample::Interned;
     use crate::memalloc::pure::rng::MinstdRand;
 
     /// Records what the tracker asked for, with no interpreter involved.
     #[derive(Default)]
     struct StubSamples {
         /// Every emitted sample, as `(frame count, values)`.
-        emitted: Vec<(usize, FFIHeapSampleValues)>,
+        emitted: Vec<(usize, HeapValues)>,
         /// How many frames `collect` should produce.
         frames_to_make: usize,
         /// Frame-cap values `collect` was asked for.
@@ -232,25 +232,25 @@ mod tests {
     }
 
     impl Samples for StubSamples {
-        fn collect(&mut self, max_nframe: u16, frames: &mut Vec<FFIFrame>) {
+        fn collect(&mut self, max_nframe: u16, frames: &mut Vec<Frame>) {
             self.caps_seen.push(max_nframe);
             assert!(frames.is_empty(), "buffer arrived dirty");
             for i in 0..self.frames_to_make {
-                frames.push(FFIFrame {
-                    function_name: FFIInternedString { index: i as u32 },
-                    file_name: FFIInternedString { index: 0 },
+                frames.push(Frame {
+                    function_name: Interned { index: i as u32 },
+                    file_name: Interned { index: 0 },
                     line: i as i32,
                 });
             }
         }
 
-        fn emit(&mut self, frames: &[FFIFrame], values: FFIHeapSampleValues) {
+        fn emit(&mut self, frames: &[Frame], values: HeapValues) {
             self.emitted.push((frames.len(), values));
         }
     }
 
     impl StubSamples {
-        fn allocs(&self) -> Vec<&FFIHeapSampleValues> {
+        fn allocs(&self) -> Vec<&HeapValues> {
             self.emitted
                 .iter()
                 .filter(|(_, v)| v.alloc_space > 0 || v.alloc_count > 0)
@@ -258,7 +258,7 @@ mod tests {
                 .collect()
         }
 
-        fn heaps(&self) -> Vec<&FFIHeapSampleValues> {
+        fn heaps(&self) -> Vec<&HeapValues> {
             self.emitted
                 .iter()
                 .filter(|(_, v)| v.heap_space > 0 || v.heap_count > 0)

@@ -1,4 +1,5 @@
-//! The process-wide heap tracker, and the C ABI the allocator hooks call.
+//! The process-wide heap tracker, and the entry points the allocator hooks
+//! call.
 //!
 //! # Why an `AtomicPtr` and not a `Mutex`
 //!
@@ -18,7 +19,7 @@
 //! every access and count hooks in flight, which `deinit` then checks.
 
 use crate::encode::pprof::StringTable;
-use crate::encode::pprof::ffi::FFIFrame;
+use crate::encode::pprof::sample::Frame;
 use crate::forksafety::LeakablePtr;
 use crate::memalloc::pure::frames::{FrameSink, walk_frames};
 use crate::memalloc::pure::heap::HeapTracker;
@@ -73,7 +74,7 @@ struct InterpreterStack {
 }
 
 impl StackCollector for InterpreterStack {
-    fn collect(&mut self, strings: &mut StringTable, max_nframe: u16, frames: &mut Vec<FFIFrame>) {
+    fn collect(&mut self, strings: &mut StringTable, max_nframe: u16, frames: &mut Vec<Frame>) {
         let mut sink = InterningFrames { frames, strings };
         walk_frames(
             &InProcess,
@@ -88,7 +89,7 @@ impl StackCollector for InterpreterStack {
 
 /// Interns each frame's strings and appends it to a buffer.
 struct InterningFrames<'a> {
-    frames: &'a mut Vec<FFIFrame>,
+    frames: &'a mut Vec<Frame>,
     strings: &'a mut StringTable,
 }
 
@@ -96,7 +97,7 @@ impl FrameSink for InterningFrames<'_> {
     fn push_frame(&mut self, function: &str, file: &str, line: i32) {
         let function_name = (&self.strings.add(function)).into();
         let file_name = (&self.strings.add(file)).into();
-        self.frames.push(FFIFrame {
+        self.frames.push(Frame {
             function_name,
             file_name,
             line,
@@ -134,8 +135,7 @@ impl Drop for InFlight {
 /// # Safety
 ///
 /// Must be called with the GIL held and before any hook is installed.
-#[unsafe(no_mangle)]
-pub extern "C" fn pyroscope_memprof_heap_init(sample_size: u32, max_nframe: u16) -> bool {
+pub fn heap_init(sample_size: u32, max_nframe: u16) -> bool {
     if !TRACKER.load(Ordering::Acquire).is_null() {
         return false;
     }
@@ -157,8 +157,7 @@ pub extern "C" fn pyroscope_memprof_heap_init(sample_size: u32, max_nframe: u16)
 /// # Safety
 ///
 /// Must be called with the GIL held and after the hooks are uninstalled.
-#[unsafe(no_mangle)]
-pub extern "C" fn pyroscope_memprof_heap_deinit() {
+pub fn heap_deinit() {
     #[cfg(debug_assertions)]
     debug_assert_eq!(
         IN_FLIGHT.load(Ordering::Acquire),
@@ -181,8 +180,7 @@ pub extern "C" fn pyroscope_memprof_heap_deinit() {
 ///
 /// Called from inside the allocator hook with the GIL held. Must not allocate
 /// through PyMem, touch refcounts, touch `PyErr`, or unwind.
-#[unsafe(no_mangle)]
-pub extern "C" fn pyroscope_memprof_heap_track(ptr: *mut std::ffi::c_void, size: usize) {
+pub fn heap_track(ptr: *mut std::ffi::c_void, size: usize) {
     if ptr.is_null() {
         return;
     }
@@ -221,8 +219,7 @@ pub extern "C" fn pyroscope_memprof_heap_track(ptr: *mut std::ffi::c_void, size:
 /// # Safety
 ///
 /// Called from inside the allocator hook with the GIL held.
-#[unsafe(no_mangle)]
-pub extern "C" fn pyroscope_memprof_heap_untrack(ptr: *mut std::ffi::c_void) {
+pub fn heap_untrack(ptr: *mut std::ffi::c_void) {
     if ptr.is_null() {
         return;
     }
@@ -240,8 +237,7 @@ pub extern "C" fn pyroscope_memprof_heap_untrack(ptr: *mut std::ffi::c_void) {
 /// # Safety
 ///
 /// Must be called with the GIL held.
-#[unsafe(no_mangle)]
-pub extern "C" fn pyroscope_memprof_heap_flush() {
+pub fn heap_flush() {
     let Ok(offsets) = pyapi::resolve() else {
         return;
     };
@@ -267,8 +263,7 @@ pub extern "C" fn pyroscope_memprof_heap_flush() {
 ///
 /// Must be called from a post-fork child handler, before any other Python code
 /// runs.
-#[unsafe(no_mangle)]
-pub extern "C" fn pyroscope_memprof_heap_postfork_child() {
+pub fn heap_postfork_child() {
     // Pin this thread as "inside a hook" so nothing the handler itself
     // allocates gets tracked while we are tearing state down.
     reentrancy::force_set(true);

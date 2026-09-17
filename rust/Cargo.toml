@@ -32,3 +32,9 @@ pyo3-build-config = "0.29"
 [features]
 default = []
 memory = []
+# Exposes _debug_offsets_selftest and _debug_walk_stack, which
+# scripts/check_debug_offsets.py and scripts/check_frame_walk.py use to
+# validate a new CPython version without having to produce and query a
+# profile. Not enabled in shipped wheels; turn it on when bringing up support
+# for a new interpreter.
+debug-introspection = ["memory"]

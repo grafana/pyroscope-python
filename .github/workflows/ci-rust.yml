@@ -58,6 +58,11 @@ jobs:
           set -euo pipefail
           export PYO3_PYTHON="$(which python)"
           cargo clippy --all-targets --no-default-features -- --deny warnings
+          # The configuration wheels actually ship: setup.py enables `memory`
+          # and nothing else. Checked explicitly, because --all-features also
+          # turns on the diagnostics feature and would hide unused imports
+          # here.
+          cargo clippy --all-targets --features memory -- --deny warnings
           cargo clippy --all-targets --all-features -- --deny warnings
         working-directory: rust
 
@@ -97,6 +102,8 @@ jobs:
         run: |
           set -euo pipefail
           export PYO3_PYTHON="$(which python)"
+          # As shipped, then with the diagnostics feature on too.
+          cargo test --locked --features memory
           cargo test --locked --all-features
         working-directory: rust
 

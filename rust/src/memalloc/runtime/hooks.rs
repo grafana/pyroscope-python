@@ -115,7 +115,7 @@ fn hook_alloc(
     };
 
     if !ptr.is_null() {
-        heap::pyroscope_memprof_heap_track(ptr, size);
+        heap::heap_track(ptr, size);
     }
     ptr
 }
@@ -133,8 +133,8 @@ fn hook_realloc(saved: &SavedAllocator, ptr: *mut c_void, new_size: usize) -> *m
     let new_ptr = realloc(alloc.ctx, ptr, new_size);
 
     if !new_ptr.is_null() {
-        heap::pyroscope_memprof_heap_untrack(ptr);
-        heap::pyroscope_memprof_heap_track(new_ptr, new_size);
+        heap::heap_untrack(ptr);
+        heap::heap_track(new_ptr, new_size);
     } else if new_size == 0 && !ptr.is_null() {
         // realloc(ptr, 0) is implementation-defined: some allocators (glibc
         // among them) free ptr and return null. In that case ptr is gone and
@@ -143,7 +143,7 @@ fn hook_realloc(saved: &SavedAllocator, ptr: *mut c_void, new_size: usize) -> *m
         // When new_size > 0 and the result is null the allocation merely
         // failed: ptr is still valid and must stay tracked. Hence the
         // new_size == 0 condition.
-        heap::pyroscope_memprof_heap_untrack(ptr);
+        heap::heap_untrack(ptr);
     }
     new_ptr
 }
@@ -160,7 +160,7 @@ fn hook_free(saved: &SavedAllocator, ptr: *mut c_void) {
     let Some(free) = alloc.free else {
         return;
     };
-    heap::pyroscope_memprof_heap_untrack(ptr);
+    heap::heap_untrack(ptr);
     // Delegating to the allocator we displaced, with its own ctx.
     free(alloc.ctx, ptr);
 }

@@ -1,7 +1,3 @@
-// Not yet wired into the profiler: the modules land first, with their tests,
-// and the allocator hooks move over to them in a later step. The attribute
-// goes away once `memory.rs` calls into them.
-#[allow(dead_code)]
 pub mod memalloc;
 
 // Test binary only. The shipped extension must never override the global
@@ -39,7 +35,9 @@ use std::{
 
 use crate::backend::{BackendConfig, Tag, ThreadTagsSet};
 use crate::pyroscope::PyroscopeAgentBuilder;
-use pyo3::exceptions::{PyDeprecationWarning, PyRuntimeError, PyValueError};
+#[cfg(feature = "debug-introspection")]
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyDeprecationWarning, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::wrap_pyfunction;
@@ -240,9 +238,10 @@ fn initialize_agent(
 
 /// Diagnostic view of the memory profiler's CPython offset resolution.
 ///
-/// Temporary: `scripts/check_debug_offsets.py` and the frame-walk check use it
-/// to validate a new CPython version without having to produce and query a
-/// profile. Moves behind a non-default feature once the rewrite lands.
+/// Behind the non-default `debug-introspection` feature.
+/// `scripts/check_debug_offsets.py` uses it to validate a new CPython version
+/// without having to produce and query a profile.
+#[cfg(feature = "debug-introspection")]
 #[pyfunction]
 fn _debug_offsets_selftest(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
     let (build, error, offsets) = memory::offsets_report();
@@ -260,8 +259,10 @@ fn _debug_offsets_selftest(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
 
 /// Walk the calling thread's Python stack with the memory profiler's walker.
 ///
-/// Temporary diagnostic, paired with `scripts/check_frame_walk.py`. Returns
-/// `(function, file, line)` per frame, innermost first.
+/// Behind the non-default `debug-introspection` feature, paired with
+/// `scripts/check_frame_walk.py`. Returns `(function, file, line)` per frame,
+/// innermost first.
+#[cfg(feature = "debug-introspection")]
 #[pyfunction]
 #[pyo3(signature = (max_nframe = 600))]
 fn _debug_walk_stack(max_nframe: u16) -> PyResult<Vec<(String, String, i32)>> {
@@ -313,8 +314,11 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(drop_agent, m)?)?;
     m.add_function(wrap_pyfunction!(add_thread_tag, m)?)?;
     m.add_function(wrap_pyfunction!(remove_thread_tag, m)?)?;
-    m.add_function(wrap_pyfunction!(_debug_offsets_selftest, m)?)?;
-    m.add_function(wrap_pyfunction!(_debug_walk_stack, m)?)?;
+    #[cfg(feature = "debug-introspection")]
+    {
+        m.add_function(wrap_pyfunction!(_debug_offsets_selftest, m)?)?;
+        m.add_function(wrap_pyfunction!(_debug_walk_stack, m)?)?;
+    }
     register_fork_handlers(m)?;
     register_atexit_handler(m)?;
     Ok(())

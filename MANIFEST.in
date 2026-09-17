@@ -2,4 +2,3 @@ include rust/Cargo.toml
 include rust/Cargo.lock
 include rust/build.rs
 recursive-include rust/src/ *.rs
-include rust/include/pyroscope_ffi.h

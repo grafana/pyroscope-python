@@ -1,7 +1,3 @@
-.PHONY: ffi/python/header
-ffi/python/header:
-	cd rust && cbindgen --config cbindgen.toml --output include/pyroscope_ffi.h
-
 .PHONY: linux/amd64
 linux/amd64:
 	docker buildx build \

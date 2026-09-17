@@ -18,7 +18,7 @@
 //! which the forking thread owns -- incidental, and it would break as soon as
 //! any of this work moved off the GIL.
 
-use crate::encode::pprof::ffi::{FFIFrame, FFIHeapSampleValues};
+use crate::encode::pprof::sample::{Frame, HeapValues};
 use crate::encode::pprof::{PProfBuilder, StringTable};
 use crate::forksafety::LeakableMutex;
 use crate::memalloc::pure::heap::Samples;
@@ -105,20 +105,20 @@ impl<'a, C> SinkSamples<'a, C> {
 pub trait StackCollector {
     /// Append the current Python stack to `frames`, interning through
     /// `strings`.
-    fn collect(&mut self, strings: &mut StringTable, max_nframe: u16, frames: &mut Vec<FFIFrame>);
+    fn collect(&mut self, strings: &mut StringTable, max_nframe: u16, frames: &mut Vec<Frame>);
 }
 
 impl<C: StackCollector> Samples for SinkSamples<'_, C> {
-    fn collect(&mut self, max_nframe: u16, frames: &mut Vec<FFIFrame>) {
+    fn collect(&mut self, max_nframe: u16, frames: &mut Vec<Frame>) {
         self.collector
             .collect(&mut self.guard.strings, max_nframe, frames);
     }
 
-    fn emit(&mut self, frames: &[FFIFrame], values: FFIHeapSampleValues) {
+    fn emit(&mut self, frames: &[Frame], values: HeapValues) {
         if frames.is_empty() {
             return;
         }
-        self.guard.builder.add_ffi_sample(frames, &values);
+        self.guard.builder.add_memory_sample(frames, &values);
     }
 }
 
@@ -131,7 +131,7 @@ mod tests {
     )]
 
     use super::*;
-    use crate::encode::pprof::ffi::FFIInternedString;
+    use crate::encode::pprof::sample::Interned;
     use crate::memalloc::pure::heap::HeapTracker;
 
     /// An arbitrary window; the sink does not care what it is.
@@ -148,16 +148,11 @@ mod tests {
     }
 
     impl StackCollector for FakeCollector {
-        fn collect(
-            &mut self,
-            strings: &mut StringTable,
-            max_nframe: u16,
-            frames: &mut Vec<FFIFrame>,
-        ) {
+        fn collect(&mut self, strings: &mut StringTable, max_nframe: u16, frames: &mut Vec<Frame>) {
             for name in self.names.iter().take(usize::from(max_nframe)) {
                 let function_name = (&strings.add(name)).into();
                 let file_name = (&strings.add("fake.py")).into();
-                frames.push(FFIFrame {
+                frames.push(Frame {
                     function_name,
                     file_name,
                     line: 1,
@@ -203,7 +198,7 @@ mod tests {
         {
             let collector = FakeCollector { names: vec![] };
             let mut samples = SinkSamples::new(&mut sink, collector);
-            samples.emit(&[], FFIHeapSampleValues::default());
+            samples.emit(&[], HeapValues::default());
         }
         let profile = sink
             .builder
@@ -228,6 +223,6 @@ mod tests {
 
     #[test]
     fn unused_interned_string_type_compiles() {
-        let _ = FFIInternedString::default();
+        let _ = Interned::default();
     }
 }

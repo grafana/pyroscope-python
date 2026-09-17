@@ -10,25 +10,6 @@ permissions:
   contents: read
 
 jobs:
-  check-generated-ffi:
-    name: Check generated FFI files
-    runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: 1.96.0
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
-        with:
-          python-version: 3.11
-      - run: cargo install cbindgen --locked --version 0.29.3
-      - run: python -m pip install cffi
-      - run: make ffi/python/header
-      - run: git diff --exit-code
-
   check-linetable-corpus:
     name: Check line-table corpus
     runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
@@ -81,6 +62,19 @@ jobs:
               echo "Wheel: $whl"
               unzip -p "$whl" '*.dist-info/WHEEL'
               unzip -p "$whl" '*.dist-info/WHEEL' | grep -qE 'Tag:.*(manylinux|musllinux)' || { echo "ERROR: expected manylinux or musllinux tag not found"; exit 1; }
+          done
+
+      - name: Check the thread-local storage model
+        run: |
+          set -euxo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq binutils
+          work=$(mktemp -d)
+          for whl in dist/*.whl; do
+              rm -rf "$work"/*
+              unzip -q "$whl" -d "$work"
+              for so in "$work"/pyroscope/_native*.so; do
+                  ./scripts/check_tls_model.sh "$so"
+              done
           done
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

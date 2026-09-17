@@ -49,7 +49,7 @@ pub fn start(max_nframe: u16, heap_sample_size: u64, enable_mem_domain: bool) ->
     // PANIC-OK: bounded by the check above.
     #[allow(clippy::cast_possible_truncation)]
     let sample_size = heap_sample_size as u32;
-    if !heap::pyroscope_memprof_heap_init(sample_size, max_nframe) {
+    if !heap::heap_init(sample_size, max_nframe) {
         return Err(PyRuntimeError::new_err("failed to initialize heap tracker"));
     }
 
@@ -78,7 +78,7 @@ pub fn stop() {
     unsafe {
         hooks::uninstall_hooks();
     }
-    heap::pyroscope_memprof_heap_deinit();
+    heap::heap_deinit();
     ENABLED.store(false, Ordering::Release);
 }
 
@@ -89,7 +89,7 @@ pub fn flush() {
     if !ENABLED.load(Ordering::Acquire) {
         return;
     }
-    heap::pyroscope_memprof_heap_flush();
+    heap::heap_flush();
 }
 
 /// Whether the profiler is currently running.
