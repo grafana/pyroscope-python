@@ -17,6 +17,11 @@ line_length = 80
 parse_deps = false
 
 [export]
+# Only the C++-facing struct and function surface. Without this, every `pub
+# const` in the crate is emitted as a `#define` -- and the names in
+# `memalloc::limits` deliberately mirror the C++ macros in
+# `cpp/_memalloc_tb.h`, so they would collide on redefinition.
+item_types = ["structs", "functions"]
 include = [
   "FFIInternedString",
   "FFIStringView",

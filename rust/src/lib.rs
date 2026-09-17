@@ -1,3 +1,17 @@
+// Not yet wired into the profiler: the modules land first, with their tests,
+// and the allocator hooks move over to them in a later step. The attribute
+// goes away once `memory.rs` calls into them.
+#[allow(dead_code)]
+pub mod memalloc;
+
+// Test binary only. The shipped extension must never override the global
+// allocator: Rust's allocator has to stay on libc malloc so that work done
+// inside an allocator hook cannot re-enter PyMem. See `memalloc`'s module
+// docs, and `memalloc::testing` for why this exception is safe.
+#[cfg(test)]
+#[global_allocator]
+static COUNTING_ALLOCATOR: memalloc::testing::CountingAllocator =
+    memalloc::testing::CountingAllocator;
 mod memory;
 mod pyspy_backend;
 

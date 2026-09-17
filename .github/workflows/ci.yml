@@ -29,6 +29,24 @@ jobs:
       - run: make ffi/python/header
       - run: git diff --exit-code
 
+  check-linetable-corpus:
+    name: Check line-table corpus
+    runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: 3.13
+      # Two independent checks: that the reference parser still agrees with
+      # CPython's own co_positions() across the whole stdlib, and that the
+      # committed fixture the Rust tests replay is self-consistent. The second
+      # is version independent, because every record carries its own
+      # line-table bytes.
+      - run: python scripts/gen_linetable_corpus.py --verify
+
   python-linux-build:
     strategy:
       fail-fast: false
