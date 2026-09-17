@@ -35,8 +35,8 @@
 // AIDEV-TODO: Revisit direct frame walking and heap-tracker synchronization if memalloc adds Py_GIL_DISABLED support.
 
 /* Frame access helpers and line table parsing. */
-#include "../profiling_helpers/frame_accessors.h"
-#include "../profiling_helpers/linetable_parser.h"
+#include "profiling_helpers/frame_accessors.h"
+#include "profiling_helpers/linetable_parser.h"
 
 /* Return the current line number for the frame by parsing the line table
  * directly, without calling PyCode_Addr2Line().
