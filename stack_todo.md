@@ -219,9 +219,6 @@ and memalloc does not get this warning set upstream either.
   used.
 - `UNWIND_NATIVE_DISABLE` (`cpp/CMakeLists.txt`) is upstream fidelity only; no
   code in dd-trace-py's stack tree references it.
-- `<ddup_interface.hpp>` (`cpp/stack/src/stack_renderer.cpp`) references no
-  symbol; `cpp/dd_wrapper/include/ddup_interface.hpp` exists only so the
-  include needs no patching. Drop both if the renderer is ever edited.
 
 ## 3. Free-threaded builds
 

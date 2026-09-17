@@ -12,7 +12,6 @@
 // Pyroscope patch: intern strings into Pyroscope's Rust-backed string table
 // instead of libdatadog's Profiles Dictionary.
 #include "Pyroscope.h"
-#include <ddup_interface.hpp>
 #include <unordered_map>
 
 using namespace Datadog;

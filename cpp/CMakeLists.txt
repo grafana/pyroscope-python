@@ -126,10 +126,6 @@ target_link_libraries(pyroscope_memalloc PRIVATE pyroscope_common absl::flat_has
 add_library(pyroscope_stack OBJECT ${STACK_SOURCES})
 target_link_libraries(pyroscope_stack PRIVATE pyroscope_common)
 target_include_directories(pyroscope_stack PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/stack/include)
-# The quoted "dd_wrapper/include/..." includes in cpp/stack resolve through
-# pyroscope_common's ${CMAKE_CURRENT_SOURCE_DIR}; this dir is needed only for
-# stack_renderer.cpp's angle-bracket <ddup_interface.hpp>, which upstream picks
-# up from the imported dd_wrapper target's INTERFACE_INCLUDE_DIRECTORIES.
 target_include_directories(pyroscope_stack PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/dd_wrapper/include)
 target_include_directories(pyroscope_stack SYSTEM PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/stack/echion
