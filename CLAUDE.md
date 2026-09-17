@@ -54,13 +54,11 @@ upstream path over editing a vendored source.
 
 ## Conventions
 
-- **Every deviation from upstream gets a `// Pyroscope patch:` banner** naming
-  the upstream symbol it replaces, how ours differs, and what callers must
-  therefore *not* do. These are the port's real documentation; there is no
-  design doc. See `cpp/pyroscope/Pyroscope.h` for the house style.
-- Rationale lives in code comments, not commit bodies.
+- Where a shim's behaviour differs from the upstream symbol it stands in for,
+  mark it `// Pyroscope patch:` so a vendor sync can find it. Keep it to the
+  difference itself; the global comment rules still apply.
 - Unfinished work gets a `TODO(Pyroscope):` at the site, and an entry in
-  `stack_todo.md`.
+  `stack_todo.md`. Put the explanation in `stack_todo.md`, not at the site.
 - Do not "fix" a vendored oddity without checking upstream first -- several are
   load-bearing, and `cpp/CMakeLists.txt` documents flags that must *not* be
   restored on a sync.

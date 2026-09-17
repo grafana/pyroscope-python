@@ -9,39 +9,67 @@ Status: **the static library compiles and archives; the sampler produces no
 data.** It walks stacks correctly and throws every sample away. Nothing in
 Python imports it yet.
 
-## 1. Blocking: no sample ever reaches Rust
+## 1. Blocking: CPU samples reach Rust and are dropped there
 
 The whole point, and everything else in section 2 is downstream of it.
 
-`Pyroscope::Sample::flush_sample()` (`cpp/pyroscope/Pyroscope.h`) is a no-op, as
-are the eight CPU-side `push_*` methods next to it. It deliberately does **not**
-forward to `export_sample()`: that pushes through
-`pyroscope_memprof_push_sample` into the memory profile builder, so forwarding
-would splice CPU stacks -- carrying all-zero alloc and heap values, since
-nothing on that path calls `push_alloc`/`push_heap` -- into every memory pprof
-we upload.
+The C++ side is wired up end to end. `Sample::push_cputime`/`push_walltime`
+accumulate into `FFISampleValues.cpu_time`/`wall_time`, every `Sample` carries
+the `PprofBuilderType` it was constructed with, and `flush_sample()` forwards to
+`export_sample()`, which calls
+`pyroscope_push_sample(builder_type, frames, len, values)`. Forwarding is safe
+because the type tells Rust which profile the sample belongs to -- it is the
+memory *projection*, not the value struct, that was ever memory-specific.
 
-Wiring it up means, roughly in order:
+`pyroscope_push_sample` then early-returns for anything but
+`PprofBuilderType::Memory`, so a CPU sample dies one frame later than it used
+to. (In practice `flush_sample` never runs yet either, because nothing imports
+the extension -- see "Nothing imports the extension" below.)
 
-- **New FFI surface.** `FFISample`/`FFIHeapSampleValues`
-  (`rust/src/encode/pprof.rs`, `pub mod ffi`) carry frames plus the four memory
-  value slots and nothing else. There is nowhere to put a wall time, a CPU
-  time, a monotonic timestamp, thread info, a span id, a local root span id, a
-  trace type, or a task name. Either widen the struct or add a sibling CPU
-  sample struct, then regenerate `rust/include/pyroscope_ffi.h` via
-  `make ffi/python/header` (and add the new export to `rust/cbindgen.toml`'s
-  `[export].include`).
-- **New push entry point**, next to `pyroscope_memprof_push_sample`. Note
-  `pyroscope_memprof_push_sample` lives in `rust/src/memory.rs` behind the
-  `memory` feature -- the CPU one must not, see section 3.
-- **A CPU accumulator in `PProfBuilder`.** `add_ffi_sample` hardcodes the four
-  memory value slots in `set_memory_profile_type` order, so it is the function
-  to parallel, not reuse. `set_cpu_profile_type` already exists
-  (`rust/src/encode/pprof.rs`) and sets `cpu/nanoseconds` + period.
+Still to do, in order:
+
+- ~~**New FFI surface.**~~ Done. `FFISampleValues` carries `cpu_time` and
+  `wall_time` alongside the four memory slots, named after upstream's
+  `ValueIndex`. The time slots are signed, the memory ones are not. There are
+  no `cpu_count`/`wall_count` slots: every call site passes a count of 1, so
+  the sample tally is whatever the encoder counts merging into a pprof row.
+- ~~**A push entry point carrying the profile type.**~~ Done.
+  `pyroscope_push_sample` replaces `pyroscope_memprof_push_sample` and takes a
+  `PprofBuilderType` first argument. One caveat: it still lives in
+  `rust/src/memory.rs` behind the `memory` feature, and a cpu/wall sink must
+  not -- see section 3. Moving it out is the next step.
+- **A CPU accumulator in `PProfBuilder`.** `add_ffi_sample` takes already
+  projected `[i64; 4]` slots, so it can be reused rather than duplicated; what
+  a cpu/wall profile needs is its own projection alongside
+  `memory_value_slots`, and `memory_samples` made const-generic if the slot
+  count differs from 4.
+  `set_cpu_profile_type` already exists and sets `cpu/nanoseconds` + period.
+  Two hazards there: it **pushes** a sample type while
+  `set_memory_profile_type` **assigns**, so they cannot be composed as-is; and
+  `take_profile_and_reset` does `mem::take` on the profile, wiping
+  `sample_type`/`period`/`period_type`, which is why `dump_pprof` re-sets the
+  type every window.
+  `memory_projection_reads_only_the_memory_slots` guards the existing
+  projection against slot drift and against a time slot leaking in.
+- **Two profile types, not one.** Decided: `wall` and `process_cpu` become
+  separate `ReportBatch` entries, each its own `RawProfileSeries` with its own
+  `__name__`, matching how Pyroscope keys expected sample types off the profile
+  name -- not upstream's single multi-sample-type profile. Note py-spy already
+  emits `process_cpu` (`rust/src/pyspy_backend.rs`), so the two CPU sources
+  have to be made mutually exclusive, and `wall` is net-new to this repo.
 - **A dump path.** Copy the shape of `memory::implementation::dump_pprof` and
   keep its lock order: `interner::string_table()` **before** the profile
   builder lock, never the reverse. The invariant is spelled out on
   `interner::clear` in `rust/src/encode/interner.rs`.
+- **Labels have nowhere to go.** `push_threadinfo`, `push_task_name`,
+  `push_span_id`, `push_local_root_span_id`, `push_trace_type` and
+  `push_monotonic_ns` are still no-ops, and not just for want of struct fields:
+  `PProfBuilder`'s FFI accumulator is keyed on the location-id vector alone and
+  `flush_memory_samples` hardcodes `label: vec![]`, so two samples differing
+  only by thread or task name are indistinguishable once merged. Carrying them
+  means either folding the label set into the accumulator key or giving up
+  accumulation for these samples. The py-spy path (`add_stacktrace`) does emit
+  labels and pushes each sample directly -- that is the shape to copy.
 
 ## 2. Gaps this port opened
 
@@ -89,6 +117,37 @@ must therefore inspect the static archive, not the `.so`.
 Decide whether the Python side drives the sampler through `_stack`'s
 `PyMethodDef` table (upstream's model) or through the Rust agent, and wire
 `cpu_enabled` in `python/pyroscope/__init__.py::configure` to it.
+
+### Wall time is multiplied by the task count
+
+`cpp/stack/src/echion/threads.cc`, `cpp/stack/src/stack_renderer.cpp`
+
+`ThreadInfo::sample` renders one sample per leaf asyncio task (or per greenlet
+stack), and *every* one of them pushes `push_walltime(thread_state.wall_time_ns,
+1)` with the same per-cycle thread delta. A thread with 50 tasks contributes 50x
+the elapsed wall time for that cycle.
+
+This is upstream's intended per-task attribution, not a bug, but it means the
+wall total is **not conservative** and must never be sanity-checked against
+wall-clock elapsed. Worth stating explicitly wherever a `wall` profile is
+eventually documented, because the numbers look wrong otherwise.
+
+### The one-CPU-sample-per-thread invariant rests on two swap loops
+
+`cpp/stack/src/echion/threads.cc`
+
+`push_cputime` is unconditional on a thread's first sample (via
+`render_cpu_time`) and conditional on `on_cpu` for every sample after it. So
+avoiding double-counted CPU time depends entirely on the on-CPU task/greenlet
+being hoisted to index 0, where `render_task_begin` reuses the already-credited
+sample and never reaches its `if (on_cpu)` branch.
+
+`threads.cc` does that hoist in two places -- once in `unwind_tasks` for
+asyncio, once for greenlets -- with slightly different loop bounds (`i = 0` plus
+an `if (i > 0)` guard versus `i = 1`). The greenlet one carries an explicit
+warning that it silently no-ops, restoring the over-count, if greenlet's
+`Py_None` "currently running" sentinel ever changes. Neither is covered by a
+test, and the failure is a plausible-looking 2x rather than a crash.
 
 ### `max_nframes` is not configurable
 `cpp/dd_wrapper/include/sample_manager.hpp`
