@@ -55,8 +55,6 @@ if (NOT TARGET Python3::Python)
 endif ()
 
 set(SOURCE_FILES memalloc/_memalloc.cpp memalloc/_memalloc_tb.cpp memalloc/_memalloc_heap.cpp memalloc/_memalloc_reentrant.cpp
-        memalloc/Pyroscope.h
-
         stack/src/echion/danger.cc
         stack/src/echion/frame.cc
         stack/src/echion/greenlets.cc
@@ -101,6 +99,7 @@ target_include_directories(
         ${CMAKE_CURRENT_SOURCE_DIR}/../rust/include
         ${CMAKE_CURRENT_SOURCE_DIR}/stack/echion
         ${CMAKE_CURRENT_SOURCE_DIR}/stack/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/pyroscope
 )
 
 # Link libraries Python3::Python target might not exist in all build environments (e.g., manylinux) Python modules
