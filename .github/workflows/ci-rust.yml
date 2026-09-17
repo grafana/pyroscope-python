@@ -27,9 +27,18 @@ jobs:
         run: cargo fmt --all --check
         working-directory: rust
 
+  # The memory profiler compiles a version-specific view of CPython's internal
+  # struct layouts, selected by cfgs that build.rs derives from the interpreter
+  # pyo3-build-config finds. Pin that interpreter explicitly and cover every
+  # supported version: without this the runner's default Python decides which
+  # arm gets compiled, and the ones we ship would go unchecked.
   clippy:
-    name: cargo clippy
+    name: cargo clippy (py${{ matrix.python-version }})
     runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -40,20 +49,27 @@ jobs:
           toolchain: 1.96.0
           components: clippy
 
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
       - name: Run clippy
         run: |
+          set -euo pipefail
+          export PYO3_PYTHON="$(which python)"
           cargo clippy --all-targets --no-default-features -- --deny warnings
-          export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
-          export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
+          export Python3_ROOT_DIR=$(python -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
+          export Python3_EXECUTABLE="$PYO3_PYTHON"
           cargo clippy --all-targets --all-features -- --deny warnings
         working-directory: rust
 
   test:
-    name: cargo test (${{ matrix.arch.name }})
+    name: cargo test (${{ matrix.arch.name }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.arch.runner }}
     strategy:
       fail-fast: false
       matrix:
+        python-version: ["3.13", "3.14"]
         arch:
           - name: x64
             runner: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
@@ -68,14 +84,23 @@ jobs:
         with:
           toolchain: 1.96.0
 
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
       - name: Run tests without memory profiling
-        run: cargo test --locked --no-default-features
+        run: |
+          set -euo pipefail
+          export PYO3_PYTHON="$(which python)"
+          cargo test --locked --no-default-features
         working-directory: rust
 
       - name: Run tests with memory profiling
         run: |
-          export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
-          export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
+          set -euo pipefail
+          export PYO3_PYTHON="$(which python)"
+          export Python3_ROOT_DIR=$(python -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
+          export Python3_EXECUTABLE="$PYO3_PYTHON"
           cargo test --locked --all-features
         working-directory: rust
 
@@ -93,6 +118,15 @@ jobs:
           toolchain: nightly-2026-07-11
           components: miri, rust-src
 
+      # Pinned so the CPython-version-specific arms Miri interprets are the
+      # ones we ship, rather than whatever the runner defaults to.
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: "3.13"
+
       - name: Run library tests under Miri
-        run: cargo miri test --locked --lib --no-default-features
+        run: |
+          set -euo pipefail
+          export PYO3_PYTHON="$(which python)"
+          cargo miri test --locked --lib --no-default-features
         working-directory: rust

@@ -75,6 +75,22 @@ pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u
     implementation::dump_pprof(heap_sample_size, time_range)
 }
 
+/// What [`offsets_report`] returns: the CPython version this extension was
+/// built for, an error string if the offsets table could not be validated,
+/// and the resolved field offsets.
+pub type OffsetsReport = ((u8, u8), Option<String>, Vec<(&'static str, usize)>);
+
+/// Diagnostic report on this interpreter's `_Py_DebugOffsets`.
+///
+/// Returns the CPython version this extension was built for, an error string
+/// if the table could not be validated, and the resolved field offsets.
+/// `scripts/check_debug_offsets.py` compares these against ctypes reads of the
+/// same interpreter, which is what catches a transcription error in a mirror
+/// before it can corrupt a profile.
+pub fn offsets_report() -> OffsetsReport {
+    implementation::offsets_report()
+}
+
 #[cfg(feature = "memory")]
 mod implementation {
     use crate::encode::pprof::PProfBuilder;
@@ -151,6 +167,17 @@ mod implementation {
         pb.reset();
     }
 
+    pub fn offsets_report() -> super::OffsetsReport {
+        use crate::memalloc::pure::offsets;
+        use crate::memalloc::runtime::pyapi;
+
+        let build = (offsets::build_major(), offsets::build_minor());
+        match pyapi::resolve() {
+            Ok(resolved) => (build, None, pyapi::report(&resolved)),
+            Err(error) => (build, Some(pyapi::describe(&error)), Vec::new()),
+        }
+    }
+
     pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u8>> {
         // try_attach skips the flush while finalizing on 3.13+ only; on
         // older Pythons the atexit hook is the actual protection.
@@ -184,5 +211,24 @@ mod implementation {
 
     pub fn dump_pprof(_heap_sample_size: u64, _time_range: &TimeRange) -> Option<Vec<u8>> {
         None
+    }
+
+    pub fn offsets_report() -> super::OffsetsReport {
+        // The build-time version is recorded by build.rs in every feature
+        // configuration, so report it even here: it is what tells a user
+        // whether they are on an unsupported interpreter or simply have a
+        // wheel built without memory support.
+        use crate::memalloc::pure::offsets;
+        (
+            (offsets::build_major(), offsets::build_minor()),
+            Some(
+                concat!(
+                    "this build does not include memory profiling support ",
+                    "(it requires CPython 3.13+ with the GIL enabled)"
+                )
+                .to_owned(),
+            ),
+            Vec::new(),
+        )
     }
 }

@@ -238,6 +238,26 @@ fn initialize_agent(
     }
 }
 
+/// Diagnostic view of the memory profiler's CPython offset resolution.
+///
+/// Temporary: `scripts/check_debug_offsets.py` and the frame-walk check use it
+/// to validate a new CPython version without having to produce and query a
+/// profile. Moves behind a non-default feature once the rewrite lands.
+#[pyfunction]
+fn _debug_offsets_selftest(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+    let (build, error, offsets) = memory::offsets_report();
+    let out = PyDict::new(py);
+    out.set_item("build_version", build)?;
+    out.set_item("supported", error.is_none())?;
+    out.set_item("error", error)?;
+    let fields = PyDict::new(py);
+    for (name, value) in offsets {
+        fields.set_item(name, value)?;
+    }
+    out.set_item("offsets", fields)?;
+    Ok(out)
+}
+
 #[pyfunction]
 fn drop_agent(py: Python<'_>) -> bool {
     let dropped = ffikit::stop(py).is_ok();
@@ -283,6 +303,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(drop_agent, m)?)?;
     m.add_function(wrap_pyfunction!(add_thread_tag, m)?)?;
     m.add_function(wrap_pyfunction!(remove_thread_tag, m)?)?;
+    m.add_function(wrap_pyfunction!(_debug_offsets_selftest, m)?)?;
     register_fork_handlers(m)?;
     register_atexit_handler(m)?;
     Ok(())

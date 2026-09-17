@@ -1277,6 +1277,7 @@ dependencies = [
  "prost",
  "py-spy",
  "pyo3",
+ "pyo3-build-config",
  "reqwest",
  "thiserror",
  "url",

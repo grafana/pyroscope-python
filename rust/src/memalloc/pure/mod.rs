@@ -6,5 +6,6 @@
 //! any libpython symbol.
 
 pub mod linetable;
+pub mod offsets;
 pub mod rng;
 pub mod sampler;

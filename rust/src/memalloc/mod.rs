@@ -61,9 +61,21 @@
     unused_must_use
 )]
 
+// The allocator hook relies on the GIL serialising it, and the frame walker
+// reads structs whose layout differs under free-threading. setup.py already
+// declines to enable the feature on such a build; this makes it impossible to
+// get wrong rather than merely unlikely.
+#[cfg(all(feature = "memory", Py_GIL_DISABLED))]
+compile_error!(
+    "the `memory` feature does not support free-threaded CPython: the allocator hook relies on the GIL"
+);
+
 pub mod limits;
 pub mod pure;
 pub mod reentrancy;
+
+#[cfg(feature = "memory")]
+pub mod runtime;
 
 #[cfg(test)]
 pub mod testing;
