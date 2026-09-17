@@ -2,25 +2,6 @@ use cmake::Config;
 use std::env;
 use std::path::{Path, PathBuf};
 
-const NATIVE_SOURCES: &[&str] = &[
-    "CMakeLists.txt",
-    "Pyroscope.h",
-    "_memalloc.cpp",
-    "_memalloc_debug.h",
-    "_memalloc_frame.h",
-    "_memalloc_gc_guard.hpp",
-    "_memalloc_heap.cpp",
-    "_memalloc_heap.h",
-    "_memalloc_reentrant.cpp",
-    "_memalloc_reentrant.h",
-    "_memalloc_tb.cpp",
-    "_memalloc_tb.h",
-    "_pymacro.h",
-    "profiling_helpers/frame_accessors.h",
-    "profiling_helpers/linetable_parser.h",
-    "profiling_helpers/version_compat.h",
-];
-
 fn main() {
     if cfg!(not(feature = "memory")) {
         return;
@@ -58,12 +39,51 @@ fn main() {
     }
 }
 
+/// Emit a `rerun-if-changed` for every C++ source under `cpp/`, plus the
+/// generated FFI header.
+///
+/// This walks the tree rather than naming files. A hand-maintained list was
+/// tried first and silently rotted: every entry still pointed at a flat
+/// `cpp/_memalloc.cpp`-style path after the sources moved into `cpp/memalloc/`
+/// and `cpp/pyroscope/`, so cargo watched nothing that existed and C++ edits
+/// never triggered a rebuild. Since then `cpp/stack/` and `cpp/dd_wrapper/`
+/// arrived too, which a list would also have missed.
+///
+/// CMake build trees are skipped. In-source `cmake-build-*` directories (what
+/// CLion creates) hold generated copies of these same headers plus the fetched
+/// abseil checkout; watching them would make every configure look like a source
+/// change.
 fn rerun_if_native_sources_changed(manifest_dir: &Path, cpp_dir: &Path) {
-    for source in NATIVE_SOURCES {
-        let path = cpp_dir.join(source);
-        println!("cargo:rerun-if-changed={}", path.display());
-    }
-
     let ffi_header = manifest_dir.join("include/pyroscope_ffi.h");
     println!("cargo:rerun-if-changed={}", ffi_header.display());
+
+    emit_rerun_for_dir(cpp_dir);
+}
+
+fn emit_rerun_for_dir(dir: &Path) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) => panic!("failed to read {}: {e}", dir.display()),
+    };
+
+    for entry in entries {
+        let entry = entry.expect("failed to read directory entry");
+        let path = entry.path();
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+
+        if path.is_dir() {
+            if name.starts_with("cmake-build") || name.starts_with('.') {
+                continue;
+            }
+            emit_rerun_for_dir(&path);
+        } else if name == "CMakeLists.txt"
+            || matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("c" | "cc" | "cpp" | "h" | "hpp" | "cmake")
+            )
+        {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+    }
 }
