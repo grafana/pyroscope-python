@@ -39,12 +39,13 @@ Upstream checkout for reference: `~/dd/dd-trace-py`, under
 
 | Path | Origin | Notes |
 |---|---|---|
-| `cpp/stack/` | upstream `profiling/stack/` | The echion CPU sampler. `echion/` subdir kept; `stack_v2` flattened to `stack`. Compiles, produces no data yet. |
+| `cpp/stack/` | upstream `profiling/stack/` | The echion CPU sampler. `echion/` subdir kept; `stack_v2` flattened to `stack`. Compiles; never started, so produces no data yet. |
 | `cpp/dd_wrapper/` | upstream `profiling/dd_wrapper/` | Upstream's shared C++ layer. Mostly our shims; a few verbatim copies. |
 | `cpp/memalloc/` | upstream `profiling/memalloc/` | Memory profiler. Done and shipping. |
 | `cpp/pyroscope/Pyroscope.h` | ours | The central shim: `Sample`, `intern_string`, `string_id`, `ProfilerStats`, `ProfileBorrow`. Shared by both profilers. |
 | `cpp/profiling_helpers/` | upstream | Version-gated CPython frame accessors. |
 | `rust/src/encode/` | ours | pprof builder + the process-wide string interner the C++ side interns into. |
+| `rust/src/stack.rs` | ours | The cpu/wall accumulator and dump path behind `PprofBuilderType::CpuWall`. |
 
 `cpp/` is on the include path, so upstream's `#include
 "dd_wrapper/include/..."` lines resolve unchanged. **Preserving upstream paths
@@ -66,9 +67,11 @@ upstream path over editing a vendored source.
 ## Status and open work
 
 `cpp/stack` compiles and archives warning-free on macOS/clang for Python
-3.11-3.14 and on Linux/gcc 13 for 3.12. The sampler walks stacks correctly and
-then **discards every sample**: no CPU push path to Rust exists yet, and nothing
-in Python imports the extension.
+3.11-3.14 and on Linux/gcc 13 for 3.12. The CPU push path to Rust now exists
+end to end -- `crate::stack` accumulates `CpuWall` samples and uploads a
+cpu+wall pprof as `process_cpu` alongside the memory profile -- but **the
+sampler never runs**: nothing in Python imports the extension and nothing
+starts `Datadog::Sampler`, so no sample is ever produced.
 
 `stack_todo.md` is the tracking doc -- blocking work, gaps the port opened,
 free-threaded-build questions, and the TODOs inherited from upstream, kept

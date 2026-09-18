@@ -86,6 +86,7 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
 /// `renderer_.postfork_child()` for this.
 pub fn stop_profilers(py: Python<'_>) {
     crate::memory::stop(py);
+    crate::stack::clear_samples();
     crate::encode::interner::clear();
 }
 

@@ -78,8 +78,7 @@ pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u
 #[cfg(feature = "memory")]
 mod implementation {
     use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
-    use crate::encode::pprof::memory_value_slots;
-    use crate::encode::pprof::{PProfBuilder, PprofBuilderType};
+    use crate::encode::pprof::{MemoryProfile, PProfBuilder};
     use crate::utils::TimeRange;
     use lazy_static::lazy_static;
     use prost::Message;
@@ -88,8 +87,8 @@ mod implementation {
     use std::sync::Mutex;
 
     lazy_static! {
-        static ref PROFILE_BUILDER: Mutex<PProfBuilder> =
-            Mutex::new(PProfBuilder::new(PprofBuilderType::Memory));
+        static ref PROFILE_BUILDER: Mutex<PProfBuilder<MemoryProfile>> =
+            Mutex::new(PProfBuilder::new());
     }
     unsafe extern "C" {
         pub fn memalloc_start(
@@ -105,7 +104,7 @@ mod implementation {
 
     pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
         if let Ok(mut pb) = PROFILE_BUILDER.lock() {
-            pb.add_ffi_sample(frames, memory_value_slots(values));
+            pb.add_ffi_sample(frames, values);
         }
     }
 
@@ -141,7 +140,7 @@ mod implementation {
             let pb = PROFILE_BUILDER.lock();
             match (st, pb) {
                 (Ok(mut st), Ok(mut pb)) => {
-                    pb.set_memory_profile_type(st.deref_mut(), heap_sample_size);
+                    pb.set_profile_type(st.deref_mut(), heap_sample_size);
                     pb.take_profile_and_reset(st.deref(), time_range)
                 }
                 _ => None,

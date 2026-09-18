@@ -9,6 +9,7 @@ use crate::{
     error::Result,
     memory,
     session::{Session, SessionManager, SessionSignal},
+    stack,
 };
 use std::sync::mpsc::SyncSender;
 use std::time::{Duration, SystemTime};
@@ -265,7 +266,7 @@ impl PyroscopeAgent {
     ) -> Result<()> {
         let time_range = stop_watch.lap()?;
 
-        let mut batch = Vec::with_capacity(2);
+        let mut batch = Vec::with_capacity(3);
 
         if config.mem_config.enabled {
             let pprof = memory::dump_pprof(config.mem_config.heap_sample_size, &time_range);
@@ -275,6 +276,24 @@ impl PyroscopeAgent {
                     data: ReportData::RawPprof(pprof),
                 })
             }
+        }
+
+        // The dump runs even when its profile is dropped, so the accumulator
+        // drains every window instead of growing without bound.
+        match (
+            stack::dump_pprof(config.sample_rate, &time_range),
+            reporter.is_some(),
+        ) {
+            (Some(pprof), false) => batch.push(ReportBatch {
+                profile_type: "process_cpu".to_string(),
+                data: ReportData::RawPprof(pprof),
+            }),
+            (Some(_), true) => log::warn!(
+                target: LOG_TAG,
+                "discarding the stack sampler's cpu/wall profile: py-spy already publishes process_cpu; \
+                 pass cpu_enabled=False to configure() to use the stack sampler instead"
+            ),
+            (None, _) => {}
         }
 
         if let Some(reporter) = reporter {

@@ -1,6 +1,7 @@
 mod ffi;
 mod memory;
 mod pyspy_backend;
+mod stack;
 
 // Re-exports structs
 pub use crate::pyroscope::PyroscopeAgent;

@@ -5,28 +5,30 @@ Tracking doc for `cpp/stack/` (dd-trace-py's echion-based CPU sampler) and the
 compile, so it covers both the gaps that port opened and the TODOs that came
 along with the vendored code.
 
-Status: **the static library compiles and archives; the sampler produces no
-data.** It walks stacks correctly and throws every sample away. Nothing in
-Python imports it yet.
+Status: **the static library compiles and archives; the sampler never runs.**
+Everything from the FFI boundary inward is now wired -- a `CpuWall` sample that
+reaches `pyroscope_push_sample` is accumulated, encoded and uploaded. Nothing
+starts the sampler, so nothing ever reaches it.
 
-## 1. Blocking: CPU samples reach Rust and are dropped there
+## 1. Blocking: nothing produces CPU samples
 
 The whole point, and everything else in section 2 is downstream of it.
 
-The C++ side is wired up end to end. `Sample::push_cputime`/`push_walltime`
+The push path is complete end to end. `Sample::push_cputime`/`push_walltime`
 accumulate into `FFISampleValues.cpu_time`/`wall_time`, every `Sample` carries
 the `PprofBuilderType` it was constructed with, and `flush_sample()` forwards to
 `export_sample()`, which calls
 `pyroscope_push_sample(builder_type, frames, len, values)`. Forwarding is safe
 because the type tells Rust which profile the sample belongs to -- it is the
 memory *projection*, not the value struct, that was ever memory-specific.
+`pyroscope_push_sample` dispatches `CpuWall` into `crate::stack`, which
+accumulates it and hands a pprof to the agent's upload window alongside the
+memory profile.
 
-`pyroscope_push_sample` dispatches on that type, and the `Cpu`/`CpuWall` arm is
-an empty no-op, so a CPU sample dies one frame later than it used to. (In
-practice `flush_sample` never runs yet either, because nothing imports the
-extension -- see "Nothing imports the extension" below.)
-
-Still to do, in order:
+What is missing now is a *producer*: nothing imports the extension or starts
+`Datadog::Sampler`, so the linker still drops all of `cpp/stack` from the final
+`.so` and the accumulator in `crate::stack` is always empty. That item moved to
+"Nothing imports the extension" in section 2 and is the remaining blocker.
 
 - ~~**New FFI surface.**~~ Done. `FFISampleValues` carries `cpu_time` and
   `wall_time` alongside the four memory slots, named after upstream's
@@ -36,25 +38,32 @@ Still to do, in order:
 - ~~**A push entry point carrying the profile type.**~~ Done.
   `pyroscope_push_sample` replaces `pyroscope_memprof_push_sample` and takes a
   `PprofBuilderType` first argument. It lives in `rust/src/ffi.rs`, ungated, and
-  is the only place that handles the raw pointers; it dispatches to
-  `memory::push_sample` on `Memory` and no-ops on `Cpu`/`CpuWall`. The dispatch
-  is an exhaustive `match`, so adding a variant without a sink is a compile
-  error rather than a silently dropped profile -- give `CpuWall` its arm here
-  once the accumulator below exists.
-- **A CPU accumulator in `PProfBuilder`.** `add_ffi_sample` takes already
-  projected `[i64; 4]` slots, so it can be reused rather than duplicated; what
-  a cpu/wall profile needs is its own projection alongside
-  `memory_value_slots`, and `memory_samples` made const-generic if the slot
-  count differs from 4.
-  `set_cpu_profile_type` already exists and sets `cpu/nanoseconds` + period.
-  Two hazards there: it **pushes** a sample type while
-  `set_memory_profile_type` **assigns**, so they cannot be composed as-is; and
-  `take_profile_and_reset` does `mem::take` on the profile, wiping
-  `sample_type`/`period`/`period_type`, which is why `dump_pprof` re-sets the
-  type every window.
-  `memory_projection_reads_only_the_memory_slots` guards the existing
-  projection against slot drift and against a time slot leaking in.
-- **One profile, not two.** Decided (reversing an earlier call): the sampler
+  is the only place that handles the raw pointers. The dispatch is an exhaustive
+  `match`, so adding a variant without a sink is a compile error rather than a
+  silently dropped profile. `Cpu` is py-spy's and is the one arm that stays a
+  no-op: py-spy never crosses the FFI boundary.
+- ~~**A CPU accumulator in `PProfBuilder`.**~~ Done. `PProfBuilder<K>` is
+  parameterized by a `ProfileKind` -- `MemoryProfile`, `CpuWallProfile` or
+  `PySpyProfile` -- which names the row's value layout (`K::Values`, one slot
+  per sample type), what `period` is derived from (`K::PeriodConfig`), and how
+  the sample types are set. The kind replaced the old `builder_type` field and
+  the three `assert_eq!`s that guarded it at runtime: a
+  `PProfBuilder<MemoryProfile>` can no longer be handed cpu sample types
+  because the setter is `K::set_profile_type`.
+
+  `add_ffi_sample` takes the raw `&FFISampleValues` and projects it through
+  `K::value_slots`, so a call site cannot pair the wrong projection with a
+  builder either. It lives on `impl<K: FfiProfileKind>`, which `PySpyProfile`
+  does not implement, so it is not callable on the py-spy builder at all;
+  `add_stacktrace` is likewise confined to `impl PProfBuilder<PySpyProfile>`.
+
+  All three `set_profile_type` impls **assign** rather than append, which is
+  what lets a dump path re-set the types every window after
+  `take_profile_and_reset` has `mem::take`n the profile;
+  `cpu_wall_profile_type_is_idempotent` guards that.
+  `cpu_wall_projection_reads_only_the_time_slots` guards the projection against
+  slot drift and against a memory slot leaking in.
+- ~~**One profile, not two.**~~ Done (reversing an earlier call): the sampler
   emits a single pprof carrying both `cpu/nanoseconds` and `wall/nanoseconds`
   sample types, as upstream dd_wrapper does -- one `ReportBatch`, one
   `RawProfileSeries`, one `__name__`. This is why `PprofBuilderType` has a
@@ -67,20 +76,33 @@ Still to do, in order:
   serves four. See the `*ProfileTypeID` constants in
   `integration-test/integration_test.go`.
 
-  Still open: the `__name__` value. py-spy already emits `process_cpu`
-  (`rust/src/pyspy_backend.rs`), so either the two CPU sources are made
-  mutually exclusive or this one needs a different name. Also note there is no
-  `samples/count` sample type available, since `FFISampleValues` has no count
-  slots; a tally would have to come from how many stacks merge into a row.
-- **A dump path.** Copy the shape of `memory::implementation::dump_pprof` and
-  keep its lock order: `interner::string_table()` **before** the profile
-  builder lock, never the reverse. The invariant is spelled out on
-  `interner::clear` in `rust/src/encode/interner.rs`.
+  The `__name__` is **`process_cpu`**, the same name py-spy publishes
+  (`rust/src/pyspy_backend.rs`), which makes the two CPU sources **mutually
+  exclusive**. `PyroscopeAgent::snapshot` enforces that: when the py-spy
+  backend is running it drops the stack sampler's profile with a warning
+  naming `cpu_enabled=False` as the way out. The dump itself still runs, so
+  the accumulator drains every window rather than growing without bound. The
+  win is that `process_cpu:cpu:nanoseconds:cpu:nanoseconds` stays the type ID
+  the UI and the integration tests already know; the sampler adds
+  `process_cpu:wall:nanoseconds:cpu:nanoseconds` to it.
+
+  Still open: there is no `samples/count` sample type, since `FFISampleValues`
+  has no count slots; a tally would have to come from how many stacks merge
+  into a row. And `period` is derived from the agent-wide `sample_rate`, not
+  from the sampler's own (adaptive) interval -- that has to be plumbed through
+  once something starts the sampler.
+- ~~**A dump path.**~~ Done. `crate::stack::dump_pprof` copies the shape of
+  `memory::implementation::dump_pprof` and its lock order --
+  `interner::string_table()` **before** the profile builder lock, never the
+  reverse (the invariant is spelled out on `interner::clear`). It needs neither
+  the GIL nor a profiler-side flush, so it drops `Python::try_attach` and has no
+  `extern "C"` dependency; the whole module is therefore **ungated**, unlike
+  `memory::implementation`. See section 3.
 - **Labels have nowhere to go.** `push_threadinfo`, `push_task_name`,
   `push_span_id`, `push_local_root_span_id`, `push_trace_type` and
   `push_monotonic_ns` are still no-ops, and not just for want of struct fields:
   `PProfBuilder`'s FFI accumulator is keyed on the location-id vector alone and
-  `flush_memory_samples` hardcodes `label: vec![]`, so two samples differing
+  `flush_ffi_samples` hardcodes `label: vec![]`, so two samples differing
   only by thread or task name are indistinguishable once merged. Carrying them
   means either folding the label set into the accumulator key or giving up
   accumulation for these samples. The py-spy path (`add_stacktrace`) does emit
@@ -91,13 +113,15 @@ Still to do, in order:
 ### `upload_seq` never advances
 `cpp/dd_wrapper/include/profiler_state.hpp`
 
+`crate::stack::dump_pprof` is the dump path to bump it from, but doing so needs
+an `extern "C"` shim over `ProfilerState` that does not exist yet.
+
 Upstream bumps it once per upload in the uploader we do not vendor.
 `Sampler::sampling_thread` watches the delta and calls
 `echion->string_table().clear_ephemeral()` every 25 uploads
 (`ephemeral_clear_interval` in `cpp/stack/src/sampler.cpp`). Held at 0, that
 clear never runs, so echion's ephemeral table -- asyncio task names, mainly --
-grows without bound in a process that churns task names. Bump it from whatever
-dump path section 1 produces.
+grows without bound in a process that churns task names.
 
 ### Fork handling is incomplete
 `cpp/dd_wrapper/include/profiler_state.hpp`, `rust/src/ffikit.rs`
@@ -121,6 +145,8 @@ not rely on `renderer_.postfork_child()`.
 
 ### Nothing imports the extension
 `cpp/stack/src/stack.cpp`
+
+**This is now the blocking item** -- see section 1.
 
 `PyInit__stack` and the ~30-entry `stack_methods` table are compiled but no
 Python module loads `_stack`, and no Rust symbol references any `stack.cpp`
@@ -233,12 +259,14 @@ and memalloc does not get this warning set upstream either.
 
 `rust/build.rs` early-returns under `cfg!(not(feature = "memory"))`, and
 `setup.py` only sets that feature when `Py_GIL_DISABLED != 1` -- so on
-free-threaded builds no C++ is compiled at all, CPU sampler included. Both FFI
-entry points are already out of `crate::memory` and ungated in anticipation of
-exactly this: the interner in `rust/src/encode/interner.rs` and the push path in
-`rust/src/ffi.rs`. What is still behind the gate is the memory accumulator and
-dump path. Decide whether the CPU sampler ships on free-threaded builds and, if
-so, split the feature gate so the stack half builds without `memory`.
+free-threaded builds no C++ is compiled at all, CPU sampler included. The whole
+Rust half of the CPU path is ungated in anticipation of exactly this: the
+interner (`rust/src/encode/interner.rs`), the push path (`rust/src/ffi.rs`), and
+the accumulator and dump path (`rust/src/stack.rs`). Only `crate::memory`'s
+accumulator and dump path are behind the gate, because they call `memalloc_*`.
+What is left is the C++ side: decide whether the CPU sampler ships on
+free-threaded builds and, if so, split the feature gate so the stack half builds
+without `memory`.
 
 ## 4. TODOs inherited from the vendored code
 
