@@ -28,11 +28,9 @@
 
 #include "_pymacro.h"
 
-#ifdef Py_GIL_DISABLED
-#error "_memalloc frame walking relies on the GIL-held allocator hook and is not yet supported on free-threaded CPython"
-#endif // Py_GIL_DISABLED
-
-// AIDEV-TODO: Revisit direct frame walking and heap-tracker synchronization if memalloc adds Py_GIL_DISABLED support.
+// These helpers compile on free-threaded CPython, but must not run there.
+// memalloc_is_supported() prevents startup until frame walking and heap-tracker
+// synchronization support that runtime, including when its GIL is enabled.
 
 /* Frame access helpers and line table parsing. */
 #include "profiling_helpers/frame_accessors.h"

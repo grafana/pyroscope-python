@@ -2,7 +2,6 @@ from setuptools import setup
 from setuptools_rust import Binding, RustExtension
 from pathlib import Path
 import sys
-import sysconfig
 import os
 
 # The C++ memalloc profiler reads version-specific CPython internal structs, so
@@ -21,10 +20,6 @@ env.update({
     "Python3_EXECUTABLE": sys.executable,
 })
 
-features = []
-if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
-    features.append("memory")
-
 setup(
     rust_extensions=[
         RustExtension(
@@ -32,7 +27,6 @@ setup(
             path="rust/Cargo.toml",
             binding=Binding.PyO3,
             cargo_manifest_args=["--locked"],
-            features=features,
             env=env,
         )
     ],

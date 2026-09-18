@@ -26,6 +26,9 @@ memalloc_heap_untrack_no_cpython(void* ptr);
 #ifdef __cplusplus
 extern "C" {
 #endif
+// Availability is determined by the target CPython ABI, not its current GIL state.
+bool
+memalloc_is_supported(void);
 void
 memalloc_heap_postfork_child(void);
 #ifdef __cplusplus

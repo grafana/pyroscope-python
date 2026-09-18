@@ -27,6 +27,7 @@ include = [
   "pyroscope_memprof_push_sample",
 ]
 exclude = [
+  "memalloc_is_supported",
   "memalloc_start",
   "memalloc_stop",
   "memalloc_heap_py",

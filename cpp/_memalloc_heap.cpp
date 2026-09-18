@@ -446,6 +446,9 @@ memalloc_heap_no_cpython(void)
 void
 memalloc_heap_postfork_child(void)
 {
+    if (!memalloc_is_supported()) {
+        return;
+    }
     if (heap_tracker_t::instance) {
         heap_tracker_t::instance->postfork_child();
     }

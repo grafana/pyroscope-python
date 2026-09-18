@@ -261,6 +261,15 @@ memalloc_realloc_mem(void* ctx, void* ptr, size_t new_size)
 }
 #endif // _PY312_AND_LATER
 
+extern "C" bool memalloc_is_supported()
+{
+#ifdef Py_GIL_DISABLED
+    return false;
+#else
+    return true;
+#endif
+}
+
 // Pyroscope patch: expose a typed C ABI entrypoint for the Rust integration
 // instead of defining a Python extension-module callback. Return 0 on success
 // and -1 with a Python exception on failure so Rust can distinguish the paths.
@@ -268,6 +277,11 @@ extern "C" int memalloc_start(    uint16_t max_nframe,
     uint64_t heap_sample_size,
     bool enable_mem_domain)
 {
+    if (!memalloc_is_supported()) {
+        PyErr_SetString(PyExc_RuntimeError, "memory profiling is not supported on free-threaded CPython");
+        return -1;
+    }
+
     if (memalloc_enabled) {
         PyErr_SetString(PyExc_RuntimeError, "the memalloc module is already started");
         return -1;
@@ -371,7 +385,7 @@ extern "C" int memalloc_start(    uint16_t max_nframe,
 // of a Python extension-module callback that raises when already stopped.
 extern "C" void memalloc_stop()
 {
-    if (!memalloc_enabled) {
+    if (!memalloc_is_supported() || !memalloc_enabled) {
         return;
     }
 
@@ -416,7 +430,7 @@ extern "C" void memalloc_stop()
 // instead of a Python extension-module callback that raises when not started.
 extern "C" void memalloc_heap_py()
 {
-    if (!memalloc_enabled) {
+    if (!memalloc_is_supported() || !memalloc_enabled) {
         return;
     }
 

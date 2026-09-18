@@ -1,6 +1,5 @@
 use crate::utils::TimeRange;
-#[cfg(feature = "memory")]
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyRuntimeWarning};
 use pyo3::prelude::*;
 
 #[derive(Clone)]
@@ -11,22 +10,29 @@ pub struct Config {
     pub heap_sample_size: u64,
 }
 
+pub fn is_supported() -> bool {
+    unsafe { implementation::memalloc_is_supported() }
+}
+
+/// Resolve requested profiling before any agent state or threads are created.
+pub fn resolve_enabled(py: Python<'_>, requested: bool) -> PyResult<bool> {
+    if requested && !is_supported() {
+        PyErr::warn(
+            py,
+            &py.get_type::<PyRuntimeWarning>(),
+            c"Memory profiling is not supported on free-threaded CPython; mem_enabled will be ignored.",
+            2,
+        )?;
+        return Ok(false);
+    }
+    Ok(requested)
+}
+
 pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
     if !config.enabled {
         return Ok(());
     }
 
-    #[cfg(not(feature = "memory"))]
-    {
-        let _ = py;
-        log::warn!(
-            target: "pyroscope-python",
-            "Memory profiling was enabled, but this build does not include memory profiling support; mem_enabled will be ignored."
-        );
-        Ok(())
-    }
-
-    #[cfg(feature = "memory")]
     unsafe {
         if let Some(err) = PyErr::take(py) {
             return Err(err);
@@ -54,6 +60,9 @@ pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
 }
 
 pub fn stop(_py: Python<'_>) {
+    if !is_supported() {
+        return;
+    }
     unsafe {
         implementation::memalloc_stop();
     }
@@ -67,10 +76,12 @@ pub fn postfork_child() {
 }
 
 pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u8>> {
+    if !is_supported() {
+        return None;
+    }
     implementation::dump_pprof(heap_sample_size, time_range)
 }
 
-#[cfg(feature = "memory")]
 mod implementation {
     use crate::encode::pprof::PProfBuilder;
     use crate::encode::pprof::ffi::{FFIInternedString, FFISample, FFIStringView};
@@ -90,6 +101,7 @@ mod implementation {
         static ref PROFILE_BUILDER: Mutex<PProfBuilder> = Mutex::new(PProfBuilder::new());
     }
     unsafe extern "C" {
+        pub fn memalloc_is_supported() -> bool;
         pub fn memalloc_start(
             max_nframe: u16,
             heap_sample_size: u64,
@@ -164,20 +176,5 @@ mod implementation {
             }
         })??;
         Some(profile.encode_to_vec())
-    }
-}
-
-#[cfg(not(feature = "memory"))]
-mod implementation {
-    use crate::utils::TimeRange;
-
-    pub unsafe fn memalloc_stop() {}
-
-    pub unsafe fn memalloc_heap_postfork_child() {}
-
-    pub fn clear_state() {}
-
-    pub fn dump_pprof(_heap_sample_size: u64, _time_range: &TimeRange) -> Option<Vec<u8>> {
-        None
     }
 }

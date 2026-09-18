@@ -22,10 +22,6 @@ const NATIVE_SOURCES: &[&str] = &[
 ];
 
 fn main() {
-    if cfg!(not(feature = "memory")) {
-        return;
-    }
-
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let cpp_dir = manifest_dir.join("../cpp");
     let cpp_dir = cpp_dir.canonicalize().unwrap();

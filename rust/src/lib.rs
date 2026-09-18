@@ -152,13 +152,14 @@ fn initialize_agent(
     mem_heap_sample_size: u64,
     mem_enable_mem_domain: bool,
     cpu_enabled: bool,
-) -> bool {
+) -> PyResult<bool> {
+    let mem_enabled = memory::resolve_enabled(py, mem_enabled)?;
     if !cpu_enabled && !mem_enabled {
         log::error!(
             target: "pyroscope-python",
             "at least one of CPU or memory profiling must be enabled"
         );
-        return false;
+        return Ok(false);
     }
 
     let backend_config = BackendConfig {
@@ -215,11 +216,11 @@ fn initialize_agent(
     match result {
         Ok(_) => {
             AGENT_RUNNING.store(true, Ordering::Release);
-            true
+            Ok(true)
         }
         Err(e) => {
             log::error!(target: "pyroscope-python", "failed to start agent: {}", e);
-            false
+            Ok(false)
         }
     }
 }
