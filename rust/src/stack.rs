@@ -11,6 +11,24 @@ lazy_static! {
         Mutex::new(PProfBuilder::new());
 }
 
+#[cfg(feature = "memory")]
+unsafe extern "C" {
+    fn pyroscope_stack_bump_upload_seq();
+}
+
+#[cfg(all(test, feature = "memory"))]
+unsafe extern "C" {
+    fn pyroscope_stack_upload_seq() -> u64;
+}
+
+#[cfg(feature = "memory")]
+fn bump_upload_seq() {
+    unsafe { pyroscope_stack_bump_upload_seq() }
+}
+
+#[cfg(not(feature = "memory"))]
+fn bump_upload_seq() {}
+
 pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
     if let Ok(mut pb) = PROFILE_BUILDER.lock() {
         pb.add_ffi_sample(frames, values);
@@ -41,6 +59,7 @@ pub fn dump_pprof(sample_rate: u32, time_range: &TimeRange) -> Option<Vec<u8>> {
         }
         _ => None,
     }?;
+    bump_upload_seq();
     Some(profile.encode_to_vec())
 }
 
@@ -83,6 +102,16 @@ mod tests {
         profile.string_table[index as usize].as_str()
     }
 
+    #[cfg(feature = "memory")]
+    fn upload_seq() -> Option<u64> {
+        Some(unsafe { pyroscope_stack_upload_seq() })
+    }
+
+    #[cfg(not(feature = "memory"))]
+    fn upload_seq() -> Option<u64> {
+        None
+    }
+
     /// Deliberately a single test: it drains the process-wide accumulator, so a
     /// second test touching it in parallel would race.
     #[test]
@@ -97,6 +126,7 @@ mod tests {
         push(&frames, &values(3, 5));
         push(&frames, &values(7, 11));
 
+        let seq_before = upload_seq();
         let bytes = dump_pprof(100, &time_range).expect("a profile with one sample");
         let profile = Profile::decode(bytes.as_slice()).expect("a decodable pprof");
 
@@ -134,9 +164,21 @@ mod tests {
         assert_eq!(profile.location.len(), 1);
         assert_eq!(profile.location[0].line[0].line, 42);
 
+        let seq_after_dump = upload_seq();
+        assert_eq!(
+            seq_after_dump,
+            seq_before.map(|s| s + 1),
+            "one upload, one bump"
+        );
+
         assert!(
             dump_pprof(100, &time_range).is_none(),
             "a drained accumulator must not produce a second profile"
+        );
+        assert_eq!(
+            upload_seq(),
+            seq_after_dump,
+            "an empty window is not an upload"
         );
 
         push(&frames, &values(1, 2));

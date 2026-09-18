@@ -110,18 +110,29 @@ What is missing now is a *producer*: nothing imports the extension or starts
 
 ## 2. Gaps this port opened
 
-### `upload_seq` never advances
-`cpp/dd_wrapper/include/profiler_state.hpp`
+### ~~`upload_seq` never advances~~
+`cpp/pyroscope/stack_ffi.cpp`, `rust/src/stack.rs`
 
-`crate::stack::dump_pprof` is the dump path to bump it from, but doing so needs
-an `extern "C"` shim over `ProfilerState` that does not exist yet.
+Done. `crate::stack::dump_pprof` bumps it via
+`pyroscope_stack_bump_upload_seq`, standing in for the uploader we do not
+vendor. Only a window that yields a profile bumps; one the agent then discards
+because py-spy owns `process_cpu` still counts, since the samples were produced
+either way.
 
-Upstream bumps it once per upload in the uploader we do not vendor.
-`Sampler::sampling_thread` watches the delta and calls
-`echion->string_table().clear_ephemeral()` every 25 uploads
-(`ephemeral_clear_interval` in `cpp/stack/src/sampler.cpp`). Held at 0, that
-clear never runs, so echion's ephemeral table -- asyncio task names, mainly --
-grows without bound in a process that churns task names.
+`clear_ephemeral()` can therefore run now, and it is safe to let it: only
+`StringTag::TaskName` is ephemeral (`is_ephemeral` in `echion/strings.h` --
+`GreenletName` is deliberately excluded), its one producer is `echion/tasks.cc`,
+and its only consumer is the `line == 0` branch of
+`StackRenderer::render_frame`, which re-looks-up the key every cycle with a
+`missing_name` fallback and never caches it in `string_id_cache`. Worst case
+after a clear is one cycle of a task rendering as the fallback name.
+
+Two link-scope invariants this rests on, both worth re-checking if the shim
+grows: referencing it pulls in `profiler_state.cpp` and
+`native_call_tracker.cpp` and nothing else -- not `Datadog::Sampler`, and not
+echion's `__attribute__((constructor))` initializers, so `import pyroscope`
+still installs no SIGSEGV/SIGBUS handler. The built dylib has no
+`__mod_init_func` section at all.
 
 ### Fork handling is incomplete
 `cpp/dd_wrapper/include/profiler_state.hpp`, `rust/src/ffikit.rs`

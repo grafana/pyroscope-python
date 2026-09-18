@@ -33,4 +33,6 @@ exclude = [
   "memalloc_start",
   "memalloc_stop",
   "memalloc_heap_py",
+  "pyroscope_stack_bump_upload_seq",
+  "pyroscope_stack_upload_seq",
 ]

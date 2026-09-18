@@ -25,15 +25,7 @@
  * is_initialized(). Upstream's start() is what creates the Profiles
  * Dictionary and installs dd_wrapper's pthread_atfork handlers; there is
  * nothing here to initialize, and Sampler installs its own handlers.
- *
- * TODO(Pyroscope): nothing increments upload_seq. Upstream bumps it once per
- * upload in the uploader, and Sampler::sampling_thread uses the delta to clear
- * echion's ephemeral string table entries (task and greenlet names) every 25
- * uploads -- see the ephemeral_clear_interval block in cpp/stack/src/sampler.cpp.
- * Held at 0, that clear never runs and the ephemeral table grows without bound
- * for a process that churns asyncio task names. Bump it from the Rust dump
- * path (memory::implementation::dump_pprof, or the CPU equivalent) when the CPU
- * profile is actually wired up to the encoder. */
+ */
 
 #include "native_call_tracker.hpp"
 

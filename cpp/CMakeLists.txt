@@ -85,6 +85,7 @@ set(STACK_SOURCES
         # their only consumer (see cpp/dd_wrapper/include/profiler_state.hpp).
         dd_wrapper/src/native_call_tracker.cpp
         dd_wrapper/src/profiler_state.cpp
+        pyroscope/stack_ffi.cpp
         stack/src/echion/danger.cc
         stack/src/echion/frame.cc
         stack/src/echion/greenlets.cc
