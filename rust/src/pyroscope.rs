@@ -42,6 +42,7 @@ pub struct PyroscopeConfig {
     /// How often the agent snapshots and uploads profile data.
     pub upload_interval: Duration,
     pub mem_config: crate::memory::Config,
+    pub stack_config: crate::stack::Config,
 }
 
 #[derive(Clone, Debug)]
@@ -58,6 +59,7 @@ impl PyroscopeConfig {
         spy_name: impl AsRef<str>,
         spy_version: impl AsRef<str>,
         mem_config: crate::memory::Config,
+        stack_config: crate::stack::Config,
     ) -> Self {
         Self {
             url: url.as_ref().to_owned(),
@@ -73,6 +75,7 @@ impl PyroscopeConfig {
             http_headers: HashMap::new(),
             upload_interval: DEFAULT_UPLOAD_INTERVAL,
             mem_config,
+            stack_config,
         }
     }
 
@@ -291,7 +294,7 @@ impl PyroscopeAgent {
             (Some(_), true) => log::warn!(
                 target: LOG_TAG,
                 "discarding the stack sampler's cpu/wall profile: py-spy already publishes process_cpu; \
-                 pass cpu_enabled=False to configure() to use the stack sampler instead"
+                 pass cpu_implementation=ProfilerImplementation.Stack to configure() instead"
             ),
             (None, _) => {}
         }

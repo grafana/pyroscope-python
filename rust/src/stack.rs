@@ -3,6 +3,7 @@ use crate::encode::pprof::{CpuWallProfile, PProfBuilder};
 use crate::utils::TimeRange;
 use lazy_static::lazy_static;
 use prost::Message;
+use pyo3::prelude::*;
 use std::ops::{Deref, DerefMut};
 use std::sync::Mutex;
 
@@ -28,6 +29,30 @@ fn bump_upload_seq() {
 
 #[cfg(not(feature = "memory"))]
 fn bump_upload_seq() {}
+
+#[derive(Clone)]
+pub struct Config {
+    pub enabled: bool,
+}
+
+pub fn install_thread_hooks(py: Python<'_>, config: &Config) -> PyResult<()> {
+    if !config.enabled {
+        return Ok(());
+    }
+
+    #[cfg(not(feature = "memory"))]
+    {
+        let _ = py;
+        log::warn!(
+            target: "pyroscope-python",
+            "The stack sampler was selected, but this build does not include native profiling support; cpu_implementation will be ignored."
+        );
+        Ok(())
+    }
+
+    #[cfg(feature = "memory")]
+    threads::install(py)
+}
 
 pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
     if let Ok(mut pb) = PROFILE_BUILDER.lock() {
@@ -61,6 +86,152 @@ pub fn dump_pprof(sample_rate: u32, time_range: &TimeRange) -> Option<Vec<u8>> {
     }?;
     bump_upload_seq();
     Some(profile.encode_to_vec())
+}
+
+/// Ported from dd-trace-py `ddtrace/profiling/collector/threading.py::init_stack`.
+#[cfg(feature = "memory")]
+mod threads {
+    use pyo3::prelude::*;
+    use pyo3::types::PyModule;
+    use pyo3::wrap_pyfunction;
+    use std::ffi::{CString, c_char};
+    use std::sync::OnceLock;
+
+    unsafe extern "C" {
+        fn pyroscope_stack_register_thread(id: u64, native_id: u64, name: *const c_char);
+        fn pyroscope_stack_unregister_thread(id: u64);
+    }
+
+    static INSTALLED: OnceLock<()> = OnceLock::new();
+
+    const INSTALL_SRC: &std::ffi::CStr = cr#"
+def install(threading, register, unregister):
+    Thread = threading.Thread
+    orig_set_native_id = Thread._set_native_id
+    orig_bootstrap_inner = Thread._bootstrap_inner
+
+    def _set_native_id(self):
+        orig_set_native_id(self)
+        if self.ident is not None and self.native_id is not None:
+            register(self.ident, self.native_id, self.name)
+
+    def _bootstrap_inner(self, *args, **kwargs):
+        orig_bootstrap_inner(self, *args, **kwargs)
+        if self.ident is not None:
+            unregister(self.ident)
+
+    Thread._set_native_id = _set_native_id
+    Thread._bootstrap_inner = _bootstrap_inner
+
+    for tid, thread in list(threading._active.items()):
+        register(tid, getattr(thread, "native_id", None) or tid, thread.name)
+"#;
+
+    #[pyfunction]
+    fn register_thread(py: Python<'_>, id: u64, native_id: u64, name: &str) {
+        let Ok(name) = CString::new(name) else {
+            log::warn!(
+                target: "pyroscope-python",
+                "not registering thread {id}: its name contains an interior NUL"
+            );
+            return;
+        };
+        log::debug!(
+            target: "pyroscope-python",
+            "registering thread id={id} native_id={native_id} name={name:?}"
+        );
+        py.detach(|| unsafe { pyroscope_stack_register_thread(id, native_id, name.as_ptr()) });
+    }
+
+    #[pyfunction]
+    fn unregister_thread(py: Python<'_>, id: u64) {
+        log::debug!(target: "pyroscope-python", "unregistering thread id={id}");
+        py.detach(|| unsafe { pyroscope_stack_unregister_thread(id) });
+    }
+
+    /// The wrappers must be Python-level functions: a `#[pyfunction]` is a
+    /// `builtin_function_or_method` and has no `__get__`, so assigning one onto
+    /// `Thread._set_native_id` would call it without `self`.
+    pub fn install(py: Python<'_>) -> PyResult<()> {
+        if INSTALLED.get().is_some() {
+            return Ok(());
+        }
+
+        let module = PyModule::from_code(
+            py,
+            INSTALL_SRC,
+            c"pyroscope_stack_threads.py",
+            c"_pyroscope_stack_threads",
+        )?;
+        module.getattr("install")?.call1((
+            py.import("threading")?,
+            wrap_pyfunction!(register_thread, py)?,
+            wrap_pyfunction!(unregister_thread, py)?,
+        ))?;
+
+        let _ = INSTALLED.set(());
+        Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "memory"))]
+mod thread_registration_tests {
+    use std::ffi::{CString, c_char};
+    use std::sync::mpsc;
+
+    unsafe extern "C" {
+        fn pyroscope_stack_register_thread(id: u64, native_id: u64, name: *const c_char);
+        fn pyroscope_stack_unregister_thread(id: u64);
+        fn pyroscope_stack_thread_count() -> usize;
+    }
+
+    /// The ids must be live pthread_t values: `ThreadInfo::create` calls
+    /// `pthread_getcpuclockid` / `pthread_mach_thread_np` on them, which
+    /// dereferences the pthread descriptor.
+    #[test]
+    fn threads_register_and_unregister_over_the_ffi() {
+        let before = unsafe { pyroscope_stack_thread_count() };
+
+        let (registered_tx, registered_rx) = mpsc::channel();
+        let name = CString::new("stack::registration_test").unwrap();
+
+        let mut handles = Vec::new();
+        let mut releases = Vec::new();
+        for _ in 0..2 {
+            let (release_tx, release_rx) = mpsc::channel::<()>();
+            let registered_tx = registered_tx.clone();
+            let name = name.clone();
+            handles.push(std::thread::spawn(move || {
+                let id = unsafe { libc::pthread_self() } as u64;
+                unsafe { pyroscope_stack_register_thread(id, id, name.as_ptr()) };
+                registered_tx.send(id).unwrap();
+                release_rx.recv().unwrap();
+                unsafe { pyroscope_stack_unregister_thread(id) };
+            }));
+            releases.push(release_tx);
+        }
+
+        let ids: Vec<u64> = (0..2).map(|_| registered_rx.recv().unwrap()).collect();
+        assert_ne!(ids[0], ids[1], "two distinct threads");
+        assert_eq!(
+            unsafe { pyroscope_stack_thread_count() },
+            before + 2,
+            "both threads registered"
+        );
+
+        for release in releases {
+            release.send(()).unwrap();
+        }
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(
+            unsafe { pyroscope_stack_thread_count() },
+            before,
+            "both threads unregistered"
+        );
+    }
 }
 
 #[cfg(test)]

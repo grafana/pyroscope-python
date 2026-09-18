@@ -35,4 +35,7 @@ exclude = [
   "memalloc_heap_py",
   "pyroscope_stack_bump_upload_seq",
   "pyroscope_stack_upload_seq",
+  "pyroscope_stack_register_thread",
+  "pyroscope_stack_unregister_thread",
+  "pyroscope_stack_thread_count",
 ]

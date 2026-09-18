@@ -67,11 +67,12 @@ upstream path over editing a vendored source.
 ## Status and open work
 
 `cpp/stack` compiles and archives warning-free on macOS/clang for Python
-3.11-3.14 and on Linux/gcc 13 for 3.12. The CPU push path to Rust now exists
-end to end -- `crate::stack` accumulates `CpuWall` samples and uploads a
-cpu+wall pprof as `process_cpu` alongside the memory profile -- but **the
-sampler never runs**: nothing in Python imports the extension and nothing
-starts `Datadog::Sampler`, so no sample is ever produced.
+3.11-3.14 and on Linux/gcc 13 for 3.12. The CPU push path to Rust exists end to
+end -- `crate::stack` accumulates `CpuWall` samples and uploads a cpu+wall pprof
+as `process_cpu` alongside the memory profile -- and
+`cpu_implementation=ProfilerImplementation.Stack` now patches `threading` from
+Rust so echion's thread info map is populated. But **the sampler never runs**:
+nothing calls `Datadog::Sampler::start()`, so no sample is ever produced.
 
 `stack_todo.md` is the tracking doc -- blocking work, gaps the port opened,
 free-threaded-build questions, and the TODOs inherited from upstream, kept
@@ -99,8 +100,9 @@ python3 -m build --wheel
 
 Caveats worth knowing before trusting a green build:
 
-- Nothing references the CPU sampler yet, so **the linker drops it from the
-  final `.so`**. Verify against the static archive, not the extension module.
+- Only what registration reaches is linked into the final `.so`; the rest of
+  the CPU sampler is still dropped. Verify against the static archive, and note
+  that its C++ symbols are hidden, so inspect the `.so` with `nm -a`, not `-g`.
 - `cpp/stack` is heavily `PY_VERSION_HEX`-gated; a single-version build proves
   little.
 - `PL_LINUX` selects different code in `vm.cc` and `danger.cc`, so macOS alone

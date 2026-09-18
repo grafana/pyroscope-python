@@ -43,6 +43,7 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
         State::Running(_) => return Err(PyroscopeError::AgentAlreadyRunning),
     }
     let mem_config = agent.config.mem_config.clone();
+    let stack_config = agent.config.stack_config.clone();
     let start_agent = || -> Result<PyroscopeAgent> {
         // Create the client only after the Idle check, so an already-running or
         // busy agent doesn't build (and, on macOS, spawn a thread for) a client
@@ -53,6 +54,14 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
 
     memory::start(py, &mem_config)
         .map_err(|err| PyroscopeError::new(&format!("failed to start memory profiler: {err}")))?;
+
+    // TODO(Pyroscope): must move after Sampler::start() once that exists.
+    if let Err(err) = crate::stack::install_thread_hooks(py, &stack_config) {
+        stop_profilers(py);
+        return Err(PyroscopeError::new(&format!(
+            "failed to install stack sampler thread hooks: {err}"
+        )));
+    }
 
     let agent = start_agent();
     match agent {

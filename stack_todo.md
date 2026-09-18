@@ -5,10 +5,11 @@ Tracking doc for `cpp/stack/` (dd-trace-py's echion-based CPU sampler) and the
 compile, so it covers both the gaps that port opened and the TODOs that came
 along with the vendored code.
 
-Status: **the static library compiles and archives; the sampler never runs.**
-Everything from the FFI boundary inward is now wired -- a `CpuWall` sample that
-reaches `pyroscope_push_sample` is accumulated, encoded and uploaded. Nothing
-starts the sampler, so nothing ever reaches it.
+Status: **the sampler is linked into the extension and its threads register,
+but nothing starts it.** Everything from the FFI boundary inward is wired -- a
+`CpuWall` sample that reaches `pyroscope_push_sample` is accumulated, encoded
+and uploaded -- and `cpu_implementation=ProfilerImplementation.Stack` now
+populates echion's thread info map. What is left is `Sampler::start()`/`stop()`.
 
 ## 1. Blocking: nothing produces CPU samples
 
@@ -25,10 +26,11 @@ memory *projection*, not the value struct, that was ever memory-specific.
 accumulates it and hands a pprof to the agent's upload window alongside the
 memory profile.
 
-What is missing now is a *producer*: nothing imports the extension or starts
-`Datadog::Sampler`, so the linker still drops all of `cpp/stack` from the final
-`.so` and the accumulator in `crate::stack` is always empty. That item moved to
-"Nothing imports the extension" in section 2 and is the remaining blocker.
+What is missing now is a *producer*. The extension does reference the sampler
+since thread registration landed, so `cpp/stack` is no longer dropped from the
+`.so`, but nothing calls `Datadog::Sampler::start()` and the accumulator in
+`crate::stack` is always empty. That item is "Nothing starts the sampler" in
+section 2 and is the remaining blocker.
 
 - ~~**New FFI surface.**~~ Done. `FFISampleValues` carries `cpu_time` and
   `wall_time` alongside the four memory slots, named after upstream's
@@ -127,12 +129,10 @@ and its only consumer is the `line == 0` branch of
 `missing_name` fallback and never caches it in `string_id_cache`. Worst case
 after a clear is one cycle of a task rendering as the fallback name.
 
-Two link-scope invariants this rests on, both worth re-checking if the shim
-grows: referencing it pulls in `profiler_state.cpp` and
-`native_call_tracker.cpp` and nothing else -- not `Datadog::Sampler`, and not
-echion's `__attribute__((constructor))` initializers, so `import pyroscope`
-still installs no SIGSEGV/SIGBUS handler. The built dylib has no
-`__mod_init_func` section at all.
+This entry used to record a link-scope invariant that **no longer holds**: the
+shim once pulled in only `profiler_state.cpp` and `native_call_tracker.cpp`, so
+the built dylib had no `__mod_init_func` section at all. Thread registration
+changed that -- see "`import pyroscope` now installs signal handlers" below.
 
 ### Fork handling is incomplete
 `cpp/dd_wrapper/include/profiler_state.hpp`, `rust/src/ffikit.rs`
@@ -154,21 +154,85 @@ together: `stack_atfork_child` runs inside `os.fork()`, i.e. before Python's
 underneath it. The sampler must be stopped and kept stopped in the child; do
 not rely on `renderer_.postfork_child()`.
 
-### Nothing imports the extension
-`cpp/stack/src/stack.cpp`
+A third strand now: the child inherits the parent's thread info map, and the
+`threading` wrappers are inherited patched, so the child's own `MainThread` is
+never re-registered. `Sampler::postfork_child()` rebuilds both the map and that
+one entry, but still has no caller. Fix it with the other two.
+
+### Nothing starts the sampler
+`cpp/pyroscope/stack_ffi.cpp`, `rust/src/stack.rs`
 
 **This is now the blocking item** -- see section 1.
 
-`PyInit__stack` and the ~30-entry `stack_methods` table are compiled but no
-Python module loads `_stack`, and no Rust symbol references any `stack.cpp`
-object -- so the linker drops the entire stack half from the final cdylib.
-Verified: `nm` on `libpyroscope_python_extension.dylib` finds zero
-`Datadog::Sampler` / `StackRenderer` / `EchionSampler` symbols. A compile check
-must therefore inspect the static archive, not the `.so`.
+The driving model is decided: **the Rust agent drives the sampler, there is no
+`_stack` Python module and no `PyMethodDef` table.** `configure()` selects the
+implementation with `cpu_implementation=ProfilerImplementation.Stack`, which
+`initialize_agent` turns into `crate::stack::Config`, and `extern "C"` shims in
+`cpp/pyroscope/stack_ffi.cpp` are how Rust reaches `Datadog::Sampler`.
+Registration went first because `for_each_thread` skips every thread absent
+from the map, so a started sampler with an empty map emits nothing.
 
-Decide whether the Python side drives the sampler through `_stack`'s
-`PyMethodDef` table (upstream's model) or through the Rust agent, and wire
-`cpu_enabled` in `python/pyroscope/__init__.py::configure` to it.
+What remains is `pyroscope_stack_start` / `pyroscope_stack_stop` shims wrapping
+`Sampler::set_*` + `start()` / `stop()`, called from `ffikit::run` and
+`ffikit::stop_profilers`, plus `is_safe_copy_failed()` checked before start the
+way `StackCollector._init()` does. `cpp/stack/src/stack.cpp` still holds
+`PyInit__stack` and its ~30-entry method table; both are dead and should go, and
+the handful of entries we still want (`start_native_monitoring` and friends) can
+become `extern "C"` at the same time.
+
+Upstream's config order, from `ddtrace/profiling/collector/stack.py::_init()`:
+setters, `is_safe_copy_failed()`, `start()`, span hook, native monitoring, then
+thread registration.
+
+### Thread registration must stay after `Sampler::start()`
+`rust/src/ffikit.rs`
+
+`stack::install_thread_hooks` currently runs *before* anything starts the
+sampler, which is only safe because nothing starts it. `Sampler::start()` runs
+`std::call_once(one_time_setup)`; `one_time_setup()` reaches
+`EchionSampler::postfork_child()`, which does
+`new (&thread_info_map_) std::unordered_map<...>()`
+(`cpp/stack/echion/echion/echion_sampler.h:122`) -- so every registration made
+before `start()` is silently discarded. Upstream orders `_init()` the same way
+and says so in a comment. The `TODO(Pyroscope)` at the call site marks it.
+
+### `import pyroscope` now installs signal handlers
+`cpp/stack/src/echion/vm.cc`, `cpp/stack/src/sampler.cpp`
+
+Referencing `Sampler::register_thread` pulls `sampler.cpp.o` into the link, and
+that object carries `__attribute__((constructor)) stack_init()`
+(`cpp/stack/src/sampler.cpp:621`). It calls `_set_pid`, which lives in `vm.cc`
+(`cpp/stack/src/echion/vm.cc:174`), so `vm.cc.o` comes too and its own
+`init_safe_copy` constructor (`vm.cc:35` on Linux, `:70` on Darwin) runs
+`init_segv_catcher()` at load time. So `import pyroscope` chains SIGSEGV/SIGBUS
+handlers for **every** user now, including memory-only ones and ones who never
+call `configure()`. Confirmed with `otool -l`: the dylib has a
+`__mod_init_func` section, which it did not before.
+
+Deliberately accepted for the registration slice. The fix belongs with the
+start/stop work: drop both constructor attributes as a `// Pyroscope patch:` and
+call the two initializers from an explicit init on the start path, so the
+handlers appear only when the sampler does. `_DD_PROFILING_STACK_FAST_COPY=0`
+is the only opt-out until then, and it only skips the handler install, not
+`stack_init`.
+
+### Nothing unpatches `threading`
+`rust/src/stack.rs`
+
+`install_thread_hooks` is once-per-process and there is no uninstall, matching
+upstream, which also never unpatches. After `shutdown()` the wrappers keep
+calling `register_thread`/`unregister_thread`, so the map stays live with no
+agent running. Bounded by the live thread count, since unregistration still
+fires on thread exit, but it means `pyroscope_stack_thread_count()` is not zero
+between sessions -- do not treat a non-empty map as proof the agent is up.
+
+Also inherited from upstream: threads not created through `threading.Thread`
+(raw `_thread.start_new_thread`, C-created threads that attach later,
+`_DummyThread`s appearing after the install-time sweep of `threading._active`)
+never register, so they are invisible to the sampler. Filling the map from the
+tstate snapshot inside `for_each_thread` would cover them, at the cost of
+calling `pthread_getcpuclockid` / `pthread_mach_thread_np` on a `pthread_t` read
+out-of-band -- a use-after-free if that thread has since exited.
 
 ### Wall time is multiplied by the task count
 
@@ -302,7 +366,9 @@ Upstream's, not ours. Listed so they are not mistaken for port artifacts.
 
 ## Verification notes
 
-Useful while iterating, since the stack half is invisible in the final `.so`:
+The linker no longer drops the whole stack half -- registration references it --
+but it still keeps only what is reachable, so most of `cpp/stack` remains absent
+from the `.so`. Check the archive while iterating:
 
 ```
 cmake -S cpp -B /tmp/ddbuild -G Ninja \
@@ -314,6 +380,9 @@ ar t /tmp/ddbuild/libdatadog_mem_profiler.a | grep -E 'sampler|stack|profiler_st
 
 # no unresolved project symbols (only the two Rust FFI exports should remain)
 nm -u /tmp/ddbuild/libdatadog_mem_profiler.a | c++filt | grep Datadog::
+
+# what actually made it into the extension (C++ symbols are hidden, so no -g)
+nm -a build/lib.*/pyroscope/_native*.so | c++filt | grep Datadog::Sampler
 ```
 
 `cpp/stack` is heavily `PY_VERSION_HEX`-gated, so repeat for 3.11 through 3.14.
