@@ -5,6 +5,7 @@ recursive-include rust/src/ *.rs
 include rust/include/pyroscope_ffi.h
 include cpp/CMakeLists.txt
 include cpp/BundleStaticLibrary.cmake
+include cpp/LICENSE cpp/LICENSE.Apache cpp/LICENSE.BSD3 cpp/NOTICE
 recursive-include cpp/ *.h
 recursive-include cpp/ *.cpp
 recursive-include cpp/ *.hpp
