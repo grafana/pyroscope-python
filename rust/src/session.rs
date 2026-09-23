@@ -123,6 +123,12 @@ impl Session {
                     pprof::encode(reports, self.config.sample_rate, self.time_range.clone())
                         .encode_to_vec()
                 }
+                ReportData::ReportsCpuNanos(reports) => pprof::encode_cpu_nanos(
+                    reports,
+                    self.config.sample_rate,
+                    self.time_range.clone(),
+                )
+                .encode_to_vec(),
             };
 
             let labels = labels_for_profile(&self.config, profile_type);

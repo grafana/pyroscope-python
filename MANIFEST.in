@@ -3,8 +3,17 @@ include rust/Cargo.lock
 include rust/build.rs
 recursive-include rust/src/ *.rs
 include rust/include/pyroscope_ffi.h
-include cpp/CMakeLists.txt
-include cpp/BundleStaticLibrary.cmake
+# Native profiler sources. cpp/cpu/ holds the vendored alternative CPU
+# profiler, in its own CMake project; see cpp/cpu/*/VENDOR.md.
+recursive-include cpp/ CMakeLists.txt
 recursive-include cpp/ *.h
-recursive-include cpp/ *.cpp
 recursive-include cpp/ *.hpp
+recursive-include cpp/ *.c
+recursive-include cpp/ *.cc
+recursive-include cpp/ *.cpp
+recursive-include cpp/ *.cmake
+
+# Upstream licences and provenance for the vendored trees. These must ship with
+# the source distribution to satisfy the vendored code's licence terms.
+recursive-include cpp/ LICENSE
+recursive-include cpp/ VENDOR.md

@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    backend::{BackendConfig, ReportBatch, ReportData, Tag, ThreadTag, ThreadTagsSet},
+    backend::{ReportBatch, ReportData, Tag, ThreadTag, ThreadTagsSet},
     error::Result,
     memory,
     session::{Session, SessionManager, SessionSignal},
@@ -13,7 +13,7 @@ use crate::{
 use std::sync::mpsc::SyncSender;
 use std::time::{Duration, SystemTime};
 
-use crate::pyspy_backend::Pyspy;
+use crate::cpu::{CpuBackend, CpuConfig, CpuReporter};
 use crate::utils::TimeRange;
 const LOG_TAG: &str = "Pyroscope::Agent";
 const DEFAULT_UPLOAD_INTERVAL: Duration = Duration::from_secs(10);
@@ -126,22 +126,20 @@ impl PyroscopeConfig {
 
 pub struct PyroscopeAgentBuilder {
     pub config: PyroscopeConfig,
-    pyspy_config: Option<py_spy::config::Config>,
-    backend_config: BackendConfig,
+    /// `None` when CPU profiling is disabled.
+    cpu_config: Option<CpuConfig>,
     ruleset: ThreadTagsSet,
 }
 
 impl PyroscopeAgentBuilder {
     pub fn new(
         config: PyroscopeConfig,
-        pyspy_config: Option<py_spy::config::Config>,
-        backend_config: BackendConfig,
+        cpu_config: Option<CpuConfig>,
         ruleset: ThreadTagsSet,
     ) -> Self {
         Self {
             config,
-            pyspy_config,
-            backend_config,
+            cpu_config,
             ruleset,
         }
     }
@@ -155,8 +153,8 @@ impl PyroscopeAgentBuilder {
         // }
 
         let backend = self
-            .pyspy_config
-            .map(|config| Pyspy::new(config, self.backend_config, self.ruleset.clone()))
+            .cpu_config
+            .map(|cpu_config| CpuBackend::new(cpu_config, self.ruleset.clone()))
             .transpose()?;
         if backend.is_some() {
             log::trace!(target: LOG_TAG, "Backend initialized");
@@ -182,8 +180,8 @@ pub struct PyroscopeAgent {
     terminate_channel: Option<Sender<()>>,
     /// Handle to the thread that runs the Pyroscope Agent
     handle: Option<JoinHandle<Result<()>>>,
-    /// Profiler backend
-    pub backend: Option<Pyspy>,
+    /// CPU profiler backend
+    pub backend: Option<CpuBackend>,
     /// Configuration Object
     pub config: PyroscopeConfig,
 
@@ -224,7 +222,7 @@ impl PyroscopeAgent {
     pub fn start(mut self) -> Result<PyroscopeAgent> {
         log::debug!(target: LOG_TAG, "Starting");
 
-        let reporter = self.backend.as_ref().map(Pyspy::reporter);
+        let reporter = self.backend.as_ref().map(CpuBackend::reporter);
 
         let (tx, rx) = mpsc::channel();
         self.terminate_channel = Some(tx);
@@ -258,7 +256,7 @@ impl PyroscopeAgent {
     }
 
     fn snapshot(
-        reporter: &Option<crate::pyspy_backend::Reporter>,
+        reporter: &Option<CpuReporter>,
         config: PyroscopeConfig,
         stx: &SyncSender<SessionSignal>,
         stop_watch: &mut StopWatch,
