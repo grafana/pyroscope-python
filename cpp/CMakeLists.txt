@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.19)
 include(CheckIPOSupported)
+include(CheckSymbolExists)
 include(FetchContent)
 
 project(_memalloc)
@@ -57,19 +58,12 @@ if (NOT Python3_INCLUDE_DIRS)
     message(FATAL_ERROR "Python3_INCLUDE_DIRS not found")
 endif ()
 
-# Not find_file: it caches, so a build dir reconfigured against a different
-# interpreter keeps the old header and rejects a GIL-enabled Python.
-set(PYROSCOPE_PYCONFIG_H "")
-foreach (PYROSCOPE_INCLUDE_DIR IN LISTS Python3_INCLUDE_DIRS)
-    if (EXISTS "${PYROSCOPE_INCLUDE_DIR}/pyconfig.h")
-        set(PYROSCOPE_PYCONFIG_H "${PYROSCOPE_INCLUDE_DIR}/pyconfig.h")
-        break()
-    endif ()
-endforeach ()
-if (NOT PYROSCOPE_PYCONFIG_H)
-    message(FATAL_ERROR "pyconfig.h not found in ${Python3_INCLUDE_DIRS}")
-endif ()
-file(STRINGS "${PYROSCOPE_PYCONFIG_H}" PYROSCOPE_GIL_DISABLED REGEX "^#define Py_GIL_DISABLED")
+set(CMAKE_REQUIRED_INCLUDES ${Python3_INCLUDE_DIRS})
+# Without the unset the result is cached, so a build dir reconfigured against a
+# different interpreter keeps the old answer and rejects a GIL-enabled Python.
+unset(PYROSCOPE_GIL_DISABLED CACHE)
+check_symbol_exists(Py_GIL_DISABLED "Python.h" PYROSCOPE_GIL_DISABLED)
+unset(CMAKE_REQUIRED_INCLUDES)
 if (PYROSCOPE_GIL_DISABLED)
     message(FATAL_ERROR
             "free-threaded CPython is unsupported: ${Python3_EXECUTABLE} defines "
