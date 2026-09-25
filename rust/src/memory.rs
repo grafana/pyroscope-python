@@ -1,6 +1,6 @@
 use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
 use crate::utils::TimeRange;
-#[cfg(feature = "memory")]
+#[cfg(feature = "cpp-profilers")]
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -17,7 +17,7 @@ pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
         return Ok(());
     }
 
-    #[cfg(not(feature = "memory"))]
+    #[cfg(not(feature = "cpp-profilers"))]
     {
         let _ = py;
         log::warn!(
@@ -27,7 +27,7 @@ pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
         Ok(())
     }
 
-    #[cfg(feature = "memory")]
+    #[cfg(feature = "cpp-profilers")]
     unsafe {
         if let Some(err) = PyErr::take(py) {
             return Err(err);
@@ -75,7 +75,7 @@ pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u
     implementation::dump_pprof(heap_sample_size, time_range)
 }
 
-#[cfg(feature = "memory")]
+#[cfg(feature = "cpp-profilers")]
 mod implementation {
     use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
     use crate::encode::pprof::{MemoryProfile, PProfBuilder};
@@ -150,7 +150,7 @@ mod implementation {
     }
 }
 
-#[cfg(not(feature = "memory"))]
+#[cfg(not(feature = "cpp-profilers"))]
 mod implementation {
     use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
     use crate::utils::TimeRange;

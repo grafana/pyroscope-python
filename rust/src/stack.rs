@@ -12,22 +12,22 @@ lazy_static! {
         Mutex::new(PProfBuilder::new());
 }
 
-#[cfg(feature = "memory")]
+#[cfg(feature = "cpp-profilers")]
 unsafe extern "C" {
     fn pyroscope_stack_bump_upload_seq();
 }
 
-#[cfg(all(test, feature = "memory"))]
+#[cfg(all(test, feature = "cpp-profilers"))]
 unsafe extern "C" {
     fn pyroscope_stack_upload_seq() -> u64;
 }
 
-#[cfg(feature = "memory")]
+#[cfg(feature = "cpp-profilers")]
 fn bump_upload_seq() {
     unsafe { pyroscope_stack_bump_upload_seq() }
 }
 
-#[cfg(not(feature = "memory"))]
+#[cfg(not(feature = "cpp-profilers"))]
 fn bump_upload_seq() {}
 
 #[derive(Clone)]
@@ -40,7 +40,7 @@ pub fn install_thread_hooks(py: Python<'_>, config: &Config) -> PyResult<()> {
         return Ok(());
     }
 
-    #[cfg(not(feature = "memory"))]
+    #[cfg(not(feature = "cpp-profilers"))]
     {
         let _ = py;
         log::warn!(
@@ -50,7 +50,7 @@ pub fn install_thread_hooks(py: Python<'_>, config: &Config) -> PyResult<()> {
         Ok(())
     }
 
-    #[cfg(feature = "memory")]
+    #[cfg(feature = "cpp-profilers")]
     threads::install(py)
 }
 
@@ -89,7 +89,7 @@ pub fn dump_pprof(sample_rate: u32, time_range: &TimeRange) -> Option<Vec<u8>> {
 }
 
 /// Ported from dd-trace-py `ddtrace/profiling/collector/threading.py::init_stack`.
-#[cfg(feature = "memory")]
+#[cfg(feature = "cpp-profilers")]
 mod threads {
     use pyo3::prelude::*;
     use pyo3::types::PyModule;
@@ -174,7 +174,7 @@ def install(threading, register, unregister):
     }
 }
 
-#[cfg(all(test, feature = "memory"))]
+#[cfg(all(test, feature = "cpp-profilers"))]
 mod thread_registration_tests {
     use std::ffi::{CString, c_char};
     use std::sync::mpsc;
@@ -273,12 +273,12 @@ mod tests {
         profile.string_table[index as usize].as_str()
     }
 
-    #[cfg(feature = "memory")]
+    #[cfg(feature = "cpp-profilers")]
     fn upload_seq() -> Option<u64> {
         Some(unsafe { pyroscope_stack_upload_seq() })
     }
 
-    #[cfg(not(feature = "memory"))]
+    #[cfg(not(feature = "cpp-profilers"))]
     fn upload_seq() -> Option<u64> {
         None
     }

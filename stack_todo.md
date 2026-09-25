@@ -332,16 +332,46 @@ and memalloc does not get this warning set upstream either.
 
 ## 3. Free-threaded builds
 
-`rust/build.rs` early-returns under `cfg!(not(feature = "memory"))`, and
+`rust/build.rs` early-returns under `cfg!(not(feature = "cpp-profilers"))`, and
 `setup.py` only sets that feature when `Py_GIL_DISABLED != 1` -- so on
-free-threaded builds no C++ is compiled at all, CPU sampler included. The whole
-Rust half of the CPU path is ungated in anticipation of exactly this: the
-interner (`rust/src/encode/interner.rs`), the push path (`rust/src/ffi.rs`), and
-the accumulator and dump path (`rust/src/stack.rs`). Only `crate::memory`'s
-accumulator and dump path are behind the gate, because they call `memalloc_*`.
-What is left is the C++ side: decide whether the CPU sampler ships on
-free-threaded builds and, if so, split the feature gate so the stack half builds
-without `memory`.
+free-threaded builds no C++ is compiled at all, CPU sampler included, and a
+3.14t wheel is py-spy plus the Rust agent only. The feature was called `memory`
+until it gated both profilers; the name now says what it covers.
+
+A 3.14t wheel is built and smoke-tested by the `python-free-threaded-build` CI
+job against `scripts/tests/test_free_threaded.py`, which covers build and import
+integrity only. It deliberately asserts nothing about profiling output, because
+py-spy cannot attach on free-threaded CPython at all (issue #163:
+`get_gil_threadid` is called unconditionally and reads GIL-enabled struct
+layouts, so no `gil_only` setting avoids it) and `configure()` returns `True`
+anyway (#164). Two related open items: #165 on the `gil_used = false` the pyo3
+0.29 `#[pymodule]` default gives us unaudited, and #166 tracking the CI job
+itself.
+
+**Decided: the C++ profilers stay out of free-threaded builds.** Not because
+they cannot compile there -- measured, the only compile error in the whole tree
+is `BITS_TO_PTR_MASKED` in `cpp/stack/echion/echion/cpython/tasks.h:250,284`,
+which `internal/pycore_stackref.h` defines only in its GIL-enabled arm (line
+467, inside the `#else // Py_GIL_DISABLED` at 454). The mask is numerically
+identical in both arms (`bits & ~1`: GIL `~Py_TAG_REFCNT`, free-threaded
+`~Py_TAG_BITS`), so a four-line `#ifdef` would make it build. Do not take that
+as a green light: echion reads struct layouts out-of-band and free-threaded
+changes several of them (`ob_tid`/`ob_ref_local` in the object header,
+`_PyThreadStateImpl`, mimalloc in place of the freelists), none of which the
+compiler checks. Compiling would buy an untrustworthy sampler, so the gate
+stays until someone reviews those layouts.
+
+Note `PyStackRef_AsPyObjectBorrow` looks like the portable spelling and is
+aliased to `BITS_TO_PTR_MASKED` on GIL builds, but do not substitute it: under
+`Py_STACKREF_DEBUG` the GIL arm redefines it (line 106) as a function that
+consults a debug table, which is wrong for a stackref copied out of another
+process.
+
+The whole Rust half of the CPU path is ungated: the interner
+(`rust/src/encode/interner.rs`), the push path (`rust/src/ffi.rs`), and the
+accumulator and dump path (`rust/src/stack.rs`). Only `crate::memory`'s
+accumulator and `crate::stack`'s thread hooks are behind the gate, because they
+call into C++.
 
 ## 4. TODOs inherited from the vendored code
 

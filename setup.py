@@ -5,8 +5,8 @@ import sys
 import sysconfig
 import os
 
-# The C++ memalloc profiler reads version-specific CPython internal structs, so
-# it must be compiled against the exact Python the wheel targets. Pass the
+# The C++ profilers read version-specific CPython internal structs, so they
+# must be compiled against the exact Python the wheel targets. Pass the
 # building interpreter and its install root down to build.rs, which forwards
 # them to CMake as Python3_EXECUTABLE / Python3_ROOT_DIR. Python3_EXECUTABLE
 # pins the exact interpreter even when several Pythons share a prefix (the
@@ -23,7 +23,7 @@ env.update({
 
 features = []
 if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
-    features.append("memory")
+    features.append("cpp-profilers")
 
 setup(
     rust_extensions=[

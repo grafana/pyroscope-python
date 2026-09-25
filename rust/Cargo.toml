@@ -31,4 +31,4 @@ cmake = "0.1"
 
 [features]
 default = []
-memory = []
+cpp-profilers = []

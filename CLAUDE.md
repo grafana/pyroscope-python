@@ -92,7 +92,7 @@ cmake --build /tmp/ddbuild
 
 # Rust, including the C++ build
 cd rust && Python3_ROOT_DIR=$(python3 -c 'import sys,pathlib;print(pathlib.Path(sys.base_prefix).resolve())') \
-  Python3_EXECUTABLE=$(which python3) cargo test --features memory
+  Python3_EXECUTABLE=$(which python3) cargo test --features cpp-profilers
 
 # full wheel
 python3 -m build --wheel

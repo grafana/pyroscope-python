@@ -219,3 +219,39 @@ jobs:
         with:
           name: ${{ github.sha }}-python-${{ matrix.target }}-${{ matrix.python-version }}
           path: dist/*
+
+  python-free-threaded-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        # pyo3 0.29 supports free-threaded CPython from 3.14 on.
+        python-version: ["3.14t"]
+    name: Python free-threaded - ${{ matrix.python-version }}
+    runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.96.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - run: python -m pip install build wheel
+      - run: python -m build --wheel
+
+      - name: Check wheel tags
+        run: |
+          set -euxo pipefail
+          for whl in dist/*.whl; do
+              echo "Wheel: $whl"
+              unzip -p "$whl" '*.dist-info/WHEEL'
+              unzip -p "$whl" '*.dist-info/WHEEL' | grep -qE 'Tag:.*cp314t' || { echo "ERROR: expected cp314t ABI tag not found"; exit 1; }
+          done
+
+      - run: python -m pip install dist/*.whl
+      - run: python scripts/tests/test_free_threaded.py

@@ -3,7 +3,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 fn main() {
-    if cfg!(not(feature = "memory")) {
+    if cfg!(not(feature = "cpp-profilers")) {
         return;
     }
 
@@ -17,11 +17,11 @@ fn main() {
 
     println!("cargo:rerun-if-env-changed=Python3_ROOT_DIR");
     let python_root = env::var_os("Python3_ROOT_DIR")
-        .expect("Python3_ROOT_DIR must be set (passed from setup.py) so the C++ memalloc profiler is compiled against the target Python version");
+        .expect("Python3_ROOT_DIR must be set (passed from setup.py) so the C++ profilers are compiled against the target Python version");
     cfg.define("Python3_ROOT_DIR", &python_root);
     println!("cargo:rerun-if-env-changed=Python3_EXECUTABLE");
     let python_executable = env::var_os("Python3_EXECUTABLE")
-        .expect("Python3_EXECUTABLE must be set (passed from setup.py) so the C++ memalloc profiler is compiled against the exact target Python interpreter");
+        .expect("Python3_EXECUTABLE must be set (passed from setup.py) so the C++ profilers are compiled against the exact target Python interpreter");
     cfg.define("Python3_EXECUTABLE", &python_executable);
     cfg.define("Python3_FIND_STRATEGY", "LOCATION");
 
