@@ -345,8 +345,8 @@ The decision rests on two independent problems, both measured:
   configuration avoids it. Before this was refused, a `cp314t` wheel installed
   and imported fine, `configure()` returned `True`, every window logged
   `Skipping empty session`, and the retry loop cost ~3.5x the CPU of a working
-  agent. Tracked as grafana/pyroscope-python#163 and
-  grafana/pyroscope-py-spy#10; #164 covers the misreported success and #165 the
+  agent. Tracked as #163 -- the code change lands in the py-spy fork, but the
+  issue lives here. #164 covers the misreported success and #165 the
   `gil_used = false` that pyo3 0.29's `#[pymodule]` default hands us unaudited.
 - **`cpp/stack` does not compile there**, though only barely. The single error
   in the whole tree is `BITS_TO_PTR_MASKED` in
