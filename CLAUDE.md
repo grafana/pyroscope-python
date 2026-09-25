@@ -67,7 +67,9 @@ upstream path over editing a vendored source.
 ## Status and open work
 
 `cpp/stack` compiles and archives warning-free on macOS/clang for Python
-3.11-3.14 and on Linux/gcc 13 for 3.12. The CPU push path to Rust exists end to
+3.11-3.14 and on Linux/gcc 13 for 3.12. There is no cargo feature gating the
+C++ half any more -- it is always built, and free-threaded interpreters are
+rejected outright by `setup.py` and `rust/build.rs`. The CPU push path to Rust exists end to
 end -- `crate::stack` accumulates `CpuWall` samples and uploads a cpu+wall pprof
 as `process_cpu` alongside the memory profile -- and
 `cpu_implementation=ProfilerImplementation.Stack` now patches `threading` from
@@ -92,7 +94,7 @@ cmake --build /tmp/ddbuild
 
 # Rust, including the C++ build
 cd rust && Python3_ROOT_DIR=$(python3 -c 'import sys,pathlib;print(pathlib.Path(sys.base_prefix).resolve())') \
-  Python3_EXECUTABLE=$(which python3) cargo test --features cpp-profilers
+  Python3_EXECUTABLE=$(which python3) cargo test
 
 # full wheel
 python3 -m build --wheel
