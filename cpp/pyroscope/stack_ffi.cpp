@@ -3,10 +3,44 @@
 #include "thread_span_links.hpp"
 
 #include "echion/echion_sampler.h"
+#include "echion/vm.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+
+/* Pyroscope patch: stands in for stack.py::_init's setter block. Adaptive
+ * sampling and fast copy are off as first-iteration choices, not defaults --
+ * see stack_todo.md. */
+extern "C" void
+pyroscope_stack_configure(double interval_s)
+{
+    set_fast_copy_enabled(false);
+    Datadog::Sampler::get().set_adaptive_sampling(false);
+    Datadog::Sampler::get().set_interval(interval_s);
+}
+
+extern "C" bool
+pyroscope_stack_is_safe_copy_failed()
+{
+#if defined PL_LINUX
+    return failed_safe_copy;
+#else
+    return false;
+#endif
+}
+
+extern "C" bool
+pyroscope_stack_start()
+{
+    return Datadog::Sampler::get().start();
+}
+
+extern "C" void
+pyroscope_stack_stop()
+{
+    Datadog::Sampler::get().stop();
+}
 
 extern "C" void
 pyroscope_stack_bump_upload_seq()

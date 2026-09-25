@@ -5,32 +5,95 @@ Tracking doc for `cpp/stack/` (dd-trace-py's echion-based CPU sampler) and the
 compile, so it covers both the gaps that port opened and the TODOs that came
 along with the vendored code.
 
-Status: **the sampler is linked into the extension and its threads register,
-but nothing starts it.** Everything from the FFI boundary inward is wired -- a
-`CpuWall` sample that reaches `pyroscope_push_sample` is accumulated, encoded
-and uploaded -- and `cpu_implementation=ProfilerImplementation.Stack` now
-populates echion's thread info map. What is left is `Sampler::start()`/`stop()`.
+Status: **the sampler runs.** `crate::stack::start` configures and starts
+`Datadog::Sampler` through `cpp/pyroscope/stack_ffi.cpp`, registers the live
+threads, and the cpu+wall samples upload as `process_cpu`. Verified against a
+live server with `scripts/tests/test_stack_cpu.py`: `cpuburn` shows 9.80s of
+9.81s total CPU in a 10s window, and both
+`process_cpu:cpu:nanoseconds:cpu:nanoseconds` and
+`process_cpu:wall:nanoseconds:cpu:nanoseconds` resolve.
 
-## 1. Blocking: nothing produces CPU samples
+What remains is quality and correctness work, not plumbing: no labels, no
+native frames, no fork safety, and the four provisional choices in section 1.
 
-The whole point, and everything else in section 2 is downstream of it.
+## 1. First-iteration choices to revisit
 
-The push path is complete end to end. `Sample::push_cputime`/`push_walltime`
-accumulate into `FFISampleValues.cpu_time`/`wall_time`, every `Sample` carries
-the `PprofBuilderType` it was constructed with, and `flush_sample()` forwards to
-`export_sample()`, which calls
-`pyroscope_push_sample(builder_type, frames, len, values)`. Forwarding is safe
-because the type tells Rust which profile the sample belongs to -- it is the
-memory *projection*, not the value struct, that was ever memory-specific.
-`pyroscope_push_sample` dispatches `CpuWall` into `crate::stack`, which
-accumulates it and hands a pprof to the agent's upload window alongside the
-memory profile.
+None of these is a settled decision. Listed first because a later session will
+otherwise read the code as intent.
 
-What is missing now is a *producer*. The extension does reference the sampler
-since thread registration landed, so `cpp/stack` is no longer dropped from the
-`.so`, but nothing calls `Datadog::Sampler::start()` and the accumulator in
-`crate::stack` is always empty. That item is "Nothing starts the sampler" in
-section 2 and is the remaining blocker.
+### Fast copy is off; we want it on by default
+
+`pyroscope_stack_configure` calls `set_fast_copy_enabled(false)`, matching
+upstream's `_DD_PROFILING_STACK_FAST_COPY` default, so out-of-band reads go
+through `process_vm_readv` on Linux and `mach_vm_read_overwrite` on macOS.
+
+**Turning fast copy on is wanted.** `safe_memcpy` avoids a syscall per read,
+which is the difference between usable and degraded sample fidelity on asyncio
+workloads, and `sampler.cpp` already carries the machinery to use it safely:
+the startup warmup window, the `segv_handler_installed()` ownership check
+before upgrading, and the permanent fallback if a foreign component (abseil via
+vLLM/gRPC, PyTorch/CUDA) takes a handler over. It was left off only because the
+start path was new and unproven. Flipping it interacts with the constructor
+item below -- the handlers are installed at load time either way today.
+
+### Adaptive sampling is off
+
+`pyroscope_stack_configure` calls `set_adaptive_sampling(false)` and
+`set_interval(1.0 / sample_rate)`. `CpuWallProfile::set_profile_type` derives
+`profile.period` from the agent-wide `sample_rate`, so with adaptation on the
+sampler would drift its interval up under load while `period` kept claiming
+`1e9 / sample_rate`. Re-enabling it means plumbing the sampler's real interval
+into the dump path, and only then restoring `set_target_overhead` /
+`set_max_sampling_period`.
+
+### Native monitoring is not enabled
+
+`stack/src/stack.cpp` is deleted (see below), and it was the only home of
+`native_call_handler`, `start_native_monitoring` and `stop_native_monitoring`.
+`echion/stacks.cc:12` still reads `ProfilerState::native_call_registry`, which
+is now permanently empty, so no native frames are spliced in front of their
+Python caller. Restoring it means bringing those three functions and the
+`g_tool_id` / `g_disable_sentinel` statics back as `extern "C"`, not as a
+`PyMethodDef` table.
+
+### `stack/src/stack.cpp` is deleted
+
+Removed rather than left unbuilt. Nothing else in `cpp/` referenced any symbol
+it defined, so `stack/include/util/cast_to_pyfunc.hpp` went with it, along with
+the `stack/include/util` SYSTEM include entry in `cpp/CMakeLists.txt` -- that
+entry was marked SYSTEM specifically to silence `-Wold-style-cast` and
+`-Wcast-function-type-mismatch` on that header, so **restore the SYSTEM marking
+if you ever bring it back.**
+
+Two consequences: `NativeCallRegistry::size()` -- which we reconstructed only
+because upstream's `_native_call_registry_size` test helper called it -- now has
+no caller at all; and `pyroscope_stack_stop` is just `Sampler::get().stop()`,
+without upstream `stack_stop`'s `ThreadSpanLinks::reset()` and
+`native_call_registry.reset()`. Both resets would be dead code today since
+nothing populates either. **Restore them with whichever feature repopulates
+them.**
+
+The whole file is recoverable from upstream at
+`ddtrace/internal/datadog/profiling/stack/src/stack.cpp`.
+
+### No labels, no thread or task information
+
+`push_threadinfo`, `push_task_name`, `push_span_id`, `push_local_root_span_id`,
+`push_trace_type` and `push_monotonic_ns` are no-ops, and not just for want of
+struct fields: `PProfBuilder`'s FFI accumulator is keyed on the location-id
+vector alone and `flush_ffi_samples` hardcodes `label: vec![]`, so two samples
+differing only by thread or task name are indistinguishable once merged.
+Carrying them means either folding the label set into the accumulator key or
+giving up accumulation for these samples. The py-spy path (`add_stacktrace`)
+does emit labels and pushes each sample directly -- that is the shape to copy.
+
+Related and still open: there is no `samples/count` sample type, since
+`FFISampleValues` has no count slots.
+
+## 1b. The push and dump path, for reference
+
+All done; kept because the reasoning behind the shape is not obvious from the
+code.
 
 - ~~**New FFI surface.**~~ Done. `FFISampleValues` carries `cpu_time` and
   `wall_time` alongside the four memory slots, named after upstream's
@@ -88,11 +151,9 @@ section 2 and is the remaining blocker.
   the UI and the integration tests already know; the sampler adds
   `process_cpu:wall:nanoseconds:cpu:nanoseconds` to it.
 
-  Still open: there is no `samples/count` sample type, since `FFISampleValues`
-  has no count slots; a tally would have to come from how many stacks merge
-  into a row. And `period` is derived from the agent-wide `sample_rate`, not
-  from the sampler's own (adaptive) interval -- that has to be plumbed through
-  once something starts the sampler.
+  Still open: no `samples/count` sample type, and `period` is derived from the
+  agent-wide `sample_rate` rather than the sampler's own interval -- see
+  "Adaptive sampling is off" above.
 - ~~**A dump path.**~~ Done. `crate::stack::dump_pprof` copies the shape of
   `memory::implementation::dump_pprof` and its lock order --
   `interner::string_table()` **before** the profile builder lock, never the
@@ -100,15 +161,6 @@ section 2 and is the remaining blocker.
   the GIL nor a profiler-side flush, so it drops `Python::try_attach` and has no
   `extern "C"` dependency; the whole module is therefore **ungated**, unlike
   `memory::implementation`. See section 3.
-- **Labels have nowhere to go.** `push_threadinfo`, `push_task_name`,
-  `push_span_id`, `push_local_root_span_id`, `push_trace_type` and
-  `push_monotonic_ns` are still no-ops, and not just for want of struct fields:
-  `PProfBuilder`'s FFI accumulator is keyed on the location-id vector alone and
-  `flush_ffi_samples` hardcodes `label: vec![]`, so two samples differing
-  only by thread or task name are indistinguishable once merged. Carrying them
-  means either folding the label set into the accumulator key or giving up
-  accumulation for these samples. The py-spy path (`add_stacktrace`) does emit
-  labels and pushes each sample directly -- that is the shape to copy.
 
 ## 2. Gaps this port opened
 
@@ -159,42 +211,67 @@ A third strand now: the child inherits the parent's thread info map, and the
 never re-registered. `Sampler::postfork_child()` rebuilds both the map and that
 one entry, but still has no caller. Fix it with the other two.
 
-### Nothing starts the sampler
+### ~~Nothing starts the sampler~~
 `cpp/pyroscope/stack_ffi.cpp`, `rust/src/stack.rs`
 
-**This is now the blocking item** -- see section 1.
+Done. **The Rust agent drives the sampler; there is no `_stack` Python module
+and no `PyMethodDef` table.** `configure()` selects the implementation with
+`cpu_implementation=ProfilerImplementation.Stack`, `initialize_agent` turns it
+into `crate::stack::Config`, and `crate::stack::start` / `stop` reach
+`Datadog::Sampler` through `pyroscope_stack_configure` /
+`pyroscope_stack_is_safe_copy_failed` / `pyroscope_stack_start` /
+`pyroscope_stack_stop`, called from `ffikit::run` and `ffikit::stop_profilers`.
 
-The driving model is decided: **the Rust agent drives the sampler, there is no
-`_stack` Python module and no `PyMethodDef` table.** `configure()` selects the
-implementation with `cpu_implementation=ProfilerImplementation.Stack`, which
-`initialize_agent` turns into `crate::stack::Config`, and `extern "C"` shims in
-`cpp/pyroscope/stack_ffi.cpp` are how Rust reaches `Datadog::Sampler`.
-Registration went first because `for_each_thread` skips every thread absent
-from the map, so a started sampler with an empty map emits nothing.
+The order follows `ddtrace/profiling/collector/stack.py::_init()`: setters,
+`is_safe_copy_failed()`, `start()`, then thread registration. (The span hook and
+native monitoring steps are not ported -- see section 1.) A failed
+`is_safe_copy_failed()` logs an error and leaves the sampler off rather than
+failing `configure()`, mirroring upstream's `CollectorUnavailable`.
 
-What remains is `pyroscope_stack_start` / `pyroscope_stack_stop` shims wrapping
-`Sampler::set_*` + `start()` / `stop()`, called from `ffikit::run` and
-`ffikit::stop_profilers`, plus `is_safe_copy_failed()` checked before start the
-way `StackCollector._init()` does. `cpp/stack/src/stack.cpp` still holds
-`PyInit__stack` and its ~30-entry method table; both are dead and should go, and
-the handful of entries we still want (`start_native_monitoring` and friends) can
-become `extern "C"` at the same time.
+Two traps that are now encoded in the code but easy to undo:
 
-Upstream's config order, from `ddtrace/profiling/collector/stack.py::_init()`:
-setters, `is_safe_copy_failed()`, `start()`, span hook, native monitoring, then
-thread registration.
+- **`stack::stop` is guarded by a `STARTED` AtomicBool.** `Sampler::stop()`
+  increments `thread_seq_num` unconditionally, and `Sampler::prefork` reads that
+  counter's *parity* to decide whether to restart after a fork. Stopping a
+  sampler that never started flips the parity and would make a later fork
+  resurrect a sampler that was never running.
+- **`Sampler::stop()` runs under `py.detach`.** See the locking rules in
+  `CLAUDE.md`.
+
+One accepted side effect: `one_time_setup`'s `postfork_child` registers
+`pthread_self()` as `"MainThread"`. `configure()` normally runs on the real main
+thread, so the entry is right; if it does not, the stray entry is keyed by a
+non-Python thread id and `for_each_thread` looks entries up by
+`tstate.thread_id`, so it is never matched.
 
 ### Thread registration must stay after `Sampler::start()`
-`rust/src/ffikit.rs`
+`rust/src/stack.rs`
 
-`stack::install_thread_hooks` currently runs *before* anything starts the
-sampler, which is only safe because nothing starts it. `Sampler::start()` runs
-`std::call_once(one_time_setup)`; `one_time_setup()` reaches
+Still true, and now load-bearing rather than academic. `crate::stack::start`
+calls `threads::install` *after* `pyroscope_stack_start`. `Sampler::start()`
+runs `std::call_once(one_time_setup)`; `one_time_setup()` reaches
 `EchionSampler::postfork_child()`, which does
 `new (&thread_info_map_) std::unordered_map<...>()`
 (`cpp/stack/echion/echion/echion_sampler.h:122`) -- so every registration made
 before `start()` is silently discarded. Upstream orders `_init()` the same way
-and says so in a comment. The `TODO(Pyroscope)` at the call site marks it.
+and says so in a comment. **Do not reorder these two.**
+
+### Do not hold `ffikit::STATE` across GIL-needing work
+`rust/src/ffikit.rs`
+
+Fixed here, recorded because the failure mode is a hard hang with no output.
+`ffikit::run` used to hold the `STATE` mutex across the whole startup body,
+including `crate::stack::start` -> `threads::install` -> `PyModule::from_code`.
+Executing that module body lets CPython drop the GIL; a second thread entering
+`configure()` then takes the GIL and blocks on `STATE` while holding it, so the
+first thread can never get the GIL back to finish. Two concurrent
+`configure()` calls with `ProfilerImplementation.Stack` wedged permanently
+(`take_gil` against `_pthread_mutex_firstfit_lock_wait`).
+
+`run` now claims a `State::Busy` marker, releases the lock, starts the
+profilers, and re-locks only to publish `State::Running` -- the same shape
+`ffikit::stop` already used. The invariant is in `CLAUDE.md`: **never hold
+`STATE` across anything that needs the GIL.**
 
 ### `import pyroscope` now installs signal handlers
 `cpp/stack/src/echion/vm.cc`, `cpp/stack/src/sampler.cpp`
@@ -209,12 +286,15 @@ handlers for **every** user now, including memory-only ones and ones who never
 call `configure()`. Confirmed with `otool -l`: the dylib has a
 `__mod_init_func` section, which it did not before.
 
-Deliberately accepted for the registration slice. The fix belongs with the
-start/stop work: drop both constructor attributes as a `// Pyroscope patch:` and
-call the two initializers from an explicit init on the start path, so the
-handlers appear only when the sampler does. `_DD_PROFILING_STACK_FAST_COPY=0`
-is the only opt-out until then, and it only skips the handler install, not
-`stack_init`.
+Still open, and it did not go away with the start path: the constructors run at
+load time regardless of whether `configure()` is ever called. The fix is to drop
+both constructor attributes as a `// Pyroscope patch:` and call the two
+initializers from `pyroscope_stack_configure` instead, so the handlers appear
+only when the sampler does. `_DD_PROFILING_STACK_FAST_COPY=0` is the only
+opt-out until then, and it only skips the handler install, not `stack_init`.
+
+Note this is coupled to the fast-copy item in section 1: turning fast copy back
+on makes the handlers load-bearing again, so decide both together.
 
 ### Nothing unpatches `threading`
 `rust/src/stack.rs`
@@ -316,6 +396,9 @@ helper calls a `size()` that does not exist upstream yet. Ours is a
 `shared_lock` + `call_sites.size()`. Replace it with upstream's on the next
 vendor sync if the signature differs.
 
+`stack.cpp` is deleted, so this method now has no caller at all. Either drop it
+or restore it alongside native monitoring.
+
 ### `-Werror` is off
 `cpp/CMakeLists.txt`
 
@@ -399,26 +482,42 @@ Upstream's, not ours. Listed so they are not mistaken for port artifacts.
 
 ## Verification notes
 
-The linker no longer drops the whole stack half -- registration references it --
-but it still keeps only what is reachable, so most of `cpp/stack` remains absent
-from the `.so`. Check the archive while iterating:
+Now that the sampler starts, `sampling_thread` and everything it reaches is
+linked into the `.so`.
 
 ```
 cmake -S cpp -B /tmp/ddbuild -G Ninja \
   -DPython3_EXECUTABLE=$(which python3) -DPython3_FIND_STRATEGY=LOCATION
 cmake --build /tmp/ddbuild
 
-# the stack objects really got archived
+# the stack objects got archived
 ar t /tmp/ddbuild/libdatadog_mem_profiler.a | grep -E 'sampler|stack|profiler_state'
 
-# no unresolved project symbols (only the two Rust FFI exports should remain)
-nm -u /tmp/ddbuild/libdatadog_mem_profiler.a | c++filt | grep Datadog::
+# every Datadog:: reference resolves inside the archive (should print nothing)
+nm -u /tmp/ddbuild/libdatadog_mem_profiler.a | grep -oE '__ZN7Datadog[A-Za-z0-9_]*' | sort -u > /tmp/undef.txt
+nm -g --defined-only /tmp/ddbuild/libdatadog_mem_profiler.a | grep -oE '__ZN7Datadog[A-Za-z0-9_]*' | sort -u > /tmp/def.txt
+comm -23 /tmp/undef.txt /tmp/def.txt | c++filt
 
-# what actually made it into the extension (C++ symbols are hidden, so no -g)
+# what made it into the extension (C++ symbols are hidden, so -a not -g)
 nm -a build/lib.*/pyroscope/_native*.so | c++filt | grep Datadog::Sampler
 ```
 
+End to end, against a real server:
+
+```
+docker run -d --name pyro-e2e -p 4040:4040 grafana/pyroscope
+python3 -m build --wheel && pip install --force-reinstall dist/*.whl
+python3 scripts/tests/test_stack_cpu.py     # both cpu and wall type IDs
+```
+
+`test_stack_cpu.py` is the only test that proves samples are produced. Run
+`scripts/tests/test_memory.py`, `test_concurrency.py` and `test_atexit.py` too
+after touching `ffikit`, and run the concurrency shape with
+`cpu_implementation=Stack` -- that is what caught the `STATE`/GIL deadlock, and
+the shipped `test_concurrency.py` only exercises `mem_enabled=True`.
+
 `cpp/stack` is heavily `PY_VERSION_HEX`-gated, so repeat for 3.11 through 3.14.
 `PL_LINUX` selects different code in `vm.cc` (`process_vm_readv`) and
-`danger.cc`, so a macOS-only build proves little -- use `ssh orb`, where the mac
-sources are mounted at identical paths.
+`danger.cc`, and `is_safe_copy_failed` is hardcoded `false` on Darwin, so a
+macOS-only build proves little -- use `ssh orb`, where the mac sources are
+mounted at identical paths.

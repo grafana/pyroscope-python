@@ -3,9 +3,11 @@ use crate::encode::pprof::{CpuWallProfile, PProfBuilder};
 use crate::utils::TimeRange;
 use lazy_static::lazy_static;
 use prost::Message;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::ops::{Deref, DerefMut};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 lazy_static! {
     static ref PROFILE_BUILDER: Mutex<PProfBuilder<CpuWallProfile>> =
@@ -15,6 +17,10 @@ lazy_static! {
 #[cfg(not(miri))]
 unsafe extern "C" {
     fn pyroscope_stack_bump_upload_seq();
+    fn pyroscope_stack_configure(interval_s: f64);
+    fn pyroscope_stack_is_safe_copy_failed() -> bool;
+    fn pyroscope_stack_start() -> bool;
+    fn pyroscope_stack_stop();
 }
 
 #[cfg(all(test, not(miri)))]
@@ -35,12 +41,90 @@ pub struct Config {
     pub enabled: bool,
 }
 
-pub fn install_thread_hooks(py: Python<'_>, config: &Config) -> PyResult<()> {
+/// Tracks whether `pyroscope_stack_start` succeeded, so `stop` never calls
+/// `Sampler::stop()` on a sampler that was never started. That call bumps
+/// `thread_seq_num` unconditionally, and `Sampler::prefork` reads the
+/// counter's *parity* to decide whether to restart after a fork.
+static STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Start the vendored echion sampler, then register the live threads with it.
+///
+/// Mirrors the order of `ddtrace/profiling/collector/stack.py::_init`: setters,
+/// `is_safe_copy_failed()`, `start()`, thread registration. Registration must
+/// come last -- `Sampler::start` runs `one_time_setup`, which placement-news
+/// echion's thread info map and would discard any earlier registration.
+pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> {
     if !config.enabled {
         return Ok(());
     }
+
+    let interval_s = 1.0 / f64::from(sample_rate.max(1));
+    configure(interval_s);
+
+    if is_safe_copy_failed() {
+        log::error!(
+            target: "pyroscope-python",
+            "no safe memory copy method available (safe_memcpy and process_vm_readv both failed); \
+             the CPU stack sampler stays off"
+        );
+        return Ok(());
+    }
+
+    if !sampler_start() {
+        return Err(PyRuntimeError::new_err(
+            "failed to start the CPU stack sampler's sampling thread",
+        ));
+    }
+    STARTED.store(true, Ordering::Release);
+
     threads::install(py)
 }
+
+pub fn stop(py: Python<'_>) {
+    if STARTED.swap(false, Ordering::AcqRel) {
+        // Not under the GIL: Sampler::stop waits for the sampling thread, which
+        // interns strings, and `memory::dump_pprof` holds the interner lock
+        // while attached to Python.
+        py.detach(sampler_stop);
+    }
+    clear_samples();
+}
+
+#[cfg(not(miri))]
+fn configure(interval_s: f64) {
+    unsafe { pyroscope_stack_configure(interval_s) }
+}
+
+#[cfg(not(miri))]
+fn is_safe_copy_failed() -> bool {
+    unsafe { pyroscope_stack_is_safe_copy_failed() }
+}
+
+#[cfg(not(miri))]
+fn sampler_start() -> bool {
+    unsafe { pyroscope_stack_start() }
+}
+
+#[cfg(not(miri))]
+fn sampler_stop() {
+    unsafe { pyroscope_stack_stop() }
+}
+
+#[cfg(miri)]
+fn configure(_interval_s: f64) {}
+
+#[cfg(miri)]
+fn is_safe_copy_failed() -> bool {
+    false
+}
+
+#[cfg(miri)]
+fn sampler_start() -> bool {
+    true
+}
+
+#[cfg(miri)]
+fn sampler_stop() {}
 
 pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
     if let Ok(mut pb) = PROFILE_BUILDER.lock() {

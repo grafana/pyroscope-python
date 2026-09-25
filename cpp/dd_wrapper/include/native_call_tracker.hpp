@@ -66,10 +66,9 @@ class NativeCallRegistry
 
     // Number of registered call sites.
     //
-    // Pyroscope patch: reconstructed, not copied. cpp/stack was vendored from a
-    // dd-trace-py revision newer than the dd_wrapper sources beside it, and
-    // stack.cpp's _native_call_registry_size test helper calls this. Replace it
-    // with upstream's own on the next vendor sync if the signature differs.
+    // Pyroscope patch: reconstructed, not copied, for upstream stack.cpp's
+    // _native_call_registry_size helper -- which we do not vendor, so this now
+    // has no caller. Replace with upstream's on the next vendor sync.
     size_t size();
 
     // Clears the registry.

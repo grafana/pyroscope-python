@@ -112,7 +112,10 @@ set(STACK_SOURCES
         stack/src/echion/threads.cc
         stack/src/echion/vm.cc
         stack/src/sampler.cpp
-        stack/src/stack.cpp
+        # Pyroscope patch: upstream's stack/src/stack.cpp is deleted, not just
+        # unbuilt. It was the _stack CPython module, replaced by the extern "C"
+        # shims in pyroscope/stack_ffi.cpp, and carried the sys.monitoring
+        # native-call tracker the first iteration does not enable.
         stack/src/stack_renderer.cpp
         stack/src/thread_span_links.cpp
 )
@@ -143,10 +146,6 @@ target_include_directories(pyroscope_stack PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/s
 target_include_directories(pyroscope_stack PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/dd_wrapper/include)
 target_include_directories(pyroscope_stack SYSTEM PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/stack/echion
-        # include/util holds cast_to_pyfunc.hpp, whose whole job is a cast that
-        # -Wold-style-cast and -Wcast-function-type-mismatch both object to.
-        # Upstream marks this dir SYSTEM for exactly that reason.
-        ${CMAKE_CURRENT_SOURCE_DIR}/stack/include/util
 )
 target_compile_definitions(pyroscope_stack PRIVATE
         $<IF:$<BOOL:${APPLE}>,PL_DARWIN,PL_LINUX>

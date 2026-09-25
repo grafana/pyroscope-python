@@ -36,41 +36,47 @@ fn create_http_client() -> Result<reqwest::blocking::Client> {
 }
 
 pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
-    let mut guard = STATE.mutex().lock()?;
-    match *guard {
-        State::Idle => {}
-        State::Busy => return Err(PyroscopeError::ConcurrentOperation),
-        State::Running(_) => return Err(PyroscopeError::AgentAlreadyRunning),
+    // Claim the slot with a Busy marker and drop the lock before starting
+    // anything. The startup below needs the GIL and can release it -- pyo3's
+    // PyModule::from_code in stack::start runs a module body -- while a thread
+    // entering here holds the GIL to block on this mutex. Holding it across
+    // startup deadlocks the two: GIL -> mutex against mutex -> GIL.
+    {
+        let mut guard = STATE.mutex().lock()?;
+        match *guard {
+            State::Idle => {}
+            State::Busy => return Err(PyroscopeError::ConcurrentOperation),
+            State::Running(_) => return Err(PyroscopeError::AgentAlreadyRunning),
+        }
+        *guard = State::Busy;
     }
+
     let mem_config = agent.config.mem_config.clone();
     let stack_config = agent.config.stack_config.clone();
-    let start_agent = || -> Result<PyroscopeAgent> {
+    let sample_rate = agent.config.sample_rate;
+
+    let started = (|| -> Result<PyroscopeAgent> {
+        memory::start(py, &mem_config).map_err(|err| {
+            PyroscopeError::new(&format!("failed to start memory profiler: {err}"))
+        })?;
+        crate::stack::start(py, &stack_config, sample_rate).map_err(|err| {
+            PyroscopeError::new(&format!("failed to start CPU stack sampler: {err}"))
+        })?;
         // Create the client only after the Idle check, so an already-running or
         // busy agent doesn't build (and, on macOS, spawn a thread for) a client
         // that would just be thrown away.
         let http_client = create_http_client()?;
         agent.build(http_client)?.start()
-    };
+    })();
 
-    memory::start(py, &mem_config)
-        .map_err(|err| PyroscopeError::new(&format!("failed to start memory profiler: {err}")))?;
-
-    // TODO(Pyroscope): must move after Sampler::start() once that exists.
-    if let Err(err) = crate::stack::install_thread_hooks(py, &stack_config) {
-        stop_profilers(py);
-        return Err(PyroscopeError::new(&format!(
-            "failed to install stack sampler thread hooks: {err}"
-        )));
-    }
-
-    let agent = start_agent();
-    match agent {
+    match started {
         Ok(agent) => {
-            *guard = State::Running(Box::new(agent));
+            *STATE.mutex().lock()? = State::Running(Box::new(agent));
             Ok(())
         }
         Err(err) => {
             stop_profilers(py);
+            *STATE.mutex().lock()? = State::Idle;
             Err(err)
         }
     }
@@ -84,8 +90,8 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
 /// stopped, and every out-of-Rust cache of indices dropped, before the table
 /// they interned into goes away. See the invariant on `interner::clear`.
 ///
-/// TODO(Pyroscope): when the vendored CPU stack sampler is wired in, this is
-/// not sufficient for the fork-child path. `stack_atfork_child`
+/// TODO(Pyroscope): this is not sufficient for the fork-child path.
+/// `stack_atfork_child`
 /// (cpp/stack/src/sampler.cpp) runs inside `os.fork()`, i.e. *before* Python's
 /// `at_fork_after_in_child` reaches here, and it calls `restart_after_fork()`
 /// after clearing the renderer caches -- so the sampling thread is live again
@@ -95,7 +101,7 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
 /// `renderer_.postfork_child()` for this.
 pub fn stop_profilers(py: Python<'_>) {
     crate::memory::stop(py);
-    crate::stack::clear_samples();
+    crate::stack::stop(py);
     crate::encode::interner::clear();
 }
 
