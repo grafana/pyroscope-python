@@ -9,10 +9,4 @@ ProfilerState::get()
     return instance;
 }
 
-void
-ProfilerState::postfork_child()
-{
-    native_call_registry.postfork_child();
-}
-
 } // namespace Datadog

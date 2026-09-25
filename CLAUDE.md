@@ -117,9 +117,9 @@ the detail; do not read any of them as a decision to preserve.
   vector alone and hardcodes `label: vec![]`, so carrying them means re-keying
   it first.
 - **Native monitoring is neither used nor enabled.** The `sys.monitoring`
-  CALL-event tracker lived only in the deleted `stack/src/stack.cpp`, so
-  `ProfilerState::native_call_registry` is always empty and no native frames
-  are spliced in.
+  CALL-event tracker lived only in the deleted `stack/src/stack.cpp`, and
+  `NativeCallRegistry` is stubbed to an always-empty `lookup` (no map, no
+  mutex), so no native frames are spliced in.
 - **Adaptive sampling is off**, because `CpuWallProfile::set_profile_type`
   derives `profile.period` from the agent-wide `sample_rate`. Turning
   adaptation on without plumbing the sampler's real interval through would make

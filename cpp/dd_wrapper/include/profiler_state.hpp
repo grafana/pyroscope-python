@@ -18,13 +18,13 @@
  *
  *   * native_call_registry -- the sys.monitoring CALL-event side table that
  *     lets the sampler splice native frames in front of their Python caller.
- *     Copied verbatim; see native_call_tracker.hpp.
+ *     Stubbed to always-empty; see native_call_tracker.hpp.
  *   * upload_seq -- a counter the sampler watches to notice upload boundaries.
  *
  * Also dropped: start(), cleanup(), prefork(), postfork_parent(),
- * is_initialized(). Upstream's start() is what creates the Profiles
- * Dictionary and installs dd_wrapper's pthread_atfork handlers; there is
- * nothing here to initialize, and Sampler installs its own handlers.
+ * postfork_child(), is_initialized(). Upstream's start() is what creates the
+ * Profiles Dictionary and installs dd_wrapper's pthread_atfork handlers; there
+ * is nothing here to initialize, and Sampler installs its own handlers.
  */
 
 #include "native_call_tracker.hpp"
@@ -49,23 +49,6 @@ class ProfilerState
     // Upload state
     // ========================================================================
     std::atomic<uint64_t> upload_seq{ 0 };
-
-    /* TODO(Pyroscope): no caller yet, so the native call registry's mutex is
-     * never re-initialized in a forked child.
-     *
-     * Upstream never calls this from the stack tree either -- it runs from the
-     * pthread_atfork child handler that ProfilerState::start installs. That
-     * handler is registered before Sampler::start, so POSIX's FIFO child-handler
-     * ordering guarantees it runs before the sampler's own; the note in
-     * Sampler::atfork_child in cpp/stack/src/sampler.cpp still describes that
-     * arrangement. We have no ProfilerState::start, so the ordering does not
-     * hold and nothing re-inits the mutex.
-     *
-     * Wiring this up needs the same care as the TODO(Pyroscope) on
-     * ffikit::stop_profilers in rust/src/ffikit.rs, which flags the mirror
-     * problem: stack_atfork_child calls restart_after_fork() before Python's
-     * at_fork_after_in_child hooks run. */
-    void postfork_child();
 
   private:
     ProfilerState() = default;

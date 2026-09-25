@@ -50,11 +50,16 @@ into the dump path, and only then restoring `set_target_overhead` /
 
 `stack/src/stack.cpp` is deleted (see below), and it was the only home of
 `native_call_handler`, `start_native_monitoring` and `stop_native_monitoring`.
-`echion/stacks.cc:12` still reads `ProfilerState::native_call_registry`, which
-is now permanently empty, so no native frames are spliced in front of their
-Python caller. Restoring it means bringing those three functions and the
-`g_tool_id` / `g_disable_sentinel` statics back as `extern "C"`, not as a
-`PyMethodDef` table.
+`echion/stacks.cc:12` still reads `ProfilerState::native_call_registry`, but
+`NativeCallRegistry` is now a stub whose `lookup` always returns `nullopt`, so
+no native frames are spliced in front of their Python caller. The stub keeps
+`stacks.cc` verbatim and drops the per-frame `shared_lock` + map lookup.
+
+Restoring it means bringing upstream's `native_call_tracker.{hpp,cpp}` back
+(and `ProfilerState::postfork_child`, which re-inits the registry's
+`shared_mutex` -- see "Fork handling is incomplete"), plus those three
+functions and the `g_tool_id` / `g_disable_sentinel` statics as `extern "C"`,
+not as a `PyMethodDef` table.
 
 ### `stack/src/stack.cpp` is deleted
 
@@ -65,9 +70,7 @@ entry was marked SYSTEM specifically to silence `-Wold-style-cast` and
 `-Wcast-function-type-mismatch` on that header, so **restore the SYSTEM marking
 if you ever bring it back.**
 
-Two consequences: `NativeCallRegistry::size()` -- which we reconstructed only
-because upstream's `_native_call_registry_size` test helper called it -- now has
-no caller at all; and `pyroscope_stack_stop` is just `Sampler::get().stop()`,
+One consequence: `pyroscope_stack_stop` is just `Sampler::get().stop()`,
 without upstream `stack_stop`'s `ThreadSpanLinks::reset()` and
 `native_call_registry.reset()`. Both resets would be dead code today since
 nothing populates either. **Restore them with whichever feature repopulates
@@ -187,29 +190,28 @@ the built dylib had no `__mod_init_func` section at all. Thread registration
 changed that -- see "`import pyroscope` now installs signal handlers" below.
 
 ### Fork handling is incomplete
-`cpp/dd_wrapper/include/profiler_state.hpp`, `rust/src/ffikit.rs`
+`cpp/stack/src/sampler.cpp`, `rust/src/ffikit.rs`
 
-`ProfilerState::postfork_child()` exists but has no caller, so
-`NativeCallRegistry`'s `std::shared_mutex` is never re-initialized in a forked
-child. Upstream gets this for free: `ProfilerState::start` installs a
-`pthread_atfork` child handler *before* `Sampler::start` installs its own, and
-POSIX's FIFO child-handler ordering does the rest. The note in
-`Sampler::atfork_child` (`cpp/stack/src/sampler.cpp`) still describes that
-arrangement; we have no `ProfilerState::start`, so it does not hold.
+Upstream's `ProfilerState::start` installs a `pthread_atfork` child handler
+*before* `Sampler::start` installs its own, and POSIX's FIFO child-handler
+ordering runs `ProfilerState::postfork_child` first. The note in
+`Sampler::atfork_child` still describes that arrangement; we have no
+`ProfilerState::start` and, since `NativeCallRegistry` became a stub with no
+mutex, no `ProfilerState::postfork_child` either. Reinstate both if the real
+registry comes back.
 
-This is the same hazard as the existing `TODO(Pyroscope)` on
-`ffikit::stop_profilers` (`rust/src/ffikit.rs`), and the two should be fixed
-together: `stack_atfork_child` runs inside `os.fork()`, i.e. before Python's
-`at_fork_after_in_child` reaches `stop_profilers`, and it calls
+What remains is the existing `TODO(Pyroscope)` on `ffikit::stop_profilers`
+(`rust/src/ffikit.rs`): `stack_atfork_child` runs inside `os.fork()`, i.e.
+before Python's `at_fork_after_in_child` reaches `stop_profilers`, and it calls
 `restart_after_fork()` -- so the sampling thread is live again and re-warming
 `StackRenderer::string_id_cache` by the time we clear the string table
 underneath it. The sampler must be stopped and kept stopped in the child; do
 not rely on `renderer_.postfork_child()`.
 
-A third strand now: the child inherits the parent's thread info map, and the
+A second strand: the child inherits the parent's thread info map, and the
 `threading` wrappers are inherited patched, so the child's own `MainThread` is
 never re-registered. `Sampler::postfork_child()` rebuilds both the map and that
-one entry, but still has no caller. Fix it with the other two.
+one entry, but still has no caller. Fix the two together.
 
 ### ~~Nothing starts the sampler~~
 `cpp/pyroscope/stack_ffi.cpp`, `rust/src/stack.rs`
@@ -386,18 +388,6 @@ batching has to become real too.
 today; the only caller that passed a nonzero value used a literal `1` as an
 undocumented sentinel for native frames, which stay distinguishable by name and
 filename.
-
-### `NativeCallRegistry::size()` is reconstructed, not vendored
-`cpp/dd_wrapper/include/native_call_tracker.hpp`
-
-`cpp/stack` was copied from a dd-trace-py revision newer than the `dd_wrapper`
-sources available locally, and `stack.cpp`'s `_native_call_registry_size` test
-helper calls a `size()` that does not exist upstream yet. Ours is a
-`shared_lock` + `call_sites.size()`. Replace it with upstream's on the next
-vendor sync if the signature differs.
-
-`stack.cpp` is deleted, so this method now has no caller at all. Either drop it
-or restore it alongside native monitoring.
 
 ### `-Werror` is off
 `cpp/CMakeLists.txt`
