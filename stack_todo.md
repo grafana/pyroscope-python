@@ -332,10 +332,16 @@ and memalloc does not get this warning set upstream either.
 
 ## 3. Free-threaded builds: unsupported, rejected at build time
 
-Free-threaded CPython is refused rather than degraded. `setup.py` raises
-`SystemExit` and `rust/build.rs`'s `reject_free_threaded` panics when the target
-interpreter reports `Py_GIL_DISABLED`, so there is no `cp314t` wheel and no
-cargo feature gating the C++ half -- the profilers are always compiled.
+Free-threaded CPython is refused rather than degraded, so there is no `cp314t`
+wheel and no cargo feature gating the C++ half -- the profilers are always
+compiled. Two checks, deliberately not three: `setup.py` raises `SystemExit` so
+a wheel build fails immediately with a readable error, and `cpp/CMakeLists.txt`
+reads `Py_GIL_DISABLED` out of the `pyconfig.h` it is about to compile against
+and stops at configure time, which covers `cargo build` and direct `cmake`.
+Reading the header rather than asking an interpreter is the point: it cannot
+disagree with the Python CMake actually resolved. The `#error` in
+`cpp/memalloc/_memalloc_frame.h` is now unreachable through both paths but is
+left as a backstop.
 
 The decision rests on two independent problems, both measured:
 

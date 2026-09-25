@@ -57,6 +57,25 @@ if (NOT Python3_INCLUDE_DIRS)
     message(FATAL_ERROR "Python3_INCLUDE_DIRS not found")
 endif ()
 
+# Not find_file: it caches, so a build dir reconfigured against a different
+# interpreter keeps the old header and rejects a GIL-enabled Python.
+set(PYROSCOPE_PYCONFIG_H "")
+foreach (PYROSCOPE_INCLUDE_DIR IN LISTS Python3_INCLUDE_DIRS)
+    if (EXISTS "${PYROSCOPE_INCLUDE_DIR}/pyconfig.h")
+        set(PYROSCOPE_PYCONFIG_H "${PYROSCOPE_INCLUDE_DIR}/pyconfig.h")
+        break()
+    endif ()
+endforeach ()
+if (NOT PYROSCOPE_PYCONFIG_H)
+    message(FATAL_ERROR "pyconfig.h not found in ${Python3_INCLUDE_DIRS}")
+endif ()
+file(STRINGS "${PYROSCOPE_PYCONFIG_H}" PYROSCOPE_GIL_DISABLED REGEX "^#define Py_GIL_DISABLED")
+if (PYROSCOPE_GIL_DISABLED)
+    message(FATAL_ERROR
+            "free-threaded CPython is unsupported: ${Python3_EXECUTABLE} defines "
+            "Py_GIL_DISABLED. Build against a GIL-enabled interpreter.")
+endif ()
+
 message(STATUS "Python3_EXECUTABLE ${Python3_EXECUTABLE}")
 message(STATUS "Python3_VERSION ${Python3_VERSION}")
 message(STATUS "Python3_INCLUDE_DIRS ${Python3_INCLUDE_DIRS}")

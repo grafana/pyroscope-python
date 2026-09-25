@@ -21,8 +21,6 @@ fn main() {
     cfg.define("Python3_EXECUTABLE", &python_executable);
     cfg.define("Python3_FIND_STRATEGY", "LOCATION");
 
-    reject_free_threaded(&python_executable);
-
     let dst = cfg.build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
@@ -34,32 +32,6 @@ fn main() {
         println!("cargo:rustc-link-arg=dynamic_lookup");
     } else {
         println!("cargo:rustc-link-lib=static=stdc++");
-    }
-}
-
-/// The C++ profilers read CPython internals that the free-threaded build lays
-/// out differently, and py-spy cannot attach there at all (see
-/// https://github.com/grafana/pyroscope-python/issues/163), so refuse the build
-/// rather than ship a wheel that cannot profile.
-fn reject_free_threaded(python_executable: &std::ffi::OsStr) {
-    let output = std::process::Command::new(python_executable)
-        .args([
-            "-c",
-            "import sysconfig;print(sysconfig.get_config_var('Py_GIL_DISABLED'))",
-        ])
-        .output()
-        .unwrap_or_else(|e| panic!("failed to query {python_executable:?}: {e}"));
-    if !output.status.success() {
-        panic!(
-            "failed to query {python_executable:?} for Py_GIL_DISABLED: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    if String::from_utf8_lossy(&output.stdout).trim() == "1" {
-        panic!(
-            "free-threaded CPython is not supported: {python_executable:?} is a \
-             Py_GIL_DISABLED build. Build against a GIL-enabled interpreter."
-        );
     }
 }
 
