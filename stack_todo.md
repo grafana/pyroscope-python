@@ -319,12 +319,6 @@ are covered only by `sampling_thread`'s ownership check. Scenarios in
 `integration-test/testdata/sighandler_workload.py`: `enable_after_warmup_keeps_ours`,
 `disable_after_warmup_keeps_ours`, `crash_after_faulthandler_takeover`.
 
-TODO: add a deterministic integration test for the `disable()` race that the
-port fixes: `disable()` landing between the sampler's `segv_handler_installed()`
-check and a faulting copy, which used to terminate with SIGSEGV/SIGBUS. It
-needs a sampler test hook to coordinate the interleaving; timing alone is not
-enough.
-
 #### Upstream gap: `enable()` during warmup loses fast copy
 
 Ported verbatim, not fixed. `uninstall_segv_handler` / `reinstall_segv_handler`
