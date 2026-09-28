@@ -1,4 +1,5 @@
 #include "dd_wrapper/include/profiler_state.hpp"
+#include "pyroscope_ffi.h"
 #include "sampler.hpp"
 #include "thread_span_links.hpp"
 
@@ -51,10 +52,10 @@ pyroscope_stack_stop()
     Datadog::Sampler::get().stop();
 }
 
-extern "C" uint8_t
+extern "C" SamplerPauseResult
 pyroscope_stack_pause_sampling()
 {
-    return static_cast<uint8_t>(Datadog::Sampler::get().pause());
+    return Datadog::Sampler::get().pause();
 }
 
 extern "C" void

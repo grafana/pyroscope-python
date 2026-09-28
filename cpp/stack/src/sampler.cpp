@@ -736,11 +736,12 @@ Sampler::stop()
     }
 }
 
-PauseResult
+// Pyroscope patch: returns the cbindgen enum, see sampler.hpp.
+SamplerPauseResult
 Sampler::pause()
 {
     if (!thread_running.load()) {
-        return PauseResult::NotRunning;
+        return SamplerPauseResult_NotRunning;
     }
 
     pause_requested_.store(true, std::memory_order_release);
@@ -755,9 +756,9 @@ Sampler::pause()
     if (!ok) {
         // Timed out -- clear the request so the sampling thread isn't stuck.
         pause_requested_.store(false, std::memory_order_release);
-        return PauseResult::Timeout;
+        return SamplerPauseResult_Timeout;
     }
-    return PauseResult::Paused;
+    return SamplerPauseResult_Paused;
 }
 
 void

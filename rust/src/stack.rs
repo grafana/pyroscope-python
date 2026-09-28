@@ -288,8 +288,16 @@ mod faulthandler {
     use pyo3::wrap_pyfunction;
     use std::sync::OnceLock;
 
+    #[allow(dead_code)]
+    #[repr(C)]
+    pub enum SamplerPauseResult {
+        Paused,
+        NotRunning,
+        Timeout,
+    }
+
     unsafe extern "C" {
-        fn pyroscope_stack_pause_sampling() -> u8;
+        fn pyroscope_stack_pause_sampling() -> SamplerPauseResult;
         fn pyroscope_stack_resume_sampling();
         fn pyroscope_stack_uninstall_segv_handler();
         fn pyroscope_stack_reinstall_segv_handler();
@@ -379,11 +387,10 @@ def install(faulthandler, threading, pause_sampling, resume_sampling, uninstall_
     /// thread, which interns strings.
     #[pyfunction]
     fn pause_sampling(py: Python<'_>) -> Option<bool> {
-        // TODO(Pyroscope): decode by name, not by `PauseResult`'s discriminants.
         match py.detach(|| unsafe { pyroscope_stack_pause_sampling() }) {
-            0 => Some(true),
-            1 => Some(false),
-            _ => None,
+            SamplerPauseResult::Paused => Some(true),
+            SamplerPauseResult::NotRunning => Some(false),
+            SamplerPauseResult::Timeout => None,
         }
     }
 

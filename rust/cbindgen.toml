@@ -27,6 +27,7 @@ include = [
   "FFISampleValues",
   "pyroscope_string_table_intern_string",
   "PprofBuilderType",
+  "SamplerPauseResult",
   "pyroscope_push_sample",
 ]
 exclude = [
@@ -37,6 +38,10 @@ exclude = [
   "pyroscope_stack_configure",
   "pyroscope_stack_fast_copy_initialized",
   "pyroscope_stack_is_safe_copy_failed",
+  "pyroscope_stack_pause_sampling",
+  "pyroscope_stack_resume_sampling",
+  "pyroscope_stack_uninstall_segv_handler",
+  "pyroscope_stack_reinstall_segv_handler",
   "pyroscope_stack_start",
   "pyroscope_stack_stop",
   "pyroscope_stack_upload_seq",

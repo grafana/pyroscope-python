@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "constants.hpp"
+#include "pyroscope_ffi.h"
 
 #include "echion/strings.h"
 #include "echion/timing.h"
@@ -18,13 +19,6 @@
 class EchionSampler;
 
 namespace Datadog {
-
-enum class PauseResult : std::uint8_t
-{
-    Paused,     // sampler was running and is now paused
-    NotRunning, // sampler was not running (nothing to pause)
-    Timeout,    // sampler is running but did not pause within the timeout
-};
 
 class Sampler
 {
@@ -95,7 +89,9 @@ class Sampler
 
     bool start();
     void stop();
-    PauseResult pause();
+    // Pyroscope patch: upstream declares its own `PauseResult` here; we return the cbindgen-generated enum so this
+    // declaration and its Rust caller cannot drift.
+    SamplerPauseResult pause();
     void resume();
     void register_thread(uint64_t id, uint64_t native_id, const char* name);
     void unregister_thread(uint64_t id);

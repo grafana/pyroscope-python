@@ -365,21 +365,35 @@ Upstream always patches, so by default it pauses the sampler around every
 `enable()` / `disable()` for nothing. Pinned by
 `fast_copy_off_leaves_faulthandler_unpatched`.
 
-#### The `PauseResult` decode is coupled to the vendored enum's order
-`rust/src/stack.rs` (`mod faulthandler`), `cpp/pyroscope/stack_ffi.cpp`
+#### ~~The `PauseResult` decode is coupled to the vendored enum's order~~
+`rust/src/stack.rs` (`mod faulthandler`), `cpp/stack/include/sampler.hpp`,
+`cpp/stack/src/sampler.cpp`
 
-The shim returns `static_cast<uint8_t>(Sampler::pause())` and `pause_sampling`
-matches `0 => Some(true), 1 => Some(false), _ => None`. Correct against
-`PauseResult` in `cpp/stack/include/sampler.hpp` today, and pinned by nothing:
-a vendor sync that inserts or reorders a variant breaks it silently, both ways
-badly. `Paused` read as `NotRunning` means `resume_sampling()` never runs and
-the sampler stays paused for the process lifetime, with no log line. `Timeout`
-read as `Paused` swaps handlers while the sampling thread is live in
-`safe_memcpy`, which is the crash the port exists to prevent. Upstream's
-`stack.cpp` switches on the named values instead.
+Done, and there is no decode left: `Datadog::PauseResult` is **deleted**.
+`Sampler::pause()` returns `SamplerPauseResult`, a `#[repr(C)]` enum declared in
+`mod faulthandler` and exported through cbindgen -- the `PprofBuilderType`
+pattern. One declaration for the whole tree, so `pyroscope_stack_pause_sampling`
+is a plain pass-through and `pause_sampling` matches all three variants
+exhaustively. There is nothing left to drift.
 
-TODO: switch on `PauseResult` in the shim and return explicit literals, with
-named constants on the Rust side.
+This is the deliberate exception to "prefer a shim over editing a vendored
+source". The shim alternative (switch on `Datadog::PauseResult` by name, return
+the generated constant) was written first and works, but it leaves an upstream
+*added* variant mapping silently to `Timeout`. Deleting the enum turns that same
+sync into a compile error instead, which is worth a permanent conflict in
+`sampler.hpp` and `sampler.cpp`. Both edits carry a `// Pyroscope patch:`
+marker.
+
+**On the next vendor sync**: upstream's `PauseResult` comes back in
+`sampler.hpp` and its three `return PauseResult::...` lines come back in
+`sampler.cpp` (upstream `stack/src/sampler.cpp`, `Sampler::pause`). Re-delete
+and re-substitute; the variant names and their order are identical, so it is a
+mechanical resolution unless upstream changed the variants, which is exactly the
+case this is meant to stop being silent.
+
+Not pinned by a test: `NotRunning` is the only value reachable without a running
+sampler, and the existing `enable_after_warmup_keeps_ours` /
+`disable_after_warmup_keeps_ours` scenarios already cover `Paused` end to end.
 
 #### A missing `faulthandler` module fails `configure()`
 `rust/src/stack.rs` (`mod faulthandler`)
