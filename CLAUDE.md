@@ -124,12 +124,10 @@ the detail; do not read any of them as a decision to preserve.
   derives `profile.period` from the agent-wide `sample_rate`. Turning
   adaptation on without plumbing the sampler's real interval through would make
   `period` a lie.
-- **Fast copy (`safe_memcpy`) is off**, matching upstream's
-  `_DD_PROFILING_STACK_FAST_COPY` default, so reads go through
-  `process_vm_readv` / `mach_vm_read_overwrite`. **We do want fast copy enabled
-  by default** -- it avoids a syscall per read and `sampler.cpp` already has the
-  warmup and handler-ownership machinery for it. Treat the current `false` as
-  temporary.
+
+Fast copy (`safe_memcpy`) is on by default, unlike upstream, and its
+SIGSEGV/SIGBUS handlers install from `configure()`, not at import.
+`_DD_PROFILING_STACK_FAST_COPY=0` is the only opt-out, as upstream.
 
 `stack_todo.md` is the tracking doc -- blocking work, gaps the port opened,
 free-threaded-build questions, and the TODOs inherited from upstream, kept
@@ -160,8 +158,8 @@ Caveats worth knowing before trusting a green build:
 - Only what registration reaches is linked into the final `.so`; the rest of
   the CPU sampler is still dropped. Verify against the static archive, and note
   that its C++ symbols are hidden, so inspect the `.so` with `nm -a`, not `-g`.
-- `cpp/stack` is heavily `PY_VERSION_HEX`-gated; a single-version build proves
-  little.
+- `cpp/stack` is heavily `PY_VERSION_HEX`-gated, but for iteration test Python
+  3.13 only; the full version matrix is left to CI (see `stack_todo.md`).
 - `PL_LINUX` selects different code in `vm.cc` and `danger.cc`, so macOS alone
   misses real breakage. Build on Linux too (`ssh orb`, where these sources are
   mounted at identical paths).

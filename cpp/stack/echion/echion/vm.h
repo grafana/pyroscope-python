@@ -78,9 +78,9 @@ inline ssize_t (*safe_copy)(pid_t,
  *
  * Tries safe_memcpy first (unless disabled via env var), falls back to
  * mach_vm_read_overwrite.
- * This occurs at static init.
+ * Pyroscope patch: called from configure(), not at static init.
  */
-__attribute__((constructor)) void
+void
 init_safe_copy();
 
 // Switch the active copy method at runtime.  Must be called before the

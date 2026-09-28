@@ -618,7 +618,8 @@ stack_atfork_child()
     Sampler::get().restart_after_fork();
 }
 
-__attribute__((constructor)) void
+// Pyroscope patch: not a constructor; one_time_setup covers it.
+void
 stack_init()
 {
     _set_pid(getpid());

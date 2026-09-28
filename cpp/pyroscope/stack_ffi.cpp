@@ -9,13 +9,16 @@
 #include <cstdint>
 #include <mutex>
 
-/* Pyroscope patch: stands in for stack.py::_init's setter block. Adaptive
- * sampling and fast copy are off as first-iteration choices, not defaults --
- * see stack_todo.md. */
+/* Pyroscope patch: stands in for stack.py::_init's setter block. Handlers are
+ * installed at most once per process: reinstalling over a foreign handler would
+ * undo sampling_thread's permanent fallback. Adaptive sampling stays off. */
 extern "C" void
 pyroscope_stack_configure(double interval_s)
 {
-    set_fast_copy_enabled(false);
+    if (!safe_memcpy_initialized) {
+        init_safe_copy();
+    }
+    set_fast_copy_enabled(safe_memcpy_initialized);
     Datadog::Sampler::get().set_adaptive_sampling(false);
     Datadog::Sampler::get().set_interval(interval_s);
 }

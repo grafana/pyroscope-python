@@ -4,7 +4,8 @@
 #include <echion/vm.h>
 
 // Returns true when _DD_PROFILING_STACK_FAST_COPY is set to a falsy value.
-// Called only during static init (constructor time), so getenv is safe here.
+// Pyroscope patch: called from configure() rather than at static init, so a
+// concurrent setenv from another thread is possible; accepted.
 static bool
 fast_copy_env_disabled()
 {
@@ -32,7 +33,8 @@ probe_process_vm_readv()
     return result == static_cast<ssize_t>(sizeof(src));
 }
 
-__attribute__((constructor)) void
+// Pyroscope patch: not a constructor; pyroscope_stack_configure calls it.
+void
 init_safe_copy()
 {
     // Always probe process_vm_readv so we know whether it is a valid fallback.
@@ -67,7 +69,8 @@ init_safe_copy()
     }
 }
 #elif defined PL_DARWIN
-__attribute__((constructor)) void
+// Pyroscope patch: not a constructor; pyroscope_stack_configure calls it.
+void
 init_safe_copy()
 {
     // Honor the fast-copy opt-out: skip installing signal handlers when disabled.
