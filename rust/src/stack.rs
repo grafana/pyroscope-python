@@ -283,6 +283,7 @@ def install(threading, register, unregister):
 /// Upstream hooks the import with `ModuleWatchdog`; `faulthandler` is not in
 /// `sys.modules` at startup, so importing and patching it here is equivalent.
 mod faulthandler {
+    use pyo3::exceptions::PyImportError;
     use pyo3::prelude::*;
     use pyo3::types::PyModule;
     use pyo3::wrap_pyfunction;
@@ -414,15 +415,28 @@ def install(faulthandler, threading, pause_sampling, resume_sampling, uninstall_
             return Ok(());
         }
 
+        let faulthandler = match py.import("faulthandler") {
+            Ok(module) => module,
+            Err(err) if err.is_instance_of::<PyImportError>(py) => {
+                log::warn!(
+                    target: "pyroscope-python",
+                    "not patching faulthandler: {err}; a later faulthandler.enable() \
+                     can displace the fast copy's SIGSEGV handler"
+                );
+                let _ = INSTALLED.set(());
+                return Ok(());
+            }
+            Err(err) => return Err(err),
+        };
+
         let module = PyModule::from_code(
             py,
             INSTALL_SRC,
             c"pyroscope_stack_faulthandler.py",
             c"_pyroscope_stack_faulthandler",
         )?;
-        // TODO(Pyroscope): a missing `faulthandler` should not fail `configure()`.
         module.getattr("install")?.call1((
-            py.import("faulthandler")?,
+            faulthandler,
             py.import("threading")?,
             wrap_pyfunction!(pause_sampling, py)?,
             wrap_pyfunction!(resume_sampling, py)?,

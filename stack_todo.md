@@ -395,15 +395,19 @@ Not pinned by a test: `NotRunning` is the only value reachable without a running
 sampler, and the existing `enable_after_warmup_keeps_ours` /
 `disable_after_warmup_keeps_ours` scenarios already cover `Paused` end to end.
 
-#### A missing `faulthandler` module fails `configure()`
+#### ~~A missing `faulthandler` module fails `configure()`~~
 `rust/src/stack.rs` (`mod faulthandler`)
 
-`py.import("faulthandler")?` propagates out of `start()`, so an interpreter
-built without the module takes the whole agent down instead of losing one
-compatibility shim. Upstream degrades silently there -- its `ModuleWatchdog`
-hook simply never fires.
+Done. `install` imports `faulthandler` on its own, before any other work, and
+an `ImportError` (so also `ModuleNotFoundError`) logs one warning and returns
+`Ok(())` with `INSTALLED` set, so a reconfigure does not re-log. An interpreter
+without the module now loses the compatibility shim instead of the whole agent,
+memory profiler included. Upstream degrades the same way -- its
+`ModuleWatchdog` hook simply never fires.
 
-TODO: log a warning and return `Ok(())` when the import or the patch fails.
+Deliberately narrower than the original TODO: `PyModule::from_code`,
+`getattr("install")`, the `threading` import and the patch call itself are our
+own code, and a failure there is a defect, so they still fail `configure()`.
 
 ### Nothing unpatches `threading`
 `rust/src/stack.rs`
