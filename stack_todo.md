@@ -337,6 +337,47 @@ is to gate on "fast copy requested and `safe_memcpy_initialized`" rather than
 
 TODO: file an issue for this, upstream and/or here.
 
+#### The patch installs even when fast copy is off
+`rust/src/stack.rs` (`start`)
+
+`cpu_fast_copy` defaults to false, so `init_safe_copy` installs no handlers and
+`fast_copy_active` stays false for the process. The wrapper then has nothing to
+protect: `uninstall_segv_handler` / `reinstall_segv_handler` are no-ops and all
+it does is pause the sampling thread around every `faulthandler.enable()` /
+`disable()`. On the pause-timeout path it also makes `disable()` a silent
+no-op that returns False, a user-visible regression bought for nothing.
+Upstream never sees this because upstream's fast copy is unconditional; opt-in
+fast copy is ours.
+
+TODO: gate `faulthandler::install` on the resolved `FAST_COPY`, not on
+`config.enabled`.
+
+#### The `PauseResult` decode is coupled to the vendored enum's order
+`rust/src/stack.rs` (`mod faulthandler`), `cpp/pyroscope/stack_ffi.cpp`
+
+The shim returns `static_cast<uint8_t>(Sampler::pause())` and `pause_sampling`
+matches `0 => Some(true), 1 => Some(false), _ => None`. Correct against
+`PauseResult` in `cpp/stack/include/sampler.hpp` today, and pinned by nothing:
+a vendor sync that inserts or reorders a variant breaks it silently, both ways
+badly. `Paused` read as `NotRunning` means `resume_sampling()` never runs and
+the sampler stays paused for the process lifetime, with no log line. `Timeout`
+read as `Paused` swaps handlers while the sampling thread is live in
+`safe_memcpy`, which is the crash the port exists to prevent. Upstream's
+`stack.cpp` switches on the named values instead.
+
+TODO: switch on `PauseResult` in the shim and return explicit literals, with
+named constants on the Rust side.
+
+#### A missing `faulthandler` module fails `configure()`
+`rust/src/stack.rs` (`mod faulthandler`)
+
+`py.import("faulthandler")?` propagates out of `start()`, so an interpreter
+built without the module takes the whole agent down instead of losing one
+compatibility shim. Upstream degrades silently there -- its `ModuleWatchdog`
+hook simply never fires.
+
+TODO: log a warning and return `Ok(())` when the import or the patch fails.
+
 ### Nothing unpatches `threading`
 `rust/src/stack.rs`
 

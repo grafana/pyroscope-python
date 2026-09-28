@@ -84,6 +84,7 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
         return Ok(());
     }
 
+    // TODO(Pyroscope): skip this when fast copy is off.
     faulthandler::install(py)?;
 
     if !sampler_start() {
@@ -362,6 +363,7 @@ def install(faulthandler, threading, pause_sampling, resume_sampling, uninstall_
     /// thread, which interns strings.
     #[pyfunction]
     fn pause_sampling(py: Python<'_>) -> Option<bool> {
+        // TODO(Pyroscope): decode by name, not by `PauseResult`'s discriminants.
         match py.detach(|| unsafe { pyroscope_stack_pause_sampling() }) {
             0 => Some(true),
             1 => Some(false),
@@ -395,6 +397,7 @@ def install(faulthandler, threading, pause_sampling, resume_sampling, uninstall_
             c"pyroscope_stack_faulthandler.py",
             c"_pyroscope_stack_faulthandler",
         )?;
+        // TODO(Pyroscope): a missing `faulthandler` should not fail `configure()`.
         module.getattr("install")?.call1((
             py.import("faulthandler")?,
             py.import("threading")?,
