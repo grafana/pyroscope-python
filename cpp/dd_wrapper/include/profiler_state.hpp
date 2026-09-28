@@ -14,12 +14,14 @@
  * (rust/src/encode/).
  *
  * What remains is exactly what the vendored stack sampler reaches for, and
- * both of those members are plain C++ upstream too:
+ * all of these members are plain C++ upstream too:
  *
  *   * native_call_registry -- the sys.monitoring CALL-event side table that
  *     lets the sampler splice native frames in front of their Python caller.
  *     Stubbed to always-empty; see native_call_tracker.hpp.
  *   * upload_seq -- a counter the sampler watches to notice upload boundaries.
+ *   * max_nframes -- the per-sample frame budget, written by
+ *     SampleManager::set_max_nframes.
  *
  * Also dropped: start(), cleanup(), prefork(), postfork_parent(),
  * postfork_child(), is_initialized(). Upstream's start() is what creates the
@@ -27,6 +29,7 @@
  * is nothing here to initialize, and Sampler installs its own handlers.
  */
 
+#include "constants.hpp"
 #include "native_call_tracker.hpp"
 
 #include <atomic>
@@ -49,6 +52,11 @@ class ProfilerState
     // Upload state
     // ========================================================================
     std::atomic<uint64_t> upload_seq{ 0 };
+
+    // ========================================================================
+    // Sample configuration
+    // ========================================================================
+    std::atomic<unsigned int> max_nframes{ g_default_max_nframes };
 
   private:
     ProfilerState() = default;

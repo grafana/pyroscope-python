@@ -38,6 +38,11 @@ def configure(
         cpu_implementation=ProfilerImplementation.PySpy,
         cpu_fast_copy=False,
         cpu_fast_copy_warmup=15.0,
+        cpu_max_nframe=64,
+        cpu_max_threads=25,
+        cpu_adaptive_sampling=False,
+        cpu_adaptive_target_overhead=0.01,
+        cpu_adaptive_max_interval_us=1000000,
 ):
     if app_name is not None:
         warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
@@ -77,6 +82,11 @@ def configure(
         cpu_implementation,
         cpu_fast_copy,
         cpu_fast_copy_warmup,
+        cpu_max_nframe,
+        cpu_max_threads,
+        cpu_adaptive_sampling,
+        cpu_adaptive_target_overhead,
+        cpu_adaptive_max_interval_us,
     )
 
 def shutdown():

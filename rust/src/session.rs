@@ -257,6 +257,11 @@ mod tests {
             enabled: false,
             fast_copy: false,
             fast_copy_warmup_s: 0.0,
+            max_nframe: 64,
+            max_threads: 25,
+            adaptive_sampling: false,
+            adaptive_target_overhead: 0.01,
+            adaptive_max_interval_us: 1_000_000,
         }
     }
 

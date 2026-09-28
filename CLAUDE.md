@@ -57,7 +57,7 @@ upstream path over editing a vendored source.
 
 - Where a shim's behaviour differs from the upstream symbol it stands in for,
   mark it `// Pyroscope patch:` so a vendor sync can find it. Keep it to the
-  difference itself; the global comment rules still apply.
+  difference itself;
 - Unfinished work gets a `TODO(Pyroscope):` at the site, and an entry in
   `stack_todo.md`. Put the explanation in `stack_todo.md`, not at the site.
 - A defect we decide to live with goes in `stack_known_bugs.md`, with the reason
@@ -122,10 +122,10 @@ the detail; do not read any of them as a decision to preserve.
   CALL-event tracker lived only in the deleted `stack/src/stack.cpp`, and
   `NativeCallRegistry` is stubbed to an always-empty `lookup` (no map, no
   mutex), so no native frames are spliced in.
-- **Adaptive sampling is off**, because `CpuWallProfile::set_profile_type`
-  derives `profile.period` from the agent-wide `sample_rate`. Turning
-  adaptation on without plumbing the sampler's real interval through would make
-  `period` a lie.
+- **Adaptive sampling is off by default**, but no longer forced off:
+  `cpu_adaptive_sampling` and its two companions reach the sampler, and
+  `profile.period` now comes from `Sampler::get_interval_us()` rather than the
+  agent-wide `sample_rate`.
 
 Fast copy (`safe_memcpy`) is opt-in via `configure(cpu_fast_copy=True)`, off by
 default as upstream, but unlike upstream its SIGSEGV/SIGBUS handlers and the

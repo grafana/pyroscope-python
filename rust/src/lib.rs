@@ -159,6 +159,11 @@ fn initialize_agent(
     cpu_implementation: ProfilerImplementation,
     cpu_fast_copy: bool,
     cpu_fast_copy_warmup: f64,
+    cpu_max_nframe: u32,
+    cpu_max_threads: u32,
+    cpu_adaptive_sampling: bool,
+    cpu_adaptive_target_overhead: f64,
+    cpu_adaptive_max_interval_us: u64,
 ) -> bool {
     if !cpu_enabled && !mem_enabled {
         log::error!(
@@ -214,6 +219,11 @@ fn initialize_agent(
             enabled: cpu_enabled && cpu_implementation == ProfilerImplementation::Stack,
             fast_copy: cpu_fast_copy,
             fast_copy_warmup_s: cpu_fast_copy_warmup,
+            max_nframe: cpu_max_nframe,
+            max_threads: cpu_max_threads,
+            adaptive_sampling: cpu_adaptive_sampling,
+            adaptive_target_overhead: cpu_adaptive_target_overhead,
+            adaptive_max_interval_us: cpu_adaptive_max_interval_us,
         },
     )
     .tags(tags)

@@ -45,16 +45,36 @@ a permanent fallback if a foreign component takes a handler over. See
 "faulthandler compatibility" for the one takeover upstream actively works
 around.
 
-### Adaptive sampling is off
+### ~~Adaptive sampling is off~~
 
-`pyroscope_stack_configure` calls `set_adaptive_sampling(false)` and
-`set_interval(1.0 / sample_rate)`. `CpuWallProfile::set_profile_type` derives
-`profile.period` from the agent-wide `sample_rate`, so with adaptation on the
-sampler would drift its interval up under load while `period` kept claiming
-`1e9 / sample_rate`. Re-enabling it means plumbing the sampler's real interval
-into the dump path, and only then restoring `set_target_overhead` /
-`set_max_sampling_period`.
+Done, and off by default rather than forced off:
+`configure(cpu_adaptive_sampling=True)` reaches
+`Sampler::set_adaptive_sampling`, with `cpu_adaptive_target_overhead` and
+`cpu_adaptive_max_interval_us` for the two setters beside it.
 
+What blocked it was `profile.period` being derived from the agent-wide
+`sample_rate` while the sampler drifted its real interval.
+`CpuWallProfile::PeriodConfig` is now nanoseconds rather than Hz and
+`stack::period_ns` fills it from `Sampler::get_interval_us()`, a
+Pyroscope-added getter. Note the values themselves are measured nanoseconds,
+so `period` was only ever metadata here -- unlike the py-spy path, where
+`add_stacktrace` multiplies by it.
+
+Two things to know:
+
+* **`target_overhead` is a fraction with us, a percentage upstream.**
+  `adapt_sampling_interval` divides by it and `g_target_overhead` is `0.01`,
+  but `stack.py::_init` passes `adaptive_sampling_target_overhead`, validated
+  to `1..100`, straight into the same setter. We take the fraction.
+* `period` is read once, at dump time, so a window during which the sampler
+  adapted reports the interval it ended on.
+* `target_overhead` is the only one of the new knobs `pyroscope_stack_configure`
+  guards, ignoring anything non-finite or below `g_min_target_overhead`; see
+  "`adapt_sampling_interval` casts before it clamps" in
+  `stack_known_bugs.md`. Every other setter either clamps (`set_max_nframes`,
+  `set_max_sampling_period`) or accepts its whole range
+  (`set_max_threads_per_sample`), so there are deliberately no Rust-side range
+  checks.
 ### Native monitoring is not enabled
 
 `stack/src/stack.cpp` is deleted (see below), and it was the only home of
@@ -163,9 +183,8 @@ code.
   the UI and the integration tests already know; the sampler adds
   `process_cpu:wall:nanoseconds:cpu:nanoseconds` to it.
 
-  Still open: no `samples/count` sample type, and `period` is derived from the
-  agent-wide `sample_rate` rather than the sampler's own interval -- see
-  "Adaptive sampling is off" above.
+  Still open: no `samples/count` sample type. `period` now comes from the
+  sampler's own interval -- see "Adaptive sampling is off" above.
 - ~~**A dump path.**~~ Done. `crate::stack::dump_pprof` copies the shape of
   `memory::implementation::dump_pprof` and its lock order --
   `interner::string_table()` **before** the profile builder lock, never the
@@ -409,6 +428,28 @@ Deliberately narrower than the original TODO: `PyModule::from_code`,
 `getattr("install")`, the `threading` import and the patch call itself are our
 own code, and a failure there is a defect, so they still fail `configure()`.
 
+### No samples after `configure()` -> `shutdown()` -> `configure()`
+
+The second run of the sampler in one process uploads no cpu/wall samples at
+all. Only the symptoms are recorded here -- the cause has not been looked at.
+
+Repro, against a local server, one process:
+
+1. `configure(cpu_implementation=ProfilerImplementation.Stack, ...)`, burn CPU
+   on a spawned thread for ~18 s, `shutdown()`.
+2. Same thing again in the same process, with the same arguments.
+
+The first window renders as expected; the second returns no profile for its
+`canary` tag. Seen with matching `cpu_max_nframe` on both runs, so it is not
+about the frame budget or any other knob's value.
+
+**Wants an integration test.** `integration-test/integration_test.go` already
+has `testPythonConcurrentConfigureShutdown` for the concurrent case, but
+nothing covers the sequential restart, which is why this went unnoticed. A
+test that configures, shuts down, reconfigures, and then asserts
+`process_cpu:cpu:nanoseconds:cpu:nanoseconds` resolves for the second run's
+canary would pin it.
+
 ### Nothing unpatches `threading`
 `rust/src/stack.rs`
 
@@ -458,14 +499,26 @@ warning that it silently no-ops, restoring the over-count, if greenlet's
 `Py_None` "currently running" sentinel ever changes. Neither is covered by a
 test, and the failure is a plausible-looking 2x rather than a crash.
 
-### `max_nframes` is not configurable
-`cpp/dd_wrapper/include/sample_manager.hpp`
+### ~~`max_nframes` is not configurable~~
 
-Hardcoded to `g_default_max_nframes` (64). Upstream plumbs
-`SampleManager::set_max_nframes` from Python config, clamping to
-`g_backend_max_nframes` (512); that path lives in the Cython layer we do not
-vendor. Note `configure()` already takes `mem_max_nframe` for the memory
-profiler -- a CPU equivalent should follow it.
+Done. `configure(cpu_max_nframe=...)`, defaulting to the same
+`g_default_max_nframes` (64) as before and named after the memory profiler's
+`mem_max_nframe`. `SampleManager::set_max_nframes` is upstream's, silent clamp
+to `g_backend_max_nframes` (512) included, and the value lives on
+`ProfilerState` as it does upstream.
+
+`ProfilerState::max_nframes` is read in exactly one place, the `Sample`
+constructor, and `start_sample`'s `thread_local Sample` is constructed once per
+thread. So a later `configure()` lands on the next sampling thread to take its
+first sample, never on one already running -- and since `Sampler::start`
+spawns a fresh thread every time, a stop/start cycle does pick up a new value.
+No `OnceLock` latch on the Rust side: unlike `FAST_COPY`, nothing here is
+one-way.
+
+`cpu_max_threads` came along with it, for
+`Sampler::set_max_threads_per_sample` (default 25, 0 for no limit). Above that
+count echion reservoir-samples the threads it walks each cycle, which changes
+what a sample represents, so being able to raise it matters.
 
 ### `SampleManager::start_sample` relies on unenforced invariants
 `cpp/dd_wrapper/include/sample_manager.hpp`
@@ -513,6 +566,19 @@ across the full image matrix for a while.
 Unrelated blocker for turning it on more broadly: `cpp/memalloc/_memalloc.cpp`
 compares an unsigned `heap_sample_size < 0` (gcc `-Wtype-limits`). Pre-existing,
 and memalloc does not get this warning set upstream either.
+
+### The integration-test Pyroscope server is unpinned and slow to serve data
+`integration-test/integration_test.go` (`startPyroscope`)
+
+The image is the bare `grafana/pyroscope` tag, so each machine runs whatever it
+last pulled (2.2.0 locally, 2026-09-28). Update to the latest release, pin it,
+and run it with `-architecture.storage=v2` and every `*.min-ready-duration=0s`.
+
+The min-ready flags are already passed and took `/ready` from 62s to 1.6s. The
+default `v1-v2-dual` mode still delays the first queryable data by ~60s after
+`/ready`: queries fall back to the old read path ("no v2 data ingested for
+tenant"). That wait is most of each CPU test's ~95s. Neither `v1` nor `v2` has
+been timed yet.
 
 ## 3. Free-threaded builds: unsupported, rejected at build time
 

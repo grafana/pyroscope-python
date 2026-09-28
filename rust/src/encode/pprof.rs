@@ -109,9 +109,11 @@ impl FfiProfileKind for MemoryProfile {
 
 impl ProfileKind for CpuWallProfile {
     type Values = [i64; 2];
-    type PeriodConfig = u32;
+    /// Nanoseconds, not Hz: the sampler owns its interval and adaptive
+    /// sampling moves it, so the dump path reports what it read.
+    type PeriodConfig = i64;
 
-    fn set_profile_type(profile: &mut Profile, strings: &mut StringTable, sample_rate: u32) {
+    fn set_profile_type(profile: &mut Profile, strings: &mut StringTable, period_ns: i64) {
         profile.sample_type = vec![
             ValueType {
                 r#type: strings.add("cpu").pprof(),
@@ -122,7 +124,7 @@ impl ProfileKind for CpuWallProfile {
                 unit: strings.add("nanoseconds").pprof(),
             },
         ];
-        profile.period = 1_000_000_000 / sample_rate as i64;
+        profile.period = period_ns;
         profile.period_type = Some(ValueType {
             r#type: strings.add("cpu").pprof(),
             unit: strings.add("nanoseconds").pprof(),
@@ -670,8 +672,8 @@ mod tests {
         let mut builder = PProfBuilder::<CpuWallProfile>::new();
         let mut strings = StringTable::new();
 
-        builder.set_profile_type(&mut strings, 100);
-        builder.set_profile_type(&mut strings, 100);
+        builder.set_profile_type(&mut strings, 10_000_000);
+        builder.set_profile_type(&mut strings, 10_000_000);
 
         assert_eq!(builder.profile.sample_type.len(), 2);
         assert_eq!(builder.profile.period, 10_000_000);

@@ -14,8 +14,18 @@ static PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuWallProfile>> = LeakableMu
 #[cfg(not(miri))]
 unsafe extern "C" {
     fn pyroscope_stack_bump_upload_seq();
-    fn pyroscope_stack_configure(interval_s: f64, fast_copy: bool, fast_copy_warmup_s: f64);
+    fn pyroscope_stack_configure(
+        interval_s: f64,
+        fast_copy: bool,
+        fast_copy_warmup_s: f64,
+        max_nframes: u32,
+        max_threads: u32,
+        adaptive_sampling: bool,
+        target_overhead: f64,
+        max_sampling_period_us: u64,
+    );
     fn pyroscope_stack_fast_copy_initialized() -> bool;
+    fn pyroscope_stack_interval_us() -> u64;
     fn pyroscope_stack_is_safe_copy_failed() -> bool;
     fn pyroscope_stack_start() -> bool;
     fn pyroscope_stack_stop();
@@ -39,6 +49,11 @@ pub struct Config {
     pub enabled: bool,
     pub fast_copy: bool,
     pub fast_copy_warmup_s: f64,
+    pub max_nframe: u32,
+    pub max_threads: u32,
+    pub adaptive_sampling: bool,
+    pub adaptive_target_overhead: f64,
+    pub adaptive_max_interval_us: u64,
 }
 
 /// Tracks whether `pyroscope_stack_start` succeeded, so `stop` never calls
@@ -71,7 +86,16 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
             config.fast_copy
         );
     }
-    configure(interval_s, fast_copy, config.fast_copy_warmup_s);
+    configure(
+        interval_s,
+        fast_copy,
+        config.fast_copy_warmup_s,
+        config.max_nframe,
+        config.max_threads,
+        config.adaptive_sampling,
+        config.adaptive_target_overhead,
+        config.adaptive_max_interval_us,
+    );
 
     if is_safe_copy_failed() {
         log::error!(
@@ -114,13 +138,39 @@ pub fn postfork_child() {
 }
 
 #[cfg(not(miri))]
-fn configure(interval_s: f64, fast_copy: bool, fast_copy_warmup_s: f64) {
-    unsafe { pyroscope_stack_configure(interval_s, fast_copy, fast_copy_warmup_s) }
+#[allow(clippy::too_many_arguments)]
+fn configure(
+    interval_s: f64,
+    fast_copy: bool,
+    fast_copy_warmup_s: f64,
+    max_nframes: u32,
+    max_threads: u32,
+    adaptive_sampling: bool,
+    target_overhead: f64,
+    max_sampling_period_us: u64,
+) {
+    unsafe {
+        pyroscope_stack_configure(
+            interval_s,
+            fast_copy,
+            fast_copy_warmup_s,
+            max_nframes,
+            max_threads,
+            adaptive_sampling,
+            target_overhead,
+            max_sampling_period_us,
+        )
+    }
 }
 
 #[cfg(not(miri))]
 fn fast_copy_initialized() -> bool {
     unsafe { pyroscope_stack_fast_copy_initialized() }
+}
+
+#[cfg(not(miri))]
+fn interval_us() -> u64 {
+    unsafe { pyroscope_stack_interval_us() }
 }
 
 #[cfg(not(miri))]
@@ -139,11 +189,27 @@ fn sampler_stop() {
 }
 
 #[cfg(miri)]
-fn configure(_interval_s: f64, _fast_copy: bool, _fast_copy_warmup_s: f64) {}
+#[allow(clippy::too_many_arguments)]
+fn configure(
+    _interval_s: f64,
+    _fast_copy: bool,
+    _fast_copy_warmup_s: f64,
+    _max_nframes: u32,
+    _max_threads: u32,
+    _adaptive_sampling: bool,
+    _target_overhead: f64,
+    _max_sampling_period_us: u64,
+) {
+}
 
 #[cfg(miri)]
 fn fast_copy_initialized() -> bool {
     false
+}
+
+#[cfg(miri)]
+fn interval_us() -> u64 {
+    0
 }
 
 #[cfg(miri)]
@@ -184,13 +250,23 @@ pub fn dump_pprof(sample_rate: u32, time_range: &TimeRange) -> Option<Vec<u8>> {
     let pb = PROFILE_BUILDER.mutex().lock();
     let profile = match (st, pb) {
         (Ok(mut st), Ok(mut pb)) => {
-            pb.set_profile_type(st.deref_mut(), sample_rate);
+            pb.set_profile_type(st.deref_mut(), period_ns(sample_rate));
             pb.take_profile_and_reset(st.deref(), time_range)
         }
         _ => None,
     }?;
     bump_upload_seq();
     Some(profile.encode_to_vec())
+}
+
+/// Asks the sampler rather than restating `1 / sample_rate`, because adaptive
+/// sampling moves the real interval. It reports 0 before the first
+/// `configure()` and under miri.
+fn period_ns(sample_rate: u32) -> i64 {
+    match interval_us() {
+        0 => 1_000_000_000 / i64::from(sample_rate.max(1)),
+        us => (us as i64).saturating_mul(1_000),
+    }
 }
 
 /// Ported from dd-trace-py `ddtrace/profiling/collector/threading.py::init_stack`.
@@ -558,10 +634,15 @@ mod tests {
         None
     }
 
-    /// Deliberately a single test: it drains the process-wide accumulator, so a
-    /// second test touching it in parallel would race.
+    /// Deliberately a single test: it drains the process-wide accumulator and
+    /// moves the sampler's interval, so a second test touching either in
+    /// parallel would race.
     #[test]
     fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
+        // 50 Hz on the sampler against the 100 Hz passed to dump_pprof, so the
+        // period asserted below can only have come from the sampler.
+        configure(1.0 / 50.0, false, 0.0, 64, 25, false, 0.01, 1_000_000);
+
         let frames = [FFIFrame {
             function_name: intern("stack::tests::some_function"),
             file_name: intern("stack::tests/some_file.py"),
@@ -593,7 +674,10 @@ mod tests {
             ),
             ("cpu", "nanoseconds")
         );
-        assert_eq!(profile.period, 10_000_000);
+        // configure and interval_us are no-ops under miri, so period_ns falls
+        // back to 1 / sample_rate there.
+        let expected_period = if cfg!(miri) { 10_000_000 } else { 20_000_000 };
+        assert_eq!(profile.period, expected_period);
         assert_eq!(profile.duration_nanos, 10_000_000_000);
 
         assert_eq!(profile.sample.len(), 1, "one row per distinct stack");

@@ -114,6 +114,35 @@ sample is silently short rather than marked bad. Upstream's TODO; fixing it
 means defining what an invalid-frame signal does on our side, which touches the
 renderer contract.
 
+### `adapt_sampling_interval` casts before it clamps
+
+`cpp/stack/src/sampler.cpp:186`. The new interval is computed as
+`I * [(s/p) / o]` and converted with `static_cast<microsecond_t>` -- an
+`int64_t` -- before the min/max clamp below it. Converting a double whose
+truncated value does not fit the integer type is undefined, and clamping the
+result afterwards cannot undo that. Because `o` is a divisor, a small enough
+`target_overhead` is all it takes.
+
+Upstream's, verbatim, and latent there: `stack.py` hands
+`adaptive_sampling_target_overhead` to the setter, and that setting is declared
+with a `range(1, 100)` validator, so in their shipped configuration the divisor
+stays at or above 1 and the product far inside `int64_t`.
+Nothing at the C++ site enforces that, though -- `Sampler::set_target_overhead`
+is a public setter with no stated precondition -- and upstream's own
+`g_target_overhead` default of `0.01` is a *fraction*, so their units are
+already inconsistent with the `1..100` percentage the Python side passes.
+Anyone reconciling that toward fractions reopens this.
+
+Not fixed because the fix is a behaviour change to vendored logic that
+Datadog is still editing, and we can close the hole from outside instead:
+`pyroscope_stack_configure` ignores any `target_overhead` below
+`g_min_target_overhead` (`1e-4`), which leaves about nine orders of magnitude
+of headroom before the product threatens `int64_t`. Values under that floor
+are meaningless anyway -- the interval pins to `max_sampling_period_us`. So
+the defect stays reachable only by a caller that bypasses our shim.
+
+Worth reporting upstream regardless; it is their clamp order, not ours.
+
 ### Stacks deeper than 64 frames lose their outermost frames, silently
 
 `cpp/dd_wrapper/include/sample_manager.hpp:48` fixes `max_nframes` to

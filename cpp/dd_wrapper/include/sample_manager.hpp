@@ -1,14 +1,15 @@
 #pragma once
 
-/* Pyroscope patch: a two-method stand-in for dd_wrapper's SampleManager.
+/* Pyroscope patch: a three-method stand-in for dd_wrapper's SampleManager.
  *
- * Only start_sample/drop_sample are kept. Upstream's configuration setters
- * (add_type, set_max_nframes, set_timeline, set_sample_pool_capacity) all
+ * start_sample/drop_sample/set_max_nframes are kept. Upstream's remaining
+ * configuration setters (add_type, set_timeline, set_sample_pool_capacity)
  * write to ProfilerState fields that our trimmed ProfilerState does not carry,
  * and nothing in the vendored stack tree calls them -- the Python-side ddup
  * config path that did is not vendored. */
 
 #include "constants.hpp"
+#include "profiler_state.hpp"
 #include "sample.hpp"
 
 namespace Datadog {
@@ -45,9 +46,24 @@ class SampleManager
      * must not leak into the next user. */
     static Sample* start_sample()
     {
-        static thread_local Sample sample{ g_default_max_nframes, PprofBuilderType_CpuWall };
+        static thread_local Sample sample{ ProfilerState::get().max_nframes.load(),
+                                           PprofBuilderType_CpuWall };
         sample.clear();
         return &sample;
+    }
+
+    /* Verbatim upstream, silent clamp included. Read only by start_sample
+     * above, so a later call lands on whichever sampling thread takes its
+     * first sample next. */
+    static void set_max_nframes(unsigned int _max_nframes)
+    {
+        auto& state = ProfilerState::get();
+        if (_max_nframes > 0) {
+            state.max_nframes = _max_nframes;
+        }
+        if (state.max_nframes > g_backend_max_nframes) {
+            state.max_nframes = g_backend_max_nframes;
+        }
     }
 
     /* No-op: start_sample's storage is thread_local and outlives the caller.
