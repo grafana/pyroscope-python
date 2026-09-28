@@ -16,6 +16,10 @@ live server with `scripts/tests/test_stack_cpu.py`: `cpuburn` shows 9.80s of
 What remains is quality and correctness work, not plumbing: no labels, no
 native frames, no fork safety, and the provisional choices in section 1.
 
+Known defects we are deliberately living with, and why, are in
+`stack_known_bugs.md`. This doc is the work list; that one is the accepted-bug
+list.
+
 ## 1. First-iteration choices to revisit
 
 None of these is a settled decision. Listed first because a later session will

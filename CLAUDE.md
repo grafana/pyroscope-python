@@ -60,6 +60,8 @@ upstream path over editing a vendored source.
   difference itself; the global comment rules still apply.
 - Unfinished work gets a `TODO(Pyroscope):` at the site, and an entry in
   `stack_todo.md`. Put the explanation in `stack_todo.md`, not at the site.
+- A defect we decide to live with goes in `stack_known_bugs.md`, with the reason
+  we are not fixing it. Do not re-file it as work in `stack_todo.md`.
 - Do not "fix" a vendored oddity without checking upstream first -- several are
   load-bearing, and `cpp/CMakeLists.txt` documents flags that must *not* be
   restored on a sync.
@@ -133,8 +135,10 @@ never uninstalled. `_DD_PROFILING_STACK_FAST_COPY=0` still overrides it, and
 
 `stack_todo.md` is the tracking doc -- blocking work, gaps the port opened,
 free-threaded-build questions, and the TODOs inherited from upstream, kept
-separate so they are not confused with ours. Read it before picking up CPU
-profiler work.
+separate so they are not confused with ours. `stack_known_bugs.md` is its
+counterpart: defects that are known and deliberately unfixed, each with the
+reason. Read both before picking up CPU profiler work, and check
+`stack_known_bugs.md` before "fixing" something that looks broken.
 
 ## Build and verify
 
