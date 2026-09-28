@@ -253,6 +253,7 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 
 func startPyroscope(t *testing.T, net *dockertest.Network) string {
 	t.Helper()
+	// TODO(Pyroscope): pin the latest release, run it in v2 storage mode.
 	c := dockertest.StartContainer(t, dockertest.ContainerRequest{
 		Image:          envOrDefault("PYROSCOPE_IMAGE", "grafana/pyroscope"),
 		ExposedPorts:   []string{"4040/tcp"},
