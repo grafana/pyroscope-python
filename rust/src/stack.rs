@@ -17,7 +17,7 @@ lazy_static! {
 #[cfg(not(miri))]
 unsafe extern "C" {
     fn pyroscope_stack_bump_upload_seq();
-    fn pyroscope_stack_configure(interval_s: f64);
+    fn pyroscope_stack_configure(interval_s: f64, fast_copy_warmup_s: f64);
     fn pyroscope_stack_is_safe_copy_failed() -> bool;
     fn pyroscope_stack_start() -> bool;
     fn pyroscope_stack_stop();
@@ -39,6 +39,7 @@ fn bump_upload_seq() {}
 #[derive(Clone)]
 pub struct Config {
     pub enabled: bool,
+    pub fast_copy_warmup_s: f64,
 }
 
 /// Tracks whether `pyroscope_stack_start` succeeded, so `stop` never calls
@@ -59,7 +60,7 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
     }
 
     let interval_s = 1.0 / f64::from(sample_rate.max(1));
-    configure(interval_s);
+    configure(interval_s, config.fast_copy_warmup_s);
 
     if is_safe_copy_failed() {
         log::error!(
@@ -91,8 +92,8 @@ pub fn stop(py: Python<'_>) {
 }
 
 #[cfg(not(miri))]
-fn configure(interval_s: f64) {
-    unsafe { pyroscope_stack_configure(interval_s) }
+fn configure(interval_s: f64, fast_copy_warmup_s: f64) {
+    unsafe { pyroscope_stack_configure(interval_s, fast_copy_warmup_s) }
 }
 
 #[cfg(not(miri))]
@@ -111,7 +112,7 @@ fn sampler_stop() {
 }
 
 #[cfg(miri)]
-fn configure(_interval_s: f64) {}
+fn configure(_interval_s: f64, _fast_copy_warmup_s: f64) {}
 
 #[cfg(miri)]
 fn is_safe_copy_failed() -> bool {

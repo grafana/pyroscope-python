@@ -253,7 +253,10 @@ mod tests {
     }
 
     fn disabled_stack_config() -> crate::stack::Config {
-        crate::stack::Config { enabled: false }
+        crate::stack::Config {
+            enabled: false,
+            fast_copy_warmup_s: 0.0,
+        }
     }
 
     fn disabled_memory_config() -> memory::Config {

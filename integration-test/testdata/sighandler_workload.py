@@ -16,7 +16,8 @@ import pyroscope
 FAULTHANDLER_BANNER = "Fatal Python error: Segmentation fault"
 TAKEN_OVER = "SIGSEGV/SIGBUS handler was taken over by another component"
 OWNED_BY_OTHER = "another component owns the SIGSEGV/SIGBUS handler"
-WARMUP_SECONDS = 20
+WARMUP_SECONDS = 0.5
+PAST_WARMUP_SECONDS = 1.5
 
 libc = ctypes.CDLL(None)
 
@@ -39,6 +40,7 @@ def expect(cond, message):
 
 def configure(**kwargs):
     kwargs.setdefault("cpu_implementation", pyroscope.ProfilerImplementation.Stack)
+    kwargs.setdefault("cpu_fast_copy_warmup", WARMUP_SECONDS)
     expect(
         pyroscope.configure(
             application_name=os.environ["PYROSCOPE_APPLICATION_NAME"],
@@ -144,12 +146,12 @@ def takeover_falls_back_permanently():
     thread = threading.Thread(target=burn, args=(stop,))
     thread.start()
     configure()
-    time.sleep(WARMUP_SECONDS)
+    time.sleep(PAST_WARMUP_SECONDS)
     faulthandler.enable()
     time.sleep(2)
     shutdown()
     configure()
-    time.sleep(WARMUP_SECONDS)
+    time.sleep(PAST_WARMUP_SECONDS)
     shutdown()
     stop.set()
     thread.join()
@@ -186,7 +188,7 @@ def main(scenario):
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        timeout=WARMUP_SECONDS * 2 + 60,
+        timeout=120,
         text=True,
     )
     sys.stderr.write(result.stderr)

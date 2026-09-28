@@ -155,11 +155,19 @@ fn initialize_agent(
     mem_enable_mem_domain: bool,
     cpu_enabled: bool,
     cpu_implementation: ProfilerImplementation,
+    cpu_fast_copy_warmup: f64,
 ) -> bool {
     if !cpu_enabled && !mem_enabled {
         log::error!(
             target: "pyroscope-python",
             "at least one of CPU or memory profiling must be enabled"
+        );
+        return false;
+    }
+    if !cpu_fast_copy_warmup.is_finite() || cpu_fast_copy_warmup < 0.0 {
+        log::error!(
+            target: "pyroscope-python",
+            "cpu_fast_copy_warmup must be a finite, non-negative number of seconds, got {cpu_fast_copy_warmup}"
         );
         return false;
     }
@@ -201,6 +209,7 @@ fn initialize_agent(
         },
         stack::Config {
             enabled: cpu_enabled && cpu_implementation == ProfilerImplementation::Stack,
+            fast_copy_warmup_s: cpu_fast_copy_warmup,
         },
     )
     .tags(tags)
