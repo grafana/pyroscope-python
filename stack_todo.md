@@ -34,11 +34,11 @@ skipped, so no SIGSEGV/SIGBUS handler is ever installed, and
 `set_fast_copy_enabled`. The warmup below is `cpu_fast_copy_warmup` (seconds,
 default 15), set on every `configure()`.
 
-With it on, `sampling_thread`'s vendored machinery is live for the first time:
-15 s warmup on the syscall copy, upgrade only if `segv_handler_installed()`, and
+With it on, `sampling_thread`'s vendored machinery is live:
+the warmup on the syscall copy, upgrade only if `segv_handler_installed()`, and
 a permanent fallback if a foreign component takes a handler over. See
-"faulthandler compatibility is not ported" for the one takeover upstream
-actively works around.
+"faulthandler compatibility" for the one takeover upstream actively works
+around.
 
 ### Adaptive sampling is off
 
@@ -301,66 +301,43 @@ separate extension imported lazily. Both constructor attributes are dropped as
   `sampling_thread`'s permanent fallback. With the guard, a later run sees
   `segv_handler_installed()` false after warmup and stays on the syscall copy.
 
-### faulthandler compatibility is not ported
-`cpp/stack/src/sampler.cpp`, `cpp/stack/src/echion/danger.cc`
+### ~~faulthandler compatibility is not ported~~
+`rust/src/stack.rs` (`mod faulthandler`), `cpp/pyroscope/stack_ffi.cpp`
 
-Live now that fast copy is on by default. Upstream's
-`ddtrace/profiling/_faulthandler.py` wraps `faulthandler.enable` / `disable`
-(via `ModuleWatchdog`, imported from `collector/stack.py::_init` before
-`start()`) so that each call runs `pause_sampling()`, `uninstall_segv_handler()`,
-the original `disable()` + `enable()`, then `reinstall_segv_handler()` and
-`resume_sampling()`. faulthandler then records the real previous handler rather
-than ours, and ours goes back on top chaining to it. Upstream patches no other
-module; abseil, PyTorch/CUDA and the like are covered only by the ownership
-check below.
+Done. `crate::stack::start` patches `faulthandler.enable` / `disable` once per
+process, before `Sampler::start`, with upstream's
+`ddtrace/profiling/_faulthandler.py` wrapper body. There is no `ModuleWatchdog`:
+`faulthandler` is not in `sys.modules` at startup (checked on 3.11, 3.13, 3.14),
+so importing it and patching directly is equivalent. Each call runs
+`pause_sampling()`, `uninstall_segv_handler()`, the original `disable()` +
+`enable()`, then `reinstall_segv_handler()` and `resume_sampling()`, so
+faulthandler records the real previous handler and ours goes back on top,
+chaining to it. `pause_sampling` runs under `py.detach`: it waits up to 3 s for
+the sampling thread, which interns strings. Like `threading`, it is never
+unpatched. Upstream patches no other module; abseil, PyTorch/CUDA and the like
+are covered only by `sampling_thread`'s ownership check. Scenarios in
+`integration-test/testdata/sighandler_workload.py`: `enable_after_warmup_keeps_ours`,
+`disable_after_warmup_keeps_ours`, `crash_after_faulthandler_takeover`.
 
-Without it, what happens depends on when faulthandler is enabled or disabled:
+TODO: add a deterministic integration test for the `disable()` race that the
+port fixes: `disable()` landing between the sampler's `segv_handler_installed()`
+check and a faulting copy, which used to terminate with SIGSEGV/SIGBUS. It
+needs a sampler test hook to coordinate the interleaving; timing alone is not
+enough.
 
-- **Before our handlers install** (pytest, `-X faulthandler`,
-  `PYTHONFAULTHANDLER`): fine while it stays enabled, since installation is lazy. `init_segv_catcher`
-  saves faulthandler as `g_old_segv` and a real crash still gets its traceback.
-  Upstream's "reinstall if already enabled" step exists only because its
-  constructor may have run before faulthandler.
-- **`faulthandler.enable()` after `configure()`**: `sampling_thread`'s
-  `segv_handler_installed()` check sees the takeover within one cycle and pins
-  the process to the syscall copy for good. Safe, but fast copy is lost for
-  the process lifetime.
-- **The race in between**: a `safe_memcpy` fault in that one-cycle window lands
-  in faulthandler first. It disables itself, prints a spurious
-  "Fatal Python error: Segmentation fault" dump, and re-raises into our still
-  armed handler, which recovers. The process survives; the user sees a fake
-  crash and silently loses faulthandler. Needs a copy fault inside ~10 ms and
-  cannot happen during the 15 s warmup.
-- **`faulthandler.disable()` after it was enabled before `configure()`**:
-  disabling restores faulthandler's saved handlers (normally the default
-  dispositions), removing ours too. After warmup, if this happens between
-  `segv_handler_installed()` and a faulting `safe_memcpy`, the process can
-  terminate with SIGSEGV/SIGBUS. The next-cycle fallback is too late; this is
-  an actual crash, not just the spurious report from the `enable()` race.
-  Reproduced on macOS with the current copy-layer sources and a controlled
-  ownership-check / disable / faulting-copy interleaving: fast copy terminated
-  with SIGBUS, while the syscall-copy control safely returned an error.
-  Port the pause/uninstall/reinstall/resume integration for both `enable()`
-  and `disable()`.
+#### Upstream gap: `enable()` during warmup loses fast copy
 
-TODO: add a failing integration test for the `disable()` race before porting
-the fix. Extend `integration-test/testdata/sighandler_workload.py` and register
-the scenario in `integration-test/integration_test.go`: enable faulthandler
-before `configure()`, let fast copy activate after warmup, then deterministically
-coordinate `disable()` between the sampler's ownership check and a faulting
-copy (add a test hook if needed; avoid relying on timing alone). Run in a child
-process and assert a clean exit, so the current SIGSEGV/SIGBUS termination fails
-the test and the compatibility fix makes it pass. The standalone copy-layer
-harness above is evidence for the race, not an integration test of the running
-sampler.
+Ported verbatim, not fixed. `uninstall_segv_handler` / `reinstall_segv_handler`
+act only `if (fast_copy_active)`, as upstream's `stack.cpp` does (also on
+upstream main a1bcb762). `sampling_thread` holds `fast_copy_active` false for
+the whole warmup, so a `faulthandler.enable()` then skips both swaps.
+faulthandler lands on top, and when warmup ends `segv_handler_installed()` is
+false and the process stays on the syscall copy for good.
+`enable_during_warmup_falls_back` pins this behaviour; a fix flips it. The fix
+is to gate on "fast copy requested and `safe_memcpy_initialized`" rather than
+`fast_copy_active`.
 
-Porting it needs no `ModuleWatchdog`: `faulthandler` is not in `sys.modules`
-at startup (checked on 3.11, 3.13, 3.14), so it can be patched from
-`crate::stack::start` the way `threads::install` patches `threading`. The C++
-half is already vendored -- `Sampler::pause()` / `resume()`,
-`uninstall_segv_handler()`, `init_segv_catcher()` -- and only needs four
-`extern "C"` exports in `cpp/pyroscope/stack_ffi.cpp`. Upstream's cases are in
-`tests/profiling/test_faulthandler.py`.
+TODO: file an issue for this, upstream and/or here.
 
 ### Nothing unpatches `threading`
 `rust/src/stack.rs`

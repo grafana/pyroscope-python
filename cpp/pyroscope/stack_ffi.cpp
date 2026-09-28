@@ -45,6 +45,34 @@ pyroscope_stack_stop()
     Datadog::Sampler::get().stop();
 }
 
+extern "C" uint8_t
+pyroscope_stack_pause_sampling()
+{
+    return static_cast<uint8_t>(Datadog::Sampler::get().pause());
+}
+
+extern "C" void
+pyroscope_stack_resume_sampling()
+{
+    Datadog::Sampler::get().resume();
+}
+
+extern "C" void
+pyroscope_stack_uninstall_segv_handler()
+{
+    if (fast_copy_active) {
+        uninstall_segv_handler();
+    }
+}
+
+extern "C" void
+pyroscope_stack_reinstall_segv_handler()
+{
+    if (fast_copy_active) {
+        init_segv_catcher();
+    }
+}
+
 extern "C" void
 pyroscope_stack_bump_upload_seq()
 {

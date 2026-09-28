@@ -71,6 +71,9 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 		"sigbus_with_our_handler",
 		"crash_chains_to_earlier_faulthandler",
 		"crash_after_faulthandler_takeover",
+		"enable_after_warmup_keeps_ours",
+		"disable_after_warmup_keeps_ours",
+		"enable_during_warmup_falls_back",
 		"takeover_falls_back_permanently",
 	}
 	for _, scenario := range scenarios {

@@ -68,6 +68,11 @@ def sigbus():
         m[0]
 
 
+def take_over():
+    signal.signal(signal.SIGSEGV, signal.SIG_DFL)
+    signal.signal(signal.SIGBUS, signal.SIG_DFL)
+
+
 def burn(stop):
     while not stop.is_set():
         sum(i * i for i in range(10000))
@@ -123,12 +128,12 @@ def reconfigure_keeps_handlers():
 def foreign_after_configure_is_not_reclaimed():
     configure()
     ours = handlers()
-    faulthandler.enable()
+    take_over()
     foreign = handlers()
-    expect(foreign != ours, "faulthandler.enable() did not replace the handlers")
+    expect(foreign != ours, "take_over() did not replace the handlers")
     shutdown()
     configure()
-    expect(handlers() == foreign, f"reconfigure reinstalled over faulthandler: {foreign} -> {handlers()}")
+    expect(handlers() == foreign, f"reconfigure reinstalled over a foreign handler: {foreign} -> {handlers()}")
     shutdown()
 
 
@@ -152,8 +157,38 @@ def crash_chains_to_earlier_faulthandler():
 
 def crash_after_faulthandler_takeover():
     configure()
+    time.sleep(PAST_WARMUP_SECONDS)
     faulthandler.enable()
     segfault()
+
+
+def enable_after_warmup_keeps_ours():
+    configure()
+    ours = handlers()
+    time.sleep(PAST_WARMUP_SECONDS)
+    faulthandler.enable()
+    expect(handlers() == ours, f"faulthandler.enable() displaced our handlers: {ours} -> {handlers()}")
+    time.sleep(1)
+    shutdown()
+
+
+def disable_after_warmup_keeps_ours():
+    faulthandler.enable()
+    configure()
+    ours = handlers()
+    time.sleep(PAST_WARMUP_SECONDS)
+    faulthandler.disable()
+    expect(handlers() == ours, f"faulthandler.disable() displaced our handlers: {ours} -> {handlers()}")
+    time.sleep(1)
+    segfault()
+
+
+def enable_during_warmup_falls_back():
+    configure(cpu_fast_copy_warmup=3)
+    time.sleep(0.5)
+    faulthandler.enable()
+    time.sleep(4)
+    shutdown()
 
 
 def takeover_falls_back_permanently():
@@ -162,7 +197,7 @@ def takeover_falls_back_permanently():
     thread.start()
     configure()
     time.sleep(PAST_WARMUP_SECONDS)
-    faulthandler.enable()
+    take_over()
     time.sleep(2)
     shutdown()
     configure()
@@ -192,6 +227,9 @@ SCENARIOS = {
     "sigbus_with_our_handler": Scenario(-signal.SIGBUS),
     "crash_chains_to_earlier_faulthandler": Scenario(-signal.SIGSEGV, required=(FAULTHANDLER_BANNER,)),
     "crash_after_faulthandler_takeover": Scenario(-signal.SIGSEGV, required=(FAULTHANDLER_BANNER,)),
+    "enable_after_warmup_keeps_ours": Scenario(forbidden=(TAKEN_OVER, OWNED_BY_OTHER)),
+    "disable_after_warmup_keeps_ours": Scenario(-signal.SIGSEGV, forbidden=(FAULTHANDLER_BANNER, TAKEN_OVER)),
+    "enable_during_warmup_falls_back": Scenario(required=(OWNED_BY_OTHER,)),
     "takeover_falls_back_permanently": Scenario(required=(TAKEN_OVER, OWNED_BY_OTHER)),
 }
 
