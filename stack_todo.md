@@ -580,6 +580,14 @@ default `v1-v2-dual` mode still delays the first queryable data by ~60s after
 tenant"). That wait is most of each CPU test's ~95s. Neither `v1` nor `v2` has
 been timed yet.
 
+### Vendored sources have no provenance headers
+`cpp/stack/`, `cpp/dd_wrapper/`
+
+We ship echion's MIT code and Datadog's Apache-2.0 code in an Apache-2.0 repo.
+Add Mimir-style `SPDX-License-Identifier` / `Provenance-includes-*` headers
+(pattern: https://github.com/grafana/mimir/blob/main/cmd/mimir/main.go) to every
+vendored file, naming the upstream location, license and copyright.
+
 ## 3. Free-threaded builds: unsupported, rejected at build time
 
 Free-threaded CPython is refused rather than degraded, so there is no `cp314t`
