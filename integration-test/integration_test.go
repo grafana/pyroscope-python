@@ -65,7 +65,7 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 		"default_installs_nothing",
 		"first_configure_wins",
 		"stack_installs_both",
-		"env_opt_out_installs_nothing",
+		"fast_copy_off_leaves_faulthandler_unpatched",
 		"reconfigure_keeps_handlers",
 		"foreign_after_configure_is_not_reclaimed",
 		"crash_with_our_handler",

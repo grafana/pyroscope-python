@@ -15,6 +15,7 @@ static PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuWallProfile>> = LeakableMu
 unsafe extern "C" {
     fn pyroscope_stack_bump_upload_seq();
     fn pyroscope_stack_configure(interval_s: f64, fast_copy: bool, fast_copy_warmup_s: f64);
+    fn pyroscope_stack_fast_copy_initialized() -> bool;
     fn pyroscope_stack_is_safe_copy_failed() -> bool;
     fn pyroscope_stack_start() -> bool;
     fn pyroscope_stack_stop();
@@ -81,8 +82,9 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
         return Ok(());
     }
 
-    // TODO(Pyroscope): skip this when fast copy is off.
-    faulthandler::install(py)?;
+    if fast_copy_initialized() {
+        faulthandler::install(py)?;
+    }
 
     if !sampler_start() {
         return Err(PyRuntimeError::new_err(
@@ -117,6 +119,11 @@ fn configure(interval_s: f64, fast_copy: bool, fast_copy_warmup_s: f64) {
 }
 
 #[cfg(not(miri))]
+fn fast_copy_initialized() -> bool {
+    unsafe { pyroscope_stack_fast_copy_initialized() }
+}
+
+#[cfg(not(miri))]
 fn is_safe_copy_failed() -> bool {
     unsafe { pyroscope_stack_is_safe_copy_failed() }
 }
@@ -133,6 +140,11 @@ fn sampler_stop() {
 
 #[cfg(miri)]
 fn configure(_interval_s: f64, _fast_copy: bool, _fast_copy_warmup_s: f64) {}
+
+#[cfg(miri)]
+fn fast_copy_initialized() -> bool {
+    false
+}
 
 #[cfg(miri)]
 fn is_safe_copy_failed() -> bool {

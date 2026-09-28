@@ -109,9 +109,11 @@ def stack_installs_both():
     shutdown()
 
 
-def env_opt_out_installs_nothing():
-    configure()
-    expect(handlers() == (0, 0), f"opt-out still installed handlers: {handlers()}")
+def fast_copy_off_leaves_faulthandler_unpatched():
+    enable, disable = faulthandler.enable, faulthandler.disable
+    configure(cpu_fast_copy=False)
+    expect(faulthandler.enable is enable, "fast copy off patched faulthandler.enable")
+    expect(faulthandler.disable is disable, "fast copy off patched faulthandler.disable")
     shutdown()
 
 
@@ -220,7 +222,7 @@ SCENARIOS = {
     "default_installs_nothing": Scenario(),
     "first_configure_wins": Scenario(),
     "stack_installs_both": Scenario(),
-    "env_opt_out_installs_nothing": Scenario(env={"_DD_PROFILING_STACK_FAST_COPY": "0"}),
+    "fast_copy_off_leaves_faulthandler_unpatched": Scenario(),
     "reconfigure_keeps_handlers": Scenario(),
     "foreign_after_configure_is_not_reclaimed": Scenario(),
     "crash_with_our_handler": Scenario(-signal.SIGSEGV, forbidden=(FAULTHANDLER_BANNER,)),

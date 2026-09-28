@@ -3,19 +3,6 @@
 
 #include <echion/vm.h>
 
-// Returns true when _DD_PROFILING_STACK_FAST_COPY is set to a falsy value.
-// Pyroscope patch: called from configure() rather than at static init, so a
-// concurrent setenv from another thread is possible; accepted.
-static bool
-fast_copy_env_disabled()
-{
-    const char* val = getenv("_DD_PROFILING_STACK_FAST_COPY");
-    if (val == nullptr) {
-        return false;
-    }
-    return strcmp(val, "0") == 0 || strcmp(val, "false") == 0 || strcmp(val, "False") == 0;
-}
-
 #if defined PL_LINUX
 static bool
 probe_process_vm_readv()
@@ -34,16 +21,16 @@ probe_process_vm_readv()
 }
 
 // Pyroscope patch: not a constructor; pyroscope_stack_configure calls it, and
-// fast_copy_requested=false opts out like the env var.
+// fast_copy_requested replaces the _DD_PROFILING_STACK_FAST_COPY env opt-out.
 void
 init_safe_copy(bool fast_copy_requested)
 {
     // Always probe process_vm_readv so we know whether it is a valid fallback.
     process_vm_readv_available = probe_process_vm_readv();
 
-    // Honor the fast-copy opt-out: when disabled via env var, skip installing
+    // Honor the fast-copy opt-out: when not requested, skip installing
     // the SIGSEGV/SIGBUS handlers and alt stack entirely.
-    if (!fast_copy_requested || fast_copy_env_disabled()) {
+    if (!fast_copy_requested) {
         if (process_vm_readv_available) {
             safe_copy = process_vm_readv;
         } else {
@@ -71,12 +58,12 @@ init_safe_copy(bool fast_copy_requested)
 }
 #elif defined PL_DARWIN
 // Pyroscope patch: not a constructor; pyroscope_stack_configure calls it, and
-// fast_copy_requested=false opts out like the env var.
+// fast_copy_requested replaces the _DD_PROFILING_STACK_FAST_COPY env opt-out.
 void
 init_safe_copy(bool fast_copy_requested)
 {
     // Honor the fast-copy opt-out: skip installing signal handlers when disabled.
-    if (!fast_copy_requested || fast_copy_env_disabled()) {
+    if (!fast_copy_requested) {
         return;
     }
 

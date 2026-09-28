@@ -28,11 +28,12 @@ otherwise read the code as intent.
 ### ~~Fast copy is off~~
 
 Done. `safe_memcpy` is opt-in: `configure(cpu_fast_copy=True)`, default off,
-unlike upstream where it defaults on. The first `configure()` that starts the
+as upstream's `DD_PROFILING_STACK_FAST_COPY` is -- but upstream installs the
+handlers at import regardless. The first `configure()` that starts the
 stack sampler fixes the choice for the process (`stack::FAST_COPY`); a later
-differing value only logs a warning. `cpu_fast_copy=False` takes the same
-`init_safe_copy` branch as upstream's private `_DD_PROFILING_STACK_FAST_COPY=0`
-opt-out, which still overrides `cpu_fast_copy=True`: `init_segv_catcher` is
+differing value only logs a warning. `cpu_fast_copy=False` takes the
+`init_safe_copy` branch of upstream's `_DD_PROFILING_STACK_FAST_COPY=0` env
+opt-out, which is dropped: `init_segv_catcher` is
 skipped, so no SIGSEGV/SIGBUS handler is ever installed, and
 `pyroscope_stack_configure` passes `safe_memcpy_initialized` (false) to
 `set_fast_copy_enabled`. The warmup below is `cpu_fast_copy_warmup` (seconds,
@@ -326,7 +327,7 @@ separate extension imported lazily. Both constructor attributes are dropped as
 ### ~~faulthandler compatibility is not ported~~
 `rust/src/stack.rs` (`mod faulthandler`), `cpp/pyroscope/stack_ffi.cpp`
 
-Done. `crate::stack::start` patches `faulthandler.enable` / `disable` once per
+Done. When fast copy is on, `crate::stack::start` patches `faulthandler.enable` / `disable` once per
 process, before `Sampler::start`, with upstream's
 `ddtrace/profiling/_faulthandler.py` wrapper body. There is no `ModuleWatchdog`:
 `faulthandler` is not in `sys.modules` at startup (checked on 3.11, 3.13, 3.14),
@@ -355,20 +356,14 @@ is to gate on "fast copy requested and `safe_memcpy_initialized`" rather than
 
 TODO: file an issue for this, upstream and/or here.
 
-#### The patch installs even when fast copy is off
+#### ~~The patch installs even when fast copy is off~~
 `rust/src/stack.rs` (`start`)
 
-`cpu_fast_copy` defaults to false, so `init_safe_copy` installs no handlers and
-`fast_copy_active` stays false for the process. The wrapper then has nothing to
-protect: `uninstall_segv_handler` / `reinstall_segv_handler` are no-ops and all
-it does is pause the sampling thread around every `faulthandler.enable()` /
-`disable()`. On the pause-timeout path it also makes `disable()` a silent
-no-op that returns False, a user-visible regression bought for nothing.
-Upstream never sees this because upstream's fast copy is unconditional; opt-in
-fast copy is ours.
-
-TODO: gate `faulthandler::install` on the resolved `FAST_COPY`, not on
-`config.enabled`.
+Done. `start` installs the patch only when `pyroscope_stack_fast_copy_initialized()`
+(`safe_memcpy_initialized`) is true, i.e. our handlers are actually installed.
+Upstream always patches, so by default it pauses the sampler around every
+`enable()` / `disable()` for nothing. Pinned by
+`fast_copy_off_leaves_faulthandler_unpatched`.
 
 #### The `PauseResult` decode is coupled to the vendored enum's order
 `rust/src/stack.rs` (`mod faulthandler`), `cpp/pyroscope/stack_ffi.cpp`

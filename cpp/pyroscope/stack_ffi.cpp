@@ -34,6 +34,12 @@ pyroscope_stack_is_safe_copy_failed()
 }
 
 extern "C" bool
+pyroscope_stack_fast_copy_initialized()
+{
+    return safe_memcpy_initialized;
+}
+
+extern "C" bool
 pyroscope_stack_start()
 {
     return Datadog::Sampler::get().start();
