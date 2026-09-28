@@ -1,18 +1,15 @@
 use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
 use crate::encode::pprof::{CpuWallProfile, PProfBuilder};
 use crate::utils::TimeRange;
-use lazy_static::lazy_static;
+use crate::forksafety::LeakableMutex;
 use prost::Message;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::ops::{Deref, DerefMut};
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-lazy_static! {
-    static ref PROFILE_BUILDER: Mutex<PProfBuilder<CpuWallProfile>> =
-        Mutex::new(PProfBuilder::new());
-}
+static PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuWallProfile>> = LeakableMutex::new();
 
 #[cfg(not(miri))]
 unsafe extern "C" {
@@ -107,6 +104,13 @@ pub fn stop(py: Python<'_>) {
     clear_samples();
 }
 
+pub fn postfork_child() {
+    #[cfg(not(miri))]
+    PROFILE_BUILDER.leak_and_reset();
+    #[cfg(miri)]
+    let _ = PROFILE_BUILDER.leak_and_reset();
+}
+
 #[cfg(not(miri))]
 fn configure(interval_s: f64, fast_copy: bool, fast_copy_warmup_s: f64) {
     unsafe { pyroscope_stack_configure(interval_s, fast_copy, fast_copy_warmup_s) }
@@ -144,7 +148,7 @@ fn sampler_start() -> bool {
 fn sampler_stop() {}
 
 pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
-    if let Ok(mut pb) = PROFILE_BUILDER.lock() {
+    if let Ok(mut pb) = PROFILE_BUILDER.mutex().lock() {
         pb.add_ffi_sample(frames, values);
     }
 }
@@ -154,7 +158,7 @@ pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
 /// See `crate::memory::implementation::clear_samples` for the reasoning,
 /// including why the shared string table is deliberately left alone.
 pub fn clear_samples() {
-    let mut pb = PROFILE_BUILDER.lock().unwrap_or_else(|e| e.into_inner());
+    let mut pb = PROFILE_BUILDER.mutex().lock().unwrap_or_else(|e| e.into_inner());
     pb.reset();
 }
 
@@ -165,7 +169,7 @@ pub fn clear_samples() {
 /// the profile builder, never the reverse.
 pub fn dump_pprof(sample_rate: u32, time_range: &TimeRange) -> Option<Vec<u8>> {
     let st = crate::encode::interner::string_table().lock();
-    let pb = PROFILE_BUILDER.lock();
+    let pb = PROFILE_BUILDER.mutex().lock();
     let profile = match (st, pb) {
         (Ok(mut st), Ok(mut pb)) => {
             pb.set_profile_type(st.deref_mut(), sample_rate);

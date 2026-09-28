@@ -51,6 +51,7 @@ func TestPythonNonCPUIntegrationSuites(t *testing.T) {
 	t.Run("memory profiler", testPythonMemoryProfiler)
 	t.Run("concurrent configure shutdown", testPythonConcurrentConfigureShutdown)
 	t.Run("atexit shutdown", testPythonAtexitShutdown)
+	t.Run("fork child", testPythonForkChild)
 }
 
 func TestPythonSignalHandlerSuites(t *testing.T) {
@@ -159,6 +160,35 @@ func testPythonAtexitShutdown(t *testing.T) {
 	})
 
 	requireContainerExit(t, workload, 0, 2*time.Minute)
+}
+
+func testPythonForkChild(t *testing.T) {
+	wheelDir := ensureWheel(t)
+
+	net := dockertest.CreateNetwork(t)
+	pyroscopeURL := startPyroscope(t, net)
+	appName := fmt.Sprintf("pyroscopers.python.test.fork.%d", time.Now().UnixNano())
+	canary := randomHex(t, 16)
+	workload := startPythonTestContainer(t, net, wheelDir, "fork_workload.py", map[string]string{
+		"PYROSCOPE_APPLICATION_NAME": appName,
+		"CANARY":                     canary,
+	})
+
+	labelSelector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
+	require.Eventually(t, func() bool {
+		collapsed, err := queryProfile(pyroscopeURL, cpuProfileTypeID, labelSelector)
+		if err != nil {
+			t.Logf("query failed: %v", err)
+			return false
+		}
+		if !strings.Contains(collapsed, "main;fork;fork_child_main;fork_child_burn") {
+			t.Logf("fork child profile does not contain main;fork;fork_child_main;fork_child_burn yet:\n%s", collapsed)
+			return false
+		}
+		return true
+	}, 3*time.Minute, 5*time.Second, "expected fork_child_burn samples from the fork child")
+
+	requireContainerExit(t, workload, 0, 3*time.Minute)
 }
 
 func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {

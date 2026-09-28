@@ -129,26 +129,6 @@ rather than a fix: it should follow `configure(mem_max_nframe=...)`.
 
 ## Introduced by the port
 
-### The fork child resurrects the sampler, then samples with a cleared interner
-
-`rust/src/ffikit.rs:93` (existing `TODO(Pyroscope)`), `cpp/stack/src/sampler.cpp`.
-`stack_atfork_child` runs inside `os.fork()`, before Python's
-`at_fork_after_in_child` reaches `stop_profilers`, and it calls
-`restart_after_fork()`. The sampling thread is therefore live and re-warming
-`StackRenderer::string_id_cache` while we clear the string table underneath it,
-so the child can push samples keyed by stale string indices.
-
-Unfixed because the correct behaviour is to keep the sampler stopped in the
-child (the agent is dead there), and that has to be done together with the next
-entry. `renderer_.postfork_child()` is not a substitute.
-
-### The fork child never re-registers its own `MainThread`
-
-The child inherits the parent's thread info map and the inherited `threading`
-patch, so nothing registers the child's main thread.
-`Sampler::postfork_child()` rebuilds both the map and that entry but has no
-caller. Same reason as above: fork safety is one piece of work, not two.
-
 ### Threads not created through `threading.Thread` are invisible
 
 `rust/src/stack.rs` (`mod threads`). Registration hangs off

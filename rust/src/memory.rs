@@ -53,6 +53,7 @@ pub fn postfork_child() {
     unsafe {
         implementation::memalloc_heap_postfork_child();
     }
+    implementation::postfork_child();
 }
 
 pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
@@ -67,16 +68,13 @@ mod implementation {
     use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
     use crate::encode::pprof::{MemoryProfile, PProfBuilder};
     use crate::utils::TimeRange;
-    use lazy_static::lazy_static;
+    use crate::forksafety::LeakableMutex;
     use prost::Message;
     use pyo3::prelude::*;
     use std::ops::{Deref, DerefMut};
-    use std::sync::Mutex;
 
-    lazy_static! {
-        static ref PROFILE_BUILDER: Mutex<PProfBuilder<MemoryProfile>> =
-            Mutex::new(PProfBuilder::new());
-    }
+    static PROFILE_BUILDER: LeakableMutex<PProfBuilder<MemoryProfile>> = LeakableMutex::new();
+
     unsafe extern "C" {
         pub fn memalloc_start(
             max_nframe: u16,
@@ -90,9 +88,16 @@ mod implementation {
     }
 
     pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
-        if let Ok(mut pb) = PROFILE_BUILDER.lock() {
+        if let Ok(mut pb) = PROFILE_BUILDER.mutex().lock() {
             pb.add_ffi_sample(frames, values);
         }
+    }
+
+    pub fn postfork_child() {
+        #[cfg(not(miri))]
+        PROFILE_BUILDER.leak_and_reset();
+        #[cfg(miri)]
+        let _ = PROFILE_BUILDER.leak_and_reset();
     }
 
     /// Discard the samples buffered for the next memory profile.
@@ -112,7 +117,7 @@ mod implementation {
     /// is always safe -- an index only becomes stale when the table is
     /// cleared, which is `ffikit::stop_profilers`' job.
     pub fn clear_samples() {
-        let mut pb = PROFILE_BUILDER.lock().unwrap_or_else(|e| e.into_inner());
+        let mut pb = PROFILE_BUILDER.mutex().lock().unwrap_or_else(|e| e.into_inner());
         pb.reset();
     }
 
@@ -124,7 +129,7 @@ mod implementation {
                 memalloc_heap_py();
             }
             let st = crate::encode::interner::string_table().lock();
-            let pb = PROFILE_BUILDER.lock();
+            let pb = PROFILE_BUILDER.mutex().lock();
             match (st, pb) {
                 (Ok(mut st), Ok(mut pb)) => {
                     pb.set_profile_type(st.deref_mut(), heap_sample_size);

@@ -89,16 +89,6 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
 /// other profiler still holds interned string indices. Every profiler must be
 /// stopped, and every out-of-Rust cache of indices dropped, before the table
 /// they interned into goes away. See the invariant on `interner::clear`.
-///
-/// TODO(Pyroscope): this is not sufficient for the fork-child path.
-/// `stack_atfork_child`
-/// (cpp/stack/src/sampler.cpp) runs inside `os.fork()`, i.e. *before* Python's
-/// `at_fork_after_in_child` reaches here, and it calls `restart_after_fork()`
-/// after clearing the renderer caches -- so the sampling thread is live again
-/// and re-warming `StackRenderer::string_id_cache` by the time we clear the
-/// table underneath it. The sampler must be stopped (and kept stopped; the
-/// agent is dead in the child) rather than resurrected. Do not rely on
-/// `renderer_.postfork_child()` for this.
 pub fn stop_profilers(py: Python<'_>) {
     crate::memory::stop(py);
     crate::stack::stop(py);

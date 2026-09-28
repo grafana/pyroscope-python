@@ -1,11 +1,9 @@
 use crate::encode::pprof::ffi::{FFIInternedString, FFIStringView};
 use crate::encode::pprof::{StringID, StringTable};
-use lazy_static::lazy_static;
+use crate::forksafety::LeakableMutex;
 use std::sync::Mutex;
 
-lazy_static! {
-    static ref STRING_TABLE: Mutex<StringTable> = Mutex::new(StringTable::new());
-}
+static STRING_TABLE: LeakableMutex<StringTable> = LeakableMutex::new();
 
 /// The shared table, for the dump paths that have to materialize it.
 ///
@@ -14,7 +12,7 @@ lazy_static! {
 /// interning needs only this one. A CPU dump path written by copying
 /// `memory::dump_pprof` must keep the same order.
 pub fn string_table() -> &'static Mutex<StringTable> {
-    &STRING_TABLE
+    STRING_TABLE.mutex()
 }
 
 #[unsafe(no_mangle)]
@@ -26,15 +24,22 @@ pub extern "C" fn pyroscope_string_table_intern_string(s: FFIStringView) -> FFII
         let s = std::slice::from_raw_parts(s.data as *const u8, s.len);
         std::str::from_utf8_unchecked(s)
     };
-    match STRING_TABLE.lock() {
+    match STRING_TABLE.mutex().lock() {
         Ok(mut string_table) => (&string_table.add(unsafe_str)).into(),
         Err(_) => StringID::empty_ffi_string(),
     }
 }
 
 pub fn clear() {
-    let mut st = STRING_TABLE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut st = STRING_TABLE.mutex().lock().unwrap_or_else(|e| e.into_inner());
     *st = StringTable::new();
+}
+
+pub fn postfork_child() {
+    #[cfg(not(miri))]
+    STRING_TABLE.leak_and_reset();
+    #[cfg(miri)]
+    let _ = STRING_TABLE.leak_and_reset();
 }
 
 #[cfg(test)]

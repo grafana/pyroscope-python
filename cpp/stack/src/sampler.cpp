@@ -614,8 +614,7 @@ stack_atfork_child()
     // Clean up Sampler state, do not start the Sampler yet.
     stack_postfork_cleanup();
 
-    // Restart the sampler if it was running before fork.
-    Sampler::get().restart_after_fork();
+    // Pyroscope patch: the agent is dead in the child; never restart.
 }
 
 // Pyroscope patch: not a constructor; one_time_setup covers it.

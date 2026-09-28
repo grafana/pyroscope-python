@@ -14,7 +14,7 @@ live server with `scripts/tests/test_stack_cpu.py`: `cpuburn` shows 9.80s of
 `process_cpu:wall:nanoseconds:cpu:nanoseconds` resolve.
 
 What remains is quality and correctness work, not plumbing: no labels, no
-native frames, no fork safety, and the provisional choices in section 1.
+native frames, and the provisional choices in section 1.
 
 Known defects we are deliberately living with, and why, are in
 `stack_known_bugs.md`. This doc is the work list; that one is the accepted-bug
@@ -197,29 +197,47 @@ shim once pulled in only `profiler_state.cpp` and `native_call_tracker.cpp`, so
 the built dylib had no `__mod_init_func` section at all. Thread registration
 changed that -- see "`import pyroscope` now installs signal handlers" below.
 
-### Fork handling is incomplete
-`cpp/stack/src/sampler.cpp`, `rust/src/ffikit.rs`
+### ~~Fork handling is incomplete~~
+`cpp/stack/src/sampler.cpp`, `rust/src/lib.rs`, `rust/src/forksafety.rs`
 
-Upstream's `ProfilerState::start` installs a `pthread_atfork` child handler
-*before* `Sampler::start` installs its own, and POSIX's FIFO child-handler
-ordering runs `ProfilerState::postfork_child` first. The note in
-`Sampler::atfork_child` still describes that arrangement; we have no
-`ProfilerState::start` and, since `NativeCallRegistry` became a stub with no
-mutex, no `ProfilerState::postfork_child` either. Reinstate both if the real
-registry comes back.
+Done. The agent is dead in a fork child, so everything the child inherits is
+dropped rather than resumed:
 
-What remains is the existing `TODO(Pyroscope)` on `ffikit::stop_profilers`
-(`rust/src/ffikit.rs`): `stack_atfork_child` runs inside `os.fork()`, i.e.
-before Python's `at_fork_after_in_child` reaches `stop_profilers`, and it calls
-`restart_after_fork()` -- so the sampling thread is live again and re-warming
-`StackRenderer::string_id_cache` by the time we clear the string table
-underneath it. The sampler must be stopped and kept stopped in the child; do
-not rely on `renderer_.postfork_child()`.
+- `stack_atfork_child` keeps `stack_postfork_cleanup()` and no longer calls
+  `restart_after_fork()` (`// Pyroscope patch:`). The cleanup already sets
+  `thread_running=false`, so the child's `stack::stop` returns at once, and
+  its `++thread_seq_num` leaves the parity even (stopped).
+- `interner::STRING_TABLE` and both `PROFILE_BUILDER`s are
+  `forksafety::LeakableMutex`es. `at_fork_after_in_child` leaks and replaces
+  them before `stop_profilers`, because the sampling thread and
+  `stack::dump_pprof` take them without the GIL: a fork landing mid-intern
+  would otherwise deadlock the child's `interner::clear()`.
 
-A second strand: the child inherits the parent's thread info map, and the
-`threading` wrappers are inherited patched, so the child's own `MainThread` is
-never re-registered. `Sampler::postfork_child()` rebuilds both the map and that
-one entry, but still has no caller. Fix the two together.
+The forking thread is re-registered: `Sampler::postfork_child` (via
+`stack_postfork_cleanup`) emplaces `pthread_self()` as `"MainThread"`, and on
+3.13+ `Thread._after_fork` calls the patched `_set_native_id`, which
+overwrites that entry with the real name. On 3.11/3.12 nothing does, so a
+non-main forking thread keeps the name `"MainThread"`. Upstream HEAD keeps the
+previously stored name; our pinned copy hardcodes it. Picked up by the next
+vendor sync.
+
+`integration-test/testdata/fork_workload.py` (`TestPythonNonCPUIntegrationSuites/fork_child`)
+forks 30 times under a busy sampler, then profiles a child that reconfigures.
+An `after_in_child` hook registered before `import pyroscope` sleeps 0.5 s, so
+a resurrected sampler reliably interns into the doomed table; before the fix
+the server rejected the child's uploads with `function name string index out
+of range`. The held-lock case stays probabilistic.
+
+Upstream vs here, for the next sync (upstream at 86fc5da5):
+
+| Upstream mechanism | Here |
+|---|---|
+| dd_wrapper `ProfilerState` `pthread_atfork` (`profiler_state.cpp:124`): prefork cancels the upload and locks `upload_lock` + `profile_mtx`; the child rebuilds the Profiles Dictionary, `Profile` and the native-call registry mutex | Dropped with `ProfilerState::start`. The Rust locks are leaked and replaced in the child instead of locked across `fork()`. Reinstate the registry's `postfork_child` if the real `NativeCallRegistry` comes back. |
+| stack `pthread_atfork` from `one_time_setup`, child restarts the sampler | Child cleans up, never restarts. The `one_time_setup` comment about handler ordering describes the dropped `ProfilerState` handler and is kept verbatim. |
+| Restart in the child leaves `thread_seq_num` even while running, so a grandchild fork does not restart (upstream bug) | Moot: nothing restarts. |
+| memalloc `pthread_atfork` child hook (`_memalloc.cpp:303`) | Patched out; `os.register_at_fork` calls `memalloc_heap_postfork_child`. |
+| `stack_init` ELF constructor | Dropped; `one_time_setup` covers it. |
+| Python: `threads._before_fork` joins the Scheduler; `PeriodicThread` autorestart resumes profiling in the child | No `before` hook; the child agent is abandoned (`ffikit::STATE` leaked). |
 
 ### ~~Nothing starts the sampler~~
 `cpp/pyroscope/stack_ffi.cpp`, `rust/src/stack.rs`
