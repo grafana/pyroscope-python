@@ -23,12 +23,16 @@ otherwise read the code as intent.
 
 ### ~~Fast copy is off~~
 
-Done. `safe_memcpy` is on by default, unlike upstream. The only opt-out is
-upstream's own: `_DD_PROFILING_STACK_FAST_COPY=0` (a private setting there,
-with no public config or API). There is deliberately no `configure()` flag.
-With it set, `init_safe_copy` skips `init_segv_catcher`, so no SIGSEGV/SIGBUS
-handler is ever installed, and `pyroscope_stack_configure` passes
-`safe_memcpy_initialized` (false) to `set_fast_copy_enabled`.
+Done. `safe_memcpy` is opt-in: `configure(cpu_fast_copy=True)`, default off,
+unlike upstream where it defaults on. The first `configure()` that starts the
+stack sampler fixes the choice for the process (`stack::FAST_COPY`); a later
+differing value only logs a warning. `cpu_fast_copy=False` takes the same
+`init_safe_copy` branch as upstream's private `_DD_PROFILING_STACK_FAST_COPY=0`
+opt-out, which still overrides `cpu_fast_copy=True`: `init_segv_catcher` is
+skipped, so no SIGSEGV/SIGBUS handler is ever installed, and
+`pyroscope_stack_configure` passes `safe_memcpy_initialized` (false) to
+`set_fast_copy_enabled`. The warmup below is `cpu_fast_copy_warmup` (seconds,
+default 15), set on every `configure()`.
 
 With it on, `sampling_thread`'s vendored machinery is live for the first time:
 15 s warmup on the syscall copy, upgrade only if `segv_handler_installed()`, and
@@ -290,9 +294,8 @@ separate extension imported lazily. Both constructor attributes are dropped as
   sample. **Do not call it from `configure`**: `postfork_child` placement-news
   the `ThreadSpanLinks` mutex, and the never-removed `threading` patch can be
   holding it via `unregister_thread` during a reconfigure.
-- `init_safe_copy` runs from `pyroscope_stack_configure` only while
-  `safe_memcpy_initialized` is false, so the handlers install at most once per
-  process. **Do not make it run on every configure**: `init_segv_catcher` only
+- `init_safe_copy` runs from `pyroscope_stack_configure` under a
+  `std::once_flag`, so the handlers install at most once per process. **Do not make it run on every configure**: `init_segv_catcher` only
   skips a signal whose handler is already ours, so after a takeover (abseil,
   PyTorch, `faulthandler.enable()`) it would install ours on top. That makes a handler cycle and undoes
   `sampling_thread`'s permanent fallback. With the guard, a later run sees

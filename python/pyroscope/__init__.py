@@ -36,6 +36,7 @@ def configure(
         mem_enable_mem_domain=True,
         cpu_enabled=True,
         cpu_implementation=ProfilerImplementation.PySpy,
+        cpu_fast_copy=False,
         cpu_fast_copy_warmup=15.0,
 ):
     if app_name is not None:
@@ -74,6 +75,7 @@ def configure(
         mem_enable_mem_domain,
         cpu_enabled,
         cpu_implementation,
+        cpu_fast_copy,
         cpu_fast_copy_warmup,
     )
 

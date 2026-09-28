@@ -33,16 +33,17 @@ probe_process_vm_readv()
     return result == static_cast<ssize_t>(sizeof(src));
 }
 
-// Pyroscope patch: not a constructor; pyroscope_stack_configure calls it.
+// Pyroscope patch: not a constructor; pyroscope_stack_configure calls it, and
+// fast_copy_requested=false opts out like the env var.
 void
-init_safe_copy()
+init_safe_copy(bool fast_copy_requested)
 {
     // Always probe process_vm_readv so we know whether it is a valid fallback.
     process_vm_readv_available = probe_process_vm_readv();
 
     // Honor the fast-copy opt-out: when disabled via env var, skip installing
     // the SIGSEGV/SIGBUS handlers and alt stack entirely.
-    if (fast_copy_env_disabled()) {
+    if (!fast_copy_requested || fast_copy_env_disabled()) {
         if (process_vm_readv_available) {
             safe_copy = process_vm_readv;
         } else {
@@ -69,12 +70,13 @@ init_safe_copy()
     }
 }
 #elif defined PL_DARWIN
-// Pyroscope patch: not a constructor; pyroscope_stack_configure calls it.
+// Pyroscope patch: not a constructor; pyroscope_stack_configure calls it, and
+// fast_copy_requested=false opts out like the env var.
 void
-init_safe_copy()
+init_safe_copy(bool fast_copy_requested)
 {
     // Honor the fast-copy opt-out: skip installing signal handlers when disabled.
-    if (fast_copy_env_disabled()) {
+    if (!fast_copy_requested || fast_copy_env_disabled()) {
         return;
     }
 

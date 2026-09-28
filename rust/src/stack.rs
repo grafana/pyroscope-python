@@ -6,7 +6,7 @@ use prost::Message;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use std::ops::{Deref, DerefMut};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 lazy_static! {
@@ -17,7 +17,7 @@ lazy_static! {
 #[cfg(not(miri))]
 unsafe extern "C" {
     fn pyroscope_stack_bump_upload_seq();
-    fn pyroscope_stack_configure(interval_s: f64, fast_copy_warmup_s: f64);
+    fn pyroscope_stack_configure(interval_s: f64, fast_copy: bool, fast_copy_warmup_s: f64);
     fn pyroscope_stack_is_safe_copy_failed() -> bool;
     fn pyroscope_stack_start() -> bool;
     fn pyroscope_stack_stop();
@@ -39,6 +39,7 @@ fn bump_upload_seq() {}
 #[derive(Clone)]
 pub struct Config {
     pub enabled: bool,
+    pub fast_copy: bool,
     pub fast_copy_warmup_s: f64,
 }
 
@@ -47,6 +48,10 @@ pub struct Config {
 /// `thread_seq_num` unconditionally, and `Sampler::prefork` reads the
 /// counter's *parity* to decide whether to restart after a fork.
 static STARTED: AtomicBool = AtomicBool::new(false);
+
+/// The first `configure()` decides fast copy for the process: its SIGSEGV/SIGBUS
+/// handlers are installed at most once and never removed.
+static FAST_COPY: OnceLock<bool> = OnceLock::new();
 
 /// Start the vendored echion sampler, then register the live threads with it.
 ///
@@ -60,7 +65,15 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
     }
 
     let interval_s = 1.0 / f64::from(sample_rate.max(1));
-    configure(interval_s, config.fast_copy_warmup_s);
+    let fast_copy = *FAST_COPY.get_or_init(|| config.fast_copy);
+    if fast_copy != config.fast_copy {
+        log::warn!(
+            target: "pyroscope-python",
+            "ignoring cpu_fast_copy={}: fast copy is fixed by the first configure() call to {fast_copy}",
+            config.fast_copy
+        );
+    }
+    configure(interval_s, fast_copy, config.fast_copy_warmup_s);
 
     if is_safe_copy_failed() {
         log::error!(
@@ -92,8 +105,8 @@ pub fn stop(py: Python<'_>) {
 }
 
 #[cfg(not(miri))]
-fn configure(interval_s: f64, fast_copy_warmup_s: f64) {
-    unsafe { pyroscope_stack_configure(interval_s, fast_copy_warmup_s) }
+fn configure(interval_s: f64, fast_copy: bool, fast_copy_warmup_s: f64) {
+    unsafe { pyroscope_stack_configure(interval_s, fast_copy, fast_copy_warmup_s) }
 }
 
 #[cfg(not(miri))]
@@ -112,7 +125,7 @@ fn sampler_stop() {
 }
 
 #[cfg(miri)]
-fn configure(_interval_s: f64, _fast_copy_warmup_s: f64) {}
+fn configure(_interval_s: f64, _fast_copy: bool, _fast_copy_warmup_s: f64) {}
 
 #[cfg(miri)]
 fn is_safe_copy_failed() -> bool {

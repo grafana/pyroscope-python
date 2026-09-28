@@ -125,9 +125,11 @@ the detail; do not read any of them as a decision to preserve.
   adaptation on without plumbing the sampler's real interval through would make
   `period` a lie.
 
-Fast copy (`safe_memcpy`) is on by default, unlike upstream, and its
-SIGSEGV/SIGBUS handlers install from `configure()`, not at import.
-`_DD_PROFILING_STACK_FAST_COPY=0` is the only opt-out, as upstream.
+Fast copy (`safe_memcpy`) is opt-in via `configure(cpu_fast_copy=True)`, unlike
+upstream, and its SIGSEGV/SIGBUS handlers install from `configure()`, not at
+import. The first `configure()` fixes the choice for the process; handlers are
+never uninstalled. `_DD_PROFILING_STACK_FAST_COPY=0` still overrides it, and
+`cpu_fast_copy_warmup` sets the syscall-copy warmup (default 15 s).
 
 `stack_todo.md` is the tracking doc -- blocking work, gaps the port opened,
 free-threaded-build questions, and the TODOs inherited from upstream, kept

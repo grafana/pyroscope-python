@@ -40,6 +40,7 @@ def expect(cond, message):
 
 def configure(**kwargs):
     kwargs.setdefault("cpu_implementation", pyroscope.ProfilerImplementation.Stack)
+    kwargs.setdefault("cpu_fast_copy", True)
     kwargs.setdefault("cpu_fast_copy_warmup", WARMUP_SECONDS)
     expect(
         pyroscope.configure(
@@ -79,6 +80,20 @@ def import_installs_nothing():
 def pyspy_and_memory_install_nothing():
     configure(cpu_implementation=pyroscope.ProfilerImplementation.PySpy, mem_enabled=True)
     expect(handlers() == (0, 0), f"py-spy + memory installed handlers: {handlers()}")
+    shutdown()
+
+
+def default_installs_nothing():
+    configure(cpu_fast_copy=False)
+    expect(handlers() == (0, 0), f"fast copy off installed handlers: {handlers()}")
+    shutdown()
+
+
+def first_configure_wins():
+    configure(cpu_fast_copy=False)
+    shutdown()
+    configure(cpu_fast_copy=True)
+    expect(handlers() == (0, 0), f"a later configure() changed fast copy: {handlers()}")
     shutdown()
 
 
@@ -167,6 +182,8 @@ class Scenario(NamedTuple):
 SCENARIOS = {
     "import_installs_nothing": Scenario(),
     "pyspy_and_memory_install_nothing": Scenario(),
+    "default_installs_nothing": Scenario(),
+    "first_configure_wins": Scenario(),
     "stack_installs_both": Scenario(),
     "env_opt_out_installs_nothing": Scenario(env={"_DD_PROFILING_STACK_FAST_COPY": "0"}),
     "reconfigure_keeps_handlers": Scenario(),

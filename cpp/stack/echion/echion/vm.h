@@ -78,10 +78,11 @@ inline ssize_t (*safe_copy)(pid_t,
  *
  * Tries safe_memcpy first (unless disabled via env var), falls back to
  * mach_vm_read_overwrite.
- * Pyroscope patch: called from configure(), not at static init.
+ * Pyroscope patch: called from configure(), not at static init, and fast copy
+ * is opt-in: fast_copy_requested=false takes the env opt-out path.
  */
 void
-init_safe_copy();
+init_safe_copy(bool fast_copy_requested);
 
 // Switch the active copy method at runtime.  Must be called before the
 // sampling thread is started.

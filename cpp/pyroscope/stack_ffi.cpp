@@ -13,11 +13,10 @@
  * installed at most once per process: reinstalling over a foreign handler would
  * undo sampling_thread's permanent fallback. Adaptive sampling stays off. */
 extern "C" void
-pyroscope_stack_configure(double interval_s, double fast_copy_warmup_s)
+pyroscope_stack_configure(double interval_s, bool fast_copy, double fast_copy_warmup_s)
 {
-    if (!safe_memcpy_initialized) {
-        init_safe_copy();
-    }
+    static std::once_flag safe_copy_once;
+    std::call_once(safe_copy_once, init_safe_copy, fast_copy);
     set_fast_copy_enabled(safe_memcpy_initialized);
     Datadog::Sampler::get().set_adaptive_sampling(false);
     Datadog::Sampler::get().set_interval(interval_s);
