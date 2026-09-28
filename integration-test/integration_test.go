@@ -29,6 +29,7 @@ const (
 type profileConfig struct {
 	onCPU   bool
 	gilOnly bool
+	stack   bool
 }
 
 func TestPythonProfilerOnCPUWithGILOnly(t *testing.T) {
@@ -45,6 +46,10 @@ func TestPythonProfilerOffCPUWithGILOnly(t *testing.T) {
 
 func TestPythonProfilerOffCPUWithoutGILOnly(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: false, gilOnly: false})
+}
+
+func TestPythonStackProfilerOnCPU(t *testing.T) {
+	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, stack: true})
 }
 
 func TestPythonNonCPUIntegrationSuites(t *testing.T) {
@@ -253,7 +258,13 @@ func startPyroscope(t *testing.T, net *dockertest.Network) string {
 		ExposedPorts:   []string{"4040/tcp"},
 		Network:        net.Name,
 		NetworkAliases: []string{"pyroscope"},
-		WaitFor:        dockertest.WaitForHTTP("/ready", "4040/tcp", 2*time.Minute),
+		Cmd: []string{
+			"-config.file=/etc/pyroscope/config.yaml",
+			"-ingester.min-ready-duration=0s",
+			"-segment-writer.min-ready-duration=0s",
+			"-metastore.min-ready-duration=0s",
+		},
+		WaitFor: dockertest.WaitForHTTP("/ready", "4040/tcp", 2*time.Minute),
 	})
 	return fmt.Sprintf("http://%s", c.HostPort(t, "4040/tcp"))
 }
@@ -271,6 +282,7 @@ func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string
 			"PYROSCOPE_SERVER_ADDRESS":      "http://pyroscope:4040",
 			"ONCPU":                         boolString(cfg.onCPU),
 			"GIL_ONLY":                      boolString(cfg.gilOnly),
+			"CPU_IMPLEMENTATION":            cfg.implementation(),
 			"CANARY":                        canary,
 			"PIP_DISABLE_PIP_VERSION_CHECK": "1",
 		},
@@ -483,6 +495,13 @@ func boolString(v bool) string {
 	return "false"
 }
 
+func (c profileConfig) implementation() string {
+	if c.stack {
+		return "Stack"
+	}
+	return "PySpy"
+}
+
 func (c profileConfig) String() string {
-	return fmt.Sprintf("oncpu=%s/gil_only=%s", boolString(c.onCPU), boolString(c.gilOnly))
+	return fmt.Sprintf("oncpu=%s/gil_only=%s/impl=%s", boolString(c.onCPU), boolString(c.gilOnly), c.implementation())
 }
