@@ -1180,7 +1180,7 @@ dependencies = [
 [[package]]
 name = "py-spy"
 version = "0.4.2"
-source = "git+https://github.com/grafana/pyroscope-py-spy?rev=a37289f#a37289f7ad84d4d5d5fd38540b235ebf281a1f39"
+source = "git+https://github.com/grafana/pyroscope-py-spy?rev=e9858c0#e9858c037e796327391708f43d454ec611594ecc"
 dependencies = [
  "anyhow",
  "chrono",
