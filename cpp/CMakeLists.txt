@@ -154,14 +154,12 @@ target_compile_definitions(pyroscope_stack PRIVATE
 # been vetted against -Wold-style-cast. Omitted on purpose: -ffunction-sections
 # (the cmake crate already adds it) and the -Os/LTO/linker options, which are
 # the cmake crate's business here.
-#
-# -Werror is also omitted, but no longer because cpp/stack fails to build -- it
-# now compiles warning-free under both Apple clang and gcc 13 with the flags
-# below. The wheels are built in manylinux and musllinux images on older gcc
-# releases whose diagnostics we have not seen, and a warning we cannot reproduce
-# locally would hard-fail a release build rather than the dev loop. Turn it on
-# once CI has been green across the full image matrix for a while.
 target_compile_options(pyroscope_stack PRIVATE -Wshadow -Wnon-virtual-dtor -Wold-style-cast)
+
+# Per target, never in add_compile_options: the FetchContent'd abseil inherits
+# those, and it is not warning-free (144 warnings under clang 21).
+target_compile_options(pyroscope_memalloc PRIVATE -Werror)
+target_compile_options(pyroscope_stack PRIVATE -Werror)
 
 # LINKER_LANGUAGE is required: a target whose only sources are TARGET_OBJECTS
 # gives CMake nothing to infer the language from.

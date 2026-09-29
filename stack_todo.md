@@ -16,9 +16,6 @@ kept as a record. Cite a symbol, not a line number.
   Cause not investigated. Wants an integration test:
   `integration-test/integration_test.go` covers the concurrent case
   (`testPythonConcurrentConfigureShutdown`) but not the sequential restart.
-- **`-Werror` is off** (`cpp/CMakeLists.txt`). `cpp/stack` is warning-free under
-  Apple clang and gcc 13.3, but release wheels build on older
-  manylinux/musllinux gcc whose diagnostics would hard-fail a release.
 - **Fix the fast-copy warmup handler-swap gap**, and file it upstream and here.
   Gate `uninstall_segv_handler` / `reinstall_segv_handler` on "fast copy
   requested and `safe_memcpy_initialized`" rather than on `fast_copy_active`;

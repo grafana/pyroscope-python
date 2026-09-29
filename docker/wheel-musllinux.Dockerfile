@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.23@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 ARG PLATFORM=x86_64
-FROM quay.io/pypa/musllinux_1_2_${PLATFORM} AS builder
+FROM quay.io/pypa/musllinux_1_2_${PLATFORM}:2026.09.26-1 AS builder
 ARG OPENSSL_VERSION=3.5.8
 
-RUN apk add --no-cache gcc musl-dev make perl linux-headers
+RUN apk add --no-cache gcc g++ clang20 musl-dev make perl linux-headers
 
 # Build OpenSSL from source
 RUN curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
@@ -19,6 +19,9 @@ RUN curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${O
 
 ENV OPENSSL_DIR=/usr/local/openssl
 ENV OPENSSL_STATIC=1
+
+ENV CC=clang
+ENV CXX=clang++
 
 RUN adduser -D builder \
     && mkdir -p /pyroscope-python \
