@@ -16,6 +16,9 @@ import pyroscope
 app_name = 'pyroscopers.python.test.stack.async'
 logger = logging.getLogger()
 
+cpu_profile_type = 'process_cpu:cpu:nanoseconds:cpu:nanoseconds'
+wall_profile_type = 'process_cpu:wall:nanoseconds:cpu:nanoseconds'
+
 cpu_async = os.getenv('CPU_ASYNC', '1') == '1'
 use_uvloop = os.getenv('UVLOOP', '0') == '1'
 configure_inside_loop = os.getenv('CONFIGURE_INSIDE_LOOP', '0') == '1'
@@ -64,7 +67,7 @@ def wait_render(profile_type, canary, needle):
             logging.info('render body %s', body.decode('utf-8'))
             if code == 200 and body != b'' and needle in body:
                 print(f'good {profile_type} {canary}')
-                return
+                return body
         except Exception:
             if response is not None:
                 response.close()
@@ -119,13 +122,21 @@ def main():
         configure(canary)
 
     done = threading.Event()
+    failures = []
 
     def check():
-        wait_render('process_cpu:cpu:nanoseconds:cpu:nanoseconds', canary, b'async_cpuburn')
-        # A coroutine parked in await is not on the thread stack, so this frame
-        # can only have come from echion's task unwinder.
-        wait_render('process_cpu:wall:nanoseconds:cpu:nanoseconds', canary, b'async_idle_forever')
-        done.set()
+        try:
+            wait_render(cpu_profile_type, canary, b'async_cpuburn')
+            if cpu_async:
+                # A coroutine parked in await is not on the thread stack, so this
+                # frame can only have come from echion's task unwinder.
+                wait_render(wall_profile_type, canary, b'async_idle_forever')
+            else:
+                wall = wait_render(wall_profile_type, canary, b'async_cpuburn')
+                if b'async_idle_forever' in wall:
+                    failures.append('async_idle_forever rendered with cpu_async off')
+        finally:
+            done.set()
 
     checker = threading.Thread(target=check)
     checker.start()
@@ -142,6 +153,7 @@ def main():
     alarm.cancel()
     checker.join()
     pyroscope.shutdown()
+    assert not failures, failures
     logging.info('done')
 
 
