@@ -96,7 +96,8 @@ Two commits, unrelated but tiny.
 `ffi.rs`/`ffikit.rs`/`lib.rs`, `pyroscope.rs`'s `process_cpu` dump,
 `session.rs`'s `disabled_stack_config`, `ProfilerImplementation` and the eight
 `cpu_*` knobs, `test_stack_cpu.py`, `fork_workload.py`,
-`sighandler_workload.py` and their Go tests, and the four tracking docs.
+`sighandler_workload.py`, `restart_workload.py` and their Go tests, and the four
+tracking docs.
 
 For that PR's description: 29 of the 39 files under `cpp/stack/` are
 byte-identical to upstream (3577 lines); only `include/sampler.hpp`,

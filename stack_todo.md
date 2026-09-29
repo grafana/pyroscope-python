@@ -11,11 +11,11 @@ kept as a record. Cite a symbol, not a line number.
 
 ## Open
 
-- **No samples after `configure()` -> `shutdown()` -> `configure()`.** The
-  second run in one process uploads no cpu/wall samples for its canary tag.
-  Cause not investigated. Wants an integration test:
-  `integration-test/integration_test.go` covers the concurrent case
-  (`testPythonConcurrentConfigureShutdown`) but not the sequential restart.
+- **No samples after `configure()` -> `shutdown()` -> `configure()`.**
+  `StackRenderer::string_id_cache` outlives the `interner::clear()` that
+  `ffikit::stop_profilers` runs on shutdown, so every second-run upload is
+  rejected with `400 function name string index out of range`. Pinned red by
+  `TestPythonStackProfilerRestart`.
 - **Fix the fast-copy warmup handler-swap gap**, and file it upstream and here.
   Gate `uninstall_segv_handler` / `reinstall_segv_handler` on "fast copy
   requested and `safe_memcpy_initialized`" rather than on `fast_copy_active`;

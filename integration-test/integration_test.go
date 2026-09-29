@@ -52,6 +52,31 @@ func TestPythonStackProfilerOnCPU(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, stack: true})
 }
 
+// TODO(Pyroscope): red until the sampler survives a restart, see stack_todo.md.
+func TestPythonStackProfilerRestart(t *testing.T) {
+	wheelDir := ensureWheel(t)
+
+	net := dockertest.CreateNetwork(t)
+	pyroscopeURL := startPyroscope(t, net)
+	appName := fmt.Sprintf("pyroscopers.python.test.restart.%d", time.Now().UnixNano())
+	canaryFirst := randomHex(t, 16)
+	canarySecond := randomHex(t, 16)
+	workload := startPythonTestContainer(t, net, wheelDir, "restart_workload.py", map[string]string{
+		"PYROSCOPE_APPLICATION_NAME": appName,
+		"CANARY_FIRST":               canaryFirst,
+		"CANARY_SECOND":              canarySecond,
+	})
+	t.Cleanup(func() {
+		workload.Stop(t, 30*time.Second)
+	})
+
+	selector := func(canary string) string {
+		return fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
+	}
+	requireProfileContains(t, workload, pyroscopeURL, selector(canaryFirst), "burn_first", 4*time.Minute)
+	requireProfileContains(t, workload, pyroscopeURL, selector(canarySecond), "burn_second", 3*time.Minute)
+}
+
 func TestPythonNonCPUIntegrationSuites(t *testing.T) {
 	t.Run("memory profiler", testPythonMemoryProfiler)
 	t.Run("concurrent configure shutdown", testPythonConcurrentConfigureShutdown)
@@ -336,6 +361,43 @@ func requireContainerExit(t *testing.T, container *dockertest.Container, expecte
 	if code != expected {
 		t.Fatalf("container exited with %d, expected %d\nlogs:\n%s", code, expected, container.Logs(t))
 	}
+}
+
+// The workload is expected to outlive the poll, so its exit means one of its
+// own assertions tripped rather than that the samples went missing.
+func requireProfileContains(
+	t *testing.T,
+	workload *dockertest.Container,
+	pyroscopeURL string,
+	labelSelector string,
+	needle string,
+	timeout time.Duration,
+) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		state, err := workload.State()
+		if err != nil {
+			t.Logf("failed to inspect workload container: %v", err)
+			return false
+		}
+		if !state.Running {
+			t.Fatalf(
+				"workload container exited with %d while waiting for %s\nlogs:\n%s",
+				state.ExitCode, needle, workload.Logs(t),
+			)
+		}
+
+		collapsed, err := queryProfile(pyroscopeURL, cpuProfileTypeID, labelSelector)
+		if err != nil {
+			t.Logf("query failed for %s: %v", needle, err)
+			return false
+		}
+		if !strings.Contains(collapsed, needle) {
+			t.Logf("profile %s does not contain %s yet:\n%s", labelSelector, needle, collapsed)
+			return false
+		}
+		return true
+	}, timeout, 5*time.Second, "expected %s samples in %s", needle, labelSelector)
 }
 
 func queryProfile(pyroscopeURL string, profileTypeID string, labelSelector string) (string, error) {
