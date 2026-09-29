@@ -22,6 +22,7 @@
  * dedup"). */
 
 #include "Pyroscope.h"
+#include "profiler_stats.hpp"
 
 namespace Datadog {
 

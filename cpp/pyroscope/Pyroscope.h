@@ -43,11 +43,19 @@ namespace Pyroscope
         {
         }
 
-        void set_string_table_ephemeral_count([[maybe_unused]] size_t count)
+        void set_fast_copy_memory_enabled([[maybe_unused]] bool enabled)
         {
         }
 
-        void set_fast_copy_memory_enabled([[maybe_unused]] bool enabled)
+        void set_fast_copy_memory_user_disabled([[maybe_unused]] bool disabled)
+        {
+        }
+
+        void set_fast_copy_memory_capable([[maybe_unused]] bool capable)
+        {
+        }
+
+        void set_fast_copy_memory_syscall_fallback([[maybe_unused]] bool fallback)
         {
         }
 
@@ -263,6 +271,21 @@ namespace Pyroscope
         }
 
         void push_task_name([[maybe_unused]] const std::string_view task_name)
+        {
+            // no-op
+        }
+
+        void push_task_id([[maybe_unused]] uint64_t task_id)
+        {
+            // no-op
+        }
+
+        void push_origin_task_id([[maybe_unused]] uint64_t origin_task_id)
+        {
+            // no-op
+        }
+
+        void push_origin_task_name([[maybe_unused]] const std::string_view origin_task_name)
         {
             // no-op
         }

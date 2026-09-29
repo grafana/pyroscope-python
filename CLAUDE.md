@@ -35,11 +35,32 @@ every upstream file into one of three buckets:
 Upstream checkout for reference: `~/dd/dd-trace-py`, under
 `ddtrace/internal/datadog/profiling/`.
 
+## Vendor provenance
+
+`cpp/stack/` and `cpp/profiling_helpers/` mirror dd-trace-py's
+`ddtrace/internal/datadog/profiling/{stack,profiling_helpers}/`. Upstream's
+`test/`, `fuzz/`, `__init__.py` and `*.pyi` are not vendored; every other file
+keeps its upstream name and path.
+
+- Imported at upstream `e3e9cf987eededa1424760bdca56b4dce0187a35` (2026-07-27),
+  which is on upstream's `4.11` release branch, not `main`.
+- Now at upstream `ba4c160b68815648265939bd16fd24850090457b` (`main`,
+  2026-09-29).
+
+The `dd` branch is the record. It is rooted at the pristine import commit
+`732077e` and gains one commit per sync holding upstream's tree under our
+paths; a sync is that commit plus `git merge dd`, so every conflict is a patch
+of ours that upstream moved.
+
+`cpp/dd_wrapper/` is not mirrored -- most of it is shims. `clock.hpp`,
+`constants.hpp`, `defer.hpp` and `scope.hpp` are verbatim upstream and are
+hand-synced.
+
 ## Layout
 
 | Path | Origin | Notes |
 |---|---|---|
-| `cpp/stack/` | upstream `profiling/stack/` | The echion CPU sampler. `echion/` subdir kept; `stack_v2` flattened to `stack`. Runs and produces data. Upstream's `stack/src/stack.cpp` (the `_stack` CPython module) is **deleted**, replaced by `cpp/pyroscope/stack_ffi.cpp`. |
+| `cpp/stack/` | upstream `profiling/stack/` | The echion CPU sampler, mirrored path for path. Runs and produces data. Upstream's `stack/src/stack.cpp` (the `_stack` CPython module) is **deleted**, replaced by `cpp/pyroscope/stack_ffi.cpp`. |
 | `cpp/dd_wrapper/` | upstream `profiling/dd_wrapper/` | Upstream's shared C++ layer. Mostly our shims; a few verbatim copies. |
 | `cpp/memalloc/` | upstream `profiling/memalloc/` | Memory profiler. Done and shipping. |
 | `cpp/pyroscope/Pyroscope.h` | ours | The central shim: `Sample`, `intern_string`, `string_id`, `ProfilerStats`, `ProfileBorrow`. Shared by both profilers. |

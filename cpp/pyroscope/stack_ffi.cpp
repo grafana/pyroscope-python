@@ -2,7 +2,7 @@
 #include "dd_wrapper/include/sample_manager.hpp"
 #include "pyroscope_ffi.h"
 #include "sampler.hpp"
-#include "thread_span_links.hpp"
+#include "span_links.hpp"
 
 #include "echion/echion_sampler.h"
 #include "echion/vm.h"
@@ -42,6 +42,7 @@ pyroscope_stack_configure(double interval_s,
     set_fast_copy_enabled(safe_memcpy_initialized);
     Datadog::SampleManager::set_max_nframes(max_nframes);
     auto& sampler = Datadog::Sampler::get();
+    sampler.set_max_frames(max_nframes);
     sampler.set_max_threads_per_sample(max_threads);
     sampler.set_adaptive_sampling(adaptive_sampling);
     if (std::isfinite(target_overhead) && target_overhead >= g_min_target_overhead) {
@@ -141,7 +142,7 @@ extern "C" void
 pyroscope_stack_unregister_thread(uint64_t id)
 {
     Datadog::Sampler::get().unregister_thread(id);
-    Datadog::ThreadSpanLinks::get_instance().unlink_span(id);
+    Datadog::SpanLinks::get_instance().unlink_span(id);
 }
 
 extern "C" size_t

@@ -41,10 +41,11 @@ work.
 
 ### Wall time is multiplied by the leaf task count
 
-`cpp/stack/src/echion/threads.cc` (`ThreadInfo::sample`). Every leaf asyncio
-task or greenlet stack pushes the same per-cycle thread delta, so 50 tasks
-contribute 50x the elapsed wall time. Upstream's intended per-task attribution;
-the consequence is that `wall` totals must never be checked against wall-clock
+`cpp/stack/src/echion/threads.cc` (`unwind_tasks`). Every leaf asyncio task or
+greenlet stack pushes the same per-cycle thread delta, so 50 tasks contribute
+50x the elapsed wall time. Upstream only scales once the count exceeds
+`max_tasks_per_sample` (50), which nothing here raises or lowers. The
+consequence is that `wall` totals must never be checked against wall-clock
 elapsed.
 
 ### The task credited as on-CPU may not be the one that was on CPU
@@ -53,12 +54,6 @@ elapsed.
 stack is captured out-of-band, so the coroutine and sync halves can be
 mis-spliced. Upstream's fix -- match every task stack against the thread stack
 -- costs real work per sample, and they report never observing the race.
-
-### The task-name frame is consumed rather than also emitted
-
-`cpp/stack/src/stack_renderer.cpp` (`render_frame`, upstream's TODO). echion
-pushes a dummy frame with line 0 carrying the task name; the renderer takes the
-name and returns early.
 
 ### `TaskInfo::unwind` does not check for a running task
 
@@ -72,9 +67,10 @@ Fixing it means defining what that signal does to the renderer contract.
 
 ### `adapt_sampling_interval` casts before it clamps
 
-`cpp/stack/src/sampler.cpp`. `static_cast<microsecond_t>(interval * (delta /
-overhead))` runs before the min/max clamp below it, so a small enough
-`target_overhead` divisor makes the conversion undefined. Closed from outside
+`cpp/stack/src/sampler.cpp`. `static_cast<microsecond_t>(interval *
+(sampler_thread_delta / budget))` runs before the min/max clamp below it, and
+`budget` is only floored when it is non-positive, so a small enough
+`target_overhead` still makes the conversion undefined. Closed from outside
 instead: `pyroscope_stack_configure` rejects anything below
 `g_min_target_overhead` (1e-4).
 
@@ -92,9 +88,10 @@ missing, and self-diagnostics are out of scope (`stack_scope.md`).
 `rust/src/stack.rs` (`mod threads`). Registration hangs off
 `Thread._set_native_id` / `_bootstrap_inner` plus a one-time sweep of
 `threading._active`, so raw `_thread.start_new_thread` threads, C-created
-threads and late `_DummyThread`s never register. The alternative -- filling the
-map inside `for_each_thread` -- means `pthread_getcpuclockid` on a `pthread_t`
-read out-of-band, a use-after-free if that thread has exited.
+threads and late `_DummyThread`s never register. The alternative --
+filling the map inside `for_each_thread` -- means reading each thread's name and
+kernel TID out-of-band, which `ThreadInfo::create` no longer needs a live
+`pthread_t` for since upstream derived the Linux clock from `native_id`.
 
 ### `threading` stays patched after `shutdown()`
 
@@ -109,12 +106,13 @@ up.
 Harmless: `for_each_thread` looks entries up by `tstate.thread_id` and never
 matches it.
 
-### `pyroscope_stack_stop` skips upstream's two resets
+### `pyroscope_stack_stop` skips upstream's three resets
 
 `cpp/pyroscope/stack_ffi.cpp`. Upstream's `stack_stop` also runs
-`ThreadSpanLinks::reset()` and `native_call_registry.reset()`; both are dead
-code here because nothing populates either. Restore each with whichever feature
-starts populating its structure.
+`SpanLinks::reset()`, `OriginTaskLinks::disable_and_reset()` and
+`native_call_registry.reset()`; all three are dead code here because nothing
+populates any of them. Restore each with whichever feature starts populating
+its structure.
 
 ### The cpu/wall profile is dropped when py-spy is also running
 
@@ -139,5 +137,6 @@ CPU time doubles.
 
 `cpp/dd_wrapper/include/sample_manager.hpp`. The `thread_local` stand-in for
 upstream's `StaticSamplePool` is sound only because only the sampling thread
-renders and `render_stack_end` always pairs `flush_sample()` with
-`drop_sample()`. Neither is asserted.
+renders; `unique_ptr<Sample, SampleDropper>` now enforces the start/drop
+pairing, and `postfork_child`'s `release()` leaks nothing here because the
+storage is static. The single-renderer half is still unasserted.

@@ -110,13 +110,15 @@ set(STACK_SOURCES
         stack/src/echion/tasks.cc
         stack/src/echion/threads.cc
         stack/src/echion/vm.cc
+        stack/src/gc_frame_tracker.cpp
+        stack/src/origin_task_links.cpp
         stack/src/sampler.cpp
+        stack/src/span_links.cpp
         # Pyroscope patch: upstream's stack/src/stack.cpp is deleted, not just
         # unbuilt. It was the _stack CPython module, replaced by the extern "C"
         # shims in pyroscope/stack_ffi.cpp, and carried the sys.monitoring
         # native-call tracker the first iteration does not enable.
         stack/src/stack_renderer.cpp
-        stack/src/thread_span_links.cpp
 )
 
 set(FULL_EXTENSION_NAME "datadog_mem_profiler")

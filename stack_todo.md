@@ -11,7 +11,14 @@ kept as a record. Cite a symbol, not a line number.
 
 ## Open
 
-Nothing.
+- **The new upstream knobs are not exposed.** `set_gc_enabled`,
+  `set_max_tasks_per_sample`, `set_baseline_core_pct`, `set_p_stable_window_s`
+  and `set_p_stable_percentile` all sit at their upstream defaults because
+  `pyroscope_stack_configure` does not pass them; `configure()` has no kwarg
+  for any of them.
+- **The sampling thread can die unreported.** `Sampler::sampling_thread`
+  catches, stashes and `break`s; `take_sampling_thread_error` has no caller
+  here, so a dead sampler looks like an idle one.
 
 ## Traps
 
@@ -19,11 +26,8 @@ Nothing.
   `Sampler::start` runs `one_time_setup`, which reaches
   `EchionSampler::postfork_child()` and placement-news `thread_info_map_`, so
   any earlier registration is discarded.
-- **`stack::stop` only runs when `STARTED`.** `Sampler::stop()` bumps
-  `thread_seq_num` unconditionally and `Sampler::prefork` reads its parity, so
-  stopping a sampler that never started makes a later fork resurrect it.
-- **Never call `stack_init` from `configure`.** Its
-  `ThreadSpanLinks::postfork_child` placement-news a mutex the never-removed
+- **Never call `stack_init` from `configure`.** Its `SpanLinks::postfork_child`
+  and `OriginTaskLinks::postfork_child` placement-new mutexes the never-removed
   `threading` patch can be holding.
 - **`init_safe_copy` stays under its `std::once_flag`.** A second run would
   install our SIGSEGV handler on top of a foreign one and undo
@@ -33,8 +37,9 @@ Nothing.
 - **Restore the SYSTEM marking on `stack/include/util`** if
   `stack/src/stack.cpp` ever comes back -- it silenced `-Wold-style-cast` and
   `-Wcast-function-type-mismatch` on `cast_to_pyfunc.hpp`.
-- **Restore `ThreadSpanLinks::reset()` and `native_call_registry.reset()`** in
-  `pyroscope_stack_stop` with whichever feature starts populating them.
+- **Restore `SpanLinks::reset()`, `OriginTaskLinks::disable_and_reset()` and
+  `native_call_registry.reset()`** in `pyroscope_stack_stop` with whichever
+  feature starts populating them.
 - **`reset_string_cache` only runs when `STARTED`.** It rides on
   `pyroscope_stack_stop`, while `interner::clear` runs unconditionally, so the
   two agree only because the cache cannot be non-empty unless the sampler
@@ -43,9 +48,15 @@ Nothing.
 - **Do not spell `BITS_TO_PTR_MASKED` as `PyStackRef_AsPyObjectBorrow`.** Under
   `Py_STACKREF_DEBUG` the latter consults a debug table, which is wrong for a
   stackref copied out of another process.
-- **On the next vendor sync, re-delete `Datadog::PauseResult`.** It returns in
+- **On every vendor sync, re-delete `Datadog::PauseResult`.** It comes back in
   `sampler.hpp` and in three `Sampler::pause` returns; keeping
   `SamplerPauseResult` is what makes an upstream variant change a compile error.
+- **`cpu_fast_copy=True` is refused for embedded interpreters.** Upstream's
+  `is_python_embedded()` in `init_safe_copy` treats an unreadable
+  `/proc/self/exe` as embedded, so fast copy silently stays on the syscall copy.
+- **Enabling GC frames takes more than `set_gc_enabled`.** Upstream's
+  `stack_start_impl` also pairs `GCFrameTracker::install_current_interpreter()`
+  with an uninstall on stop, both under the GIL.
 
 ## Verification
 
