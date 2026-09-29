@@ -15,6 +15,10 @@ no write-up of how to implement it.
   `push_origin_task_name`, `push_span_id`, `push_local_root_span_id`,
   `push_trace_type` and `push_monotonic_ns` are no-ops in
   `cpp/pyroscope/Pyroscope.h`.
+- **No dropped-frame count.** `Sample::incr_dropped_frames` sets a flag and
+  `export_sample` appends a countless `<truncated>` frame, where upstream
+  appends `<N frame(s) omitted>`. Every producer increments once and breaks, so
+  the count upstream prints is always 1.
 - **No `samples/count` sample type.** `FFISampleValues` has no count slots and
   every call site passes a count of 1.
 

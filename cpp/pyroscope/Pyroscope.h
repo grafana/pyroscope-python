@@ -153,6 +153,18 @@ namespace Pyroscope
         size_t max_nframes;
         PprofBuilderType builder_type;
         FFISampleValues values{};
+        bool truncated = false;
+
+        void push_frame_impl(const string_id function_name, const string_id file_name, const int line)
+        {
+            frames.emplace_back(
+                FFIFrame{
+                    .function_name = function_name,
+                    .file_name = file_name,
+                    .line = line,
+                }
+            );
+        }
 
     public:
         /* The leading underscore matches upstream's Sample(SampleType,
@@ -162,7 +174,7 @@ namespace Pyroscope
         Sample(const size_t _max_nframes, const PprofBuilderType _builder_type)
             : max_nframes{_max_nframes}, builder_type{_builder_type}
         {
-            frames.reserve(max_nframes);
+            frames.reserve(max_nframes + 1);
         }
 
 
@@ -174,13 +186,7 @@ namespace Pyroscope
                 incr_dropped_frames();
                 return;
             }
-            frames.emplace_back(
-                FFIFrame{
-                    .function_name = function_name,
-                    .file_name = file_name,
-                    .line = line,
-                }
-            );
+            push_frame_impl(function_name, file_name, line);
         }
 
 
@@ -226,10 +232,18 @@ namespace Pyroscope
         {
             values = {};
             frames.clear();
+            truncated = false;
         }
 
-        void export_sample() const
+        void export_sample()
         {
+            if (truncated)
+            {
+                static constexpr std::string_view marker = "<truncated>";
+                const string_id id = intern_string(marker);
+                push_frame_impl(id, id, 0);
+                truncated = false;
+            }
             pyroscope_push_sample(builder_type, frames.data(), frames.size(), &values);
         }
 
@@ -297,9 +311,11 @@ namespace Pyroscope
             clear();
         }
 
-        void incr_dropped_frames()
+        // Pyroscope patch: appends one countless "<truncated>" frame where
+        // upstream appends "<N frame(s) omitted>".
+        void incr_dropped_frames([[maybe_unused]] size_t count = 1)
         {
-            // no-op
+            truncated = true;
         }
 
         /* Stats sink for the vendored stack sampler; see ProfilerStats. */

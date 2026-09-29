@@ -23,9 +23,6 @@ kept as a record. Cite a symbol, not a line number.
   fast-copy flags included, while `Sampler::sampling_thread` computes all of
   them each cycle; `copy_memory_error_count` and `sample_capture_cpu_time_us`
   are the two worth a sink.
-- **Emit upstream's `<N frames omitted>` frame.** `Sample::incr_dropped_frames`
-  is a no-op, so frames past `max_nframes` vanish silently. Upstream appends the
-  marker in `Sample::export_sample`; `_memalloc_tb.cpp` feeds the counter too.
 - **Non-UTF-8 frame names are undefined behaviour.**
   `pyroscope_string_table_intern_string` calls `from_utf8_unchecked` on bytes
   copied out of another process. libdatadog sanitized lossily at that boundary;
@@ -80,7 +77,9 @@ kept as a record. Cite a symbol, not a line number.
 ## Verification
 
 `scripts/tests/test_stack_cpu.py` is the only test that proves samples are
-produced. Build commands are in `CLAUDE.md`.
+produced, and `scripts/tests/test_truncated_frames.py` the only one that proves
+a truncated stack carries its `<truncated>` marker. Build commands are in
+`CLAUDE.md`.
 
 - After touching `ffikit`, run `test_memory.py`, `test_concurrency.py` and
   `test_atexit.py` too, and run the concurrency shape with
