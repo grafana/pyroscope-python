@@ -306,7 +306,7 @@ extern "C" int memalloc_start(    uint16_t max_nframe,
 
     global_memalloc_ctx.max_nframe = (uint16_t)max_nframe;
 
-    if (heap_sample_size < 0 || heap_sample_size > MAX_HEAP_SAMPLE_SIZE) {
+    if (heap_sample_size > MAX_HEAP_SAMPLE_SIZE) {
         PyErr_Format(PyExc_ValueError, "the heap sample size must be in range [0; %u]", MAX_HEAP_SAMPLE_SIZE);
         return -1;
     }
