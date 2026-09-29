@@ -74,6 +74,9 @@ class StackRenderer
 
     // Clear caches after fork to avoid using stale interned string/function IDs
     void postfork_child();
+
+    // Pyroscope patch: no upstream equivalent; see pyroscope_stack_stop.
+    void reset_string_cache();
 };
 
 } // namespace Datadog

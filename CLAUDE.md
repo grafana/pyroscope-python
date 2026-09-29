@@ -62,6 +62,10 @@ upstream path over editing a vendored source.
   `stack_todo.md`. Put the explanation in `stack_todo.md`, not at the site.
 - A defect we decide to live with goes in `stack_known_bugs.md`, with the reason
   we are not fixing it. Do not re-file it as work in `stack_todo.md`.
+- We do not fix upstream's bugs in this integration, and we do not report them
+  upstream either. An inherited defect gets documented in
+  `stack_known_bugs.md` and left alone; it never becomes work in
+  `stack_todo.md`.
 - Something we have decided not to do goes in `stack_scope.md`, and stays there.
   It is not work: do not file it in `stack_todo.md`, and do not write up how it
   would be implemented.

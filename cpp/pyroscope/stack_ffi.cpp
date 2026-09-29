@@ -80,10 +80,15 @@ pyroscope_stack_start()
     return Datadog::Sampler::get().start();
 }
 
+/* Pyroscope patch: ffikit::stop_profilers clears the string table right after
+ * this returns, so the renderer's ids have to be dropped here -- after stop()
+ * has joined the sampling thread, and before the table goes away. */
 extern "C" void
 pyroscope_stack_stop()
 {
-    Datadog::Sampler::get().stop();
+    auto& sampler = Datadog::Sampler::get();
+    sampler.stop();
+    sampler.get_echion().renderer().reset_string_cache();
 }
 
 extern "C" SamplerPauseResult

@@ -11,16 +11,7 @@ kept as a record. Cite a symbol, not a line number.
 
 ## Open
 
-- **No samples after `configure()` -> `shutdown()` -> `configure()`.**
-  `StackRenderer::string_id_cache` outlives the `interner::clear()` that
-  `ffikit::stop_profilers` runs on shutdown, so every second-run upload is
-  rejected with `400 function name string index out of range`. Pinned red by
-  `TestPythonStackProfilerRestart`.
-- **Fix the fast-copy warmup handler-swap gap**, and file it upstream and here.
-  Gate `uninstall_segv_handler` / `reinstall_segv_handler` on "fast copy
-  requested and `safe_memcpy_initialized`" rather than on `fast_copy_active`;
-  `enable_during_warmup_falls_back` pins today's behaviour, so the fix flips a
-  test. See `stack_known_bugs.md`.
+Nothing.
 
 ## Traps
 
@@ -44,6 +35,11 @@ kept as a record. Cite a symbol, not a line number.
   `-Wcast-function-type-mismatch` on `cast_to_pyfunc.hpp`.
 - **Restore `ThreadSpanLinks::reset()` and `native_call_registry.reset()`** in
   `pyroscope_stack_stop` with whichever feature starts populating them.
+- **`reset_string_cache` only runs when `STARTED`.** It rides on
+  `pyroscope_stack_stop`, while `interner::clear` runs unconditionally, so the
+  two agree only because the cache cannot be non-empty unless the sampler
+  sampled. Anything that interns outside a started sampler needs the reset moved
+  onto the teardown path itself.
 - **Do not spell `BITS_TO_PTR_MASKED` as `PyStackRef_AsPyObjectBorrow`.** Under
   `Py_STACKREF_DEBUG` the latter consults a debug table, which is wrong for a
   stackref copied out of another process.

@@ -252,3 +252,10 @@ Datadog::StackRenderer::postfork_child()
     new (&string_id_cache) std::unordered_map<StringTable::Key, string_id>();
     sample = nullptr;
 }
+
+// Pyroscope patch: no upstream equivalent; see pyroscope_stack_stop.
+void
+Datadog::StackRenderer::reset_string_cache()
+{
+    string_id_cache.clear();
+}

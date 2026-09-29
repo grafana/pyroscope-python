@@ -1,10 +1,10 @@
 # CPU stack profiler: known bugs we are not fixing
 
 Accepted defects in `cpp/stack/`, `cpp/dd_wrapper/`, `cpp/pyroscope/stack_ffi.cpp`
-and `rust/src/stack.rs`. Work lives in `stack_todo.md`; a bug we decide to fix
-moves there. Things this iteration has decided not to do are in
-`stack_scope.md`. Most of these stay because a local fix to vendored logic is a
-vendor-sync conflict we carry forever.
+and `rust/src/stack.rs`. Work lives in `stack_todo.md`; an upstream bug never
+moves there -- we document it here and leave it. Things this iteration has
+decided not to do are in `stack_scope.md`. Most of these stay because a local
+fix to vendored logic is a vendor-sync conflict we carry forever.
 
 Format: heading plus one to three lines -- where it is, what goes wrong, why it
 stays. Cite a symbol, not a line number.
@@ -31,8 +31,7 @@ is not the default.
 `cpp/pyroscope/stack_ffi.cpp` (`pyroscope_stack_uninstall_segv_handler`).
 Both swaps act only `if (fast_copy_active)`, which `sampling_thread` holds false
 for the whole warmup, so faulthandler lands on top of our handler and the
-process stays on the syscall copy. Pinned by `enable_during_warmup_falls_back`;
-the fix is in `stack_todo.md`.
+process stays on the syscall copy. Pinned by `enable_during_warmup_falls_back`.
 
 ### Thread CPU time is reported as task CPU time
 
@@ -77,7 +76,7 @@ Fixing it means defining what that signal does to the renderer contract.
 overhead))` runs before the min/max clamp below it, so a small enough
 `target_overhead` divisor makes the conversion undefined. Closed from outside
 instead: `pyroscope_stack_configure` rejects anything below
-`g_min_target_overhead` (1e-4). Worth reporting upstream.
+`g_min_target_overhead` (1e-4).
 
 ## Introduced by the port
 
