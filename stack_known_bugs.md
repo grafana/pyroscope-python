@@ -1,232 +1,143 @@
 # CPU stack profiler: known bugs we are not fixing
 
-Defects in the shipped CPU sampler (`cpp/stack/`, `cpp/dd_wrapper/`,
-`cpp/pyroscope/stack_ffi.cpp`, `rust/src/stack.rs`) that are known, reproducible
-or at least understood, and deliberately left in place. Each entry says what
-goes wrong and why the fix is not worth taking now.
+Accepted defects in `cpp/stack/`, `cpp/dd_wrapper/`, `cpp/pyroscope/stack_ffi.cpp`
+and `rust/src/stack.rs`. Work lives in `stack_todo.md`; a bug we decide to fix
+moves there. Most of these stay because a local fix to vendored logic is a
+vendor-sync conflict we carry forever.
 
-This is not a work list. `stack_todo.md` holds outstanding work, unimplemented
-features (labels, native frames, adaptive sampling) and build policy. A bug
-that we decide to fix moves out of here and into that doc.
-
-Two reasons recur, so they are named once here:
-
-- **Verbatim from upstream.** The port's whole strategy is to keep upstream's
-  files, names and call shapes so the next vendor sync stays a small diff
-  (`CLAUDE.md`). A local fix to vendored logic is a conflict we carry forever,
-  against code Datadog is still changing. The bar for taking one is that the bug
-  hurts us specifically, or corrupts data.
-- **First-iteration scope.** The branch's goal was to make the sampler run at
-  all. Anything needing a new mechanism to fix is out of scope until the shape
-  settles.
+Format: heading plus one to three lines -- where it is, what goes wrong, why it
+stays. Cite a symbol, not a line number.
 
 ## Verbatim from upstream
 
 ### A failing `faulthandler.enable()` leaves faulthandler disabled
 
-`rust/src/stack.rs:305`. The wrapper runs `_original_disable()` before
-`_original_enable(*args)`, and the exception path only reinstalls our SIGSEGV
-handler before re-raising. So `faulthandler.enable(file=closed_file)` raises
-`ValueError` and drops crash reporting that was active before the call;
-unpatched CPython validates its arguments first and leaves the previous
-configuration untouched. Reproduced on 3.14.5/macOS: `is_enabled()` goes
-`True` -> `False`.
-
-Not fixed because the restore is not implementable faithfully. There is no
-getter for faulthandler's `file` or `all_threads`, so re-enabling after the
-failure would silently move crash output to stderr and change `all_threads`,
-which is a different and quieter bug than the one it replaces. Upstream's
-`ddtrace/profiling/_faulthandler.py` makes the same call.
+`rust/src/stack.rs` (`_patched_enable`). It runs `_original_disable()` before
+`_original_enable(*args)`, so `enable(file=closed_file)` raises and drops crash
+reporting that was active before the call. Not restorable faithfully: there is
+no getter for faulthandler's `file` or `all_threads`.
 
 ### `faulthandler.enable()` clobbers foreign handlers on its other signals
 
-`rust/src/stack.rs:305`. The `disable()` + `enable()` pair exists to stop
+`rust/src/stack.rs` (`_patched_enable`). The `disable()` + `enable()` pair stops
 faulthandler recording itself as its own previous handler, but `disable()`
-restores the saved handler for *all* of faulthandler's signals (SIGSEGV, SIGFPE,
-SIGABRT, SIGBUS, SIGILL), not just the one we care about. A handler installed
-between two `enable()` calls is therefore wiped. Unpatched `enable()` is a no-op
-on an already-enabled faulthandler and preserves it. Reproduced: with a Python
-SIGABRT handler installed in between, the second `enable()` makes
-`raise_signal(SIGABRT)` abort the process with faulthandler's fatal-error dump
-instead of running the handler.
-
-Not fixed in the vendored logic, for the reason above. Note one narrowing that
-*is* ours to make and is written up in `stack_todo.md`: with `cpu_fast_copy`
-off, no SIGSEGV handler exists to protect, the C++ `uninstall`/`reinstall`
-already no-op on `fast_copy_active` (`cpp/pyroscope/stack_ffi.cpp:63,71`), and
-the swap is pure downside, so gating `faulthandler::install`
-(`rust/src/stack.rs:87`) on fast copy removes the exposure for the default
-configuration without touching upstream's body.
+restores the saved handler for all five of its signals, so a handler installed
+between two `enable()` calls is wiped. Reachable only with fast copy on, which
+is not the default.
 
 ### `enable()` during the fast-copy warmup loses fast copy permanently
 
-`cpp/pyroscope/stack_ffi.cpp:63,71`. `uninstall_segv_handler` and
-`reinstall_segv_handler` act only `if (fast_copy_active)`, and
-`sampling_thread` holds that false for the whole warmup. A
-`faulthandler.enable()` inside the warmup window therefore skips both swaps,
-faulthandler lands on top of our handler, and when warmup ends
-`segv_handler_installed()` is false, so the process stays on the syscall copy
-for good.
-
-Ported as-is (upstream main a1bcb762 does the same) and pinned by
-`enable_during_warmup_falls_back` in
-`integration-test/testdata/sighandler_workload.py`, so a fix flips a test. The
-fix is to gate on "fast copy requested and `safe_memcpy_initialized`" rather
-than on `fast_copy_active`. Low impact: the penalty is the slower copy path,
-not wrong data.
+`cpp/pyroscope/stack_ffi.cpp` (`pyroscope_stack_uninstall_segv_handler`).
+Both swaps act only `if (fast_copy_active)`, which `sampling_thread` holds false
+for the whole warmup, so faulthandler lands on top of our handler and the
+process stays on the syscall copy. Pinned by `enable_during_warmup_falls_back`;
+the fix is in `stack_todo.md`.
 
 ### Thread CPU time is reported as task CPU time
 
-`cpp/stack/src/stack_renderer.cpp:221`, carrying upstream's own comment that
-this is "absolutely false". The per-thread CPU delta is pushed for the task
-sample. Kept because it is how upstream's v1 sampler behaves and normalizing to
-the task level is upstream's open work, not ours.
+`cpp/stack/src/stack_renderer.cpp` (`render_cpu_time`), carrying upstream's own
+"absolutely false" comment. Normalizing to the task level is upstream's open
+work.
 
 ### Wall time is multiplied by the leaf task count
 
-`cpp/stack/src/echion/threads.cc`, `cpp/stack/src/stack_renderer.cpp`.
-`ThreadInfo::sample` renders one sample per leaf asyncio task or greenlet stack,
-and each one pushes `push_walltime(thread_state.wall_time_ns, 1)` with the same
-per-cycle thread delta. A thread with 50 live tasks contributes 50x the elapsed
-wall time for that cycle.
-
-This is upstream's intended per-task attribution, so it stays. The consequence
-worth knowing: the `wall` total is not conservative and must never be
-sanity-checked against wall-clock elapsed time.
+`cpp/stack/src/echion/threads.cc` (`ThreadInfo::sample`). Every leaf asyncio
+task or greenlet stack pushes the same per-cycle thread delta, so 50 tasks
+contribute 50x the elapsed wall time. Upstream's intended per-task attribution;
+the consequence is that `wall` totals must never be checked against wall-clock
+elapsed.
 
 ### The task credited as on-CPU may not be the one that was on CPU
 
-`cpp/stack/src/echion/threads.cc:266`. The thread stack is captured
-out-of-band, so the task believed to be on CPU can differ from the one running
-when the frames were read, which mis-splices the coroutine and sync halves of
-the stack. Upstream reports never observing it; the fix it suggests is matching
-every task stack against the thread stack, which costs real work per sample.
+`cpp/stack/src/echion/threads.cc` (`unwind_tasks`, upstream's TODO). The thread
+stack is captured out-of-band, so the coroutine and sync halves can be
+mis-spliced. Upstream's fix -- match every task stack against the thread stack
+-- costs real work per sample, and they report never observing the race.
+
+### The task-name frame is consumed rather than also emitted
+
+`cpp/stack/src/stack_renderer.cpp` (`render_frame`, upstream's TODO). echion
+pushes a dummy frame with line 0 carrying the task name; the renderer takes the
+name and returns early.
 
 ### `TaskInfo::unwind` does not check for a running task
 
-`cpp/stack/src/echion/tasks.cc:206`, upstream's TODO. Left as found.
+`cpp/stack/src/echion/tasks.cc`, upstream's TODO. Left as found.
 
 ### A failed `_PyCFrame` copy silently yields no stack on 3.11/3.12
 
-`cpp/stack/src/echion/stacks.cc:95`. When `copy_type` of the `_PyCFrame`
-fails, the unwinder returns instead of signalling an invalid frame, so the
-sample is silently short rather than marked bad. Upstream's TODO; fixing it
-means defining what an invalid-frame signal does on our side, which touches the
-renderer contract.
+`cpp/stack/src/echion/stacks.cc`, upstream's TODO. The unwinder returns instead
+of signalling an invalid frame, so the sample is short rather than marked bad.
+Fixing it means defining what that signal does to the renderer contract.
 
 ### `adapt_sampling_interval` casts before it clamps
 
-`cpp/stack/src/sampler.cpp:186`. The new interval is computed as
-`I * [(s/p) / o]` and converted with `static_cast<microsecond_t>` -- an
-`int64_t` -- before the min/max clamp below it. Converting a double whose
-truncated value does not fit the integer type is undefined, and clamping the
-result afterwards cannot undo that. Because `o` is a divisor, a small enough
-`target_overhead` is all it takes.
-
-Upstream's, verbatim, and latent there: `stack.py` hands
-`adaptive_sampling_target_overhead` to the setter, and that setting is declared
-with a `range(1, 100)` validator, so in their shipped configuration the divisor
-stays at or above 1 and the product far inside `int64_t`.
-Nothing at the C++ site enforces that, though -- `Sampler::set_target_overhead`
-is a public setter with no stated precondition -- and upstream's own
-`g_target_overhead` default of `0.01` is a *fraction*, so their units are
-already inconsistent with the `1..100` percentage the Python side passes.
-Anyone reconciling that toward fractions reopens this.
-
-Not fixed because the fix is a behaviour change to vendored logic that
-Datadog is still editing, and we can close the hole from outside instead:
-`pyroscope_stack_configure` ignores any `target_overhead` below
-`g_min_target_overhead` (`1e-4`), which leaves about nine orders of magnitude
-of headroom before the product threatens `int64_t`. Values under that floor
-are meaningless anyway -- the interval pins to `max_sampling_period_us`. So
-the defect stays reachable only by a caller that bypasses our shim.
-
-Worth reporting upstream regardless; it is their clamp order, not ours.
-
-### Stacks deeper than 64 frames lose their outermost frames, silently
-
-`cpp/dd_wrapper/include/sample_manager.hpp:48` fixes `max_nframes` to
-`g_default_max_nframes` (64), and `Sample::push_frame`
-(`cpp/pyroscope/Pyroscope.h:164,182`) drops the overflow and calls
-`incr_dropped_frames()`, which is a no-op in our stats shim
-(`cpp/pyroscope/Pyroscope.h:277`). So deep stacks are truncated and nothing
-reports it.
-
-Upstream plumbs `SampleManager::set_max_nframes` from Python config (clamped to
-512) through the Cython layer we do not vendor, so exposing it is new plumbing
-rather than a fix: it should follow `configure(mem_max_nframe=...)`.
+`cpp/stack/src/sampler.cpp`. `static_cast<microsecond_t>(interval * (delta /
+overhead))` runs before the min/max clamp below it, so a small enough
+`target_overhead` divisor makes the conversion undefined. Closed from outside
+instead: `pyroscope_stack_configure` rejects anything below
+`g_min_target_overhead` (1e-4). Worth reporting upstream.
 
 ## Introduced by the port
+
+### Truncated stacks are silent
+
+`cpp/pyroscope/Pyroscope.h`. `Sample::push_frame` drops frames past
+`max_nframes` and reports it through `incr_dropped_frames()`, a no-op in our
+stats shim. The budget is configurable (`cpu_max_nframe`); only the reporting is
+missing, and it needs `ProfilerStats` to become real first.
 
 ### Threads not created through `threading.Thread` are invisible
 
 `rust/src/stack.rs` (`mod threads`). Registration hangs off
-`Thread._set_native_id` / `Thread._bootstrap_inner` plus a one-time sweep of
+`Thread._set_native_id` / `_bootstrap_inner` plus a one-time sweep of
 `threading._active`, so raw `_thread.start_new_thread` threads, C-created
-threads that attach later, and `_DummyThread`s appearing after the sweep never
-register and are never sampled. Inherited from upstream's `init_stack`.
-
-Not fixed because the alternative is filling the map from the tstate snapshot
-inside `for_each_thread`, which means calling `pthread_getcpuclockid` /
-`pthread_mach_thread_np` on a `pthread_t` read out-of-band: a use-after-free if
-that thread has exited.
+threads and late `_DummyThread`s never register. The alternative -- filling the
+map inside `for_each_thread` -- means `pthread_getcpuclockid` on a `pthread_t`
+read out-of-band, a use-after-free if that thread has exited.
 
 ### `threading` stays patched after `shutdown()`
 
-`rust/src/stack.rs` (`mod threads`). The patch is once-per-process with no
-uninstall, matching upstream, so the wrappers keep calling
-`register_thread`/`unregister_thread` with no agent running and the map stays
-live between sessions. Bounded by the live thread count, since unregistration
-still fires on thread exit. Consequence: `pyroscope_stack_thread_count()` is
-not zero between sessions, so a non-empty map is not proof the agent is up.
+`rust/src/stack.rs` (`mod threads`). Once-per-process with no uninstall, as
+upstream, so the wrappers keep registering with no agent running. Bounded by the
+live thread count; consequence is that a non-empty map is not proof the agent is
+up.
 
 ### `configure()` off the main thread leaves a stray `MainThread` entry
 
-`one_time_setup`'s `postfork_child` registers `pthread_self()` as
-`"MainThread"`. If `configure()` runs on some other thread, that entry is keyed
-by a non-Python thread id. Harmless in practice: `for_each_thread` looks entries
-up by `tstate.thread_id` and never matches it. Not worth a guard until something
-depends on the map being exact.
+`Sampler::one_time_setup` registers `pthread_self()` as `"MainThread"`.
+Harmless: `for_each_thread` looks entries up by `tstate.thread_id` and never
+matches it.
 
 ### `pyroscope_stack_stop` skips upstream's two resets
 
-`cpp/pyroscope/stack_ffi.cpp:43`. Upstream's `stack_stop` also runs
+`cpp/pyroscope/stack_ffi.cpp`. Upstream's `stack_stop` also runs
 `ThreadSpanLinks::reset()` and `native_call_registry.reset()`; both are dead
-code here because nothing populates either (no span hook, stub registry).
-Deliberately omitted, and a trap for later: **restore each reset with whichever
-feature starts populating its structure.**
+code here because nothing populates either. Restore each with whichever feature
+starts populating its structure.
 
 ### The cpu/wall profile is dropped when py-spy is also running
 
-`rust/src/pyroscope.rs:294`. Both sources publish `__name__ = process_cpu`, so
-`PyroscopeAgent::snapshot` drops the stack sampler's profile with a warning
-naming `cpu_enabled=False` as the way out. Chosen over renaming, which would
-cost the `process_cpu:cpu:nanoseconds:cpu:nanoseconds` type ID the UI and the
-integration tests already use. The dump still runs each window so the
-accumulator drains instead of growing.
+`rust/src/pyroscope.rs` (`PyroscopeAgent::snapshot`). Both sources publish
+`__name__ = process_cpu`, so the stack sampler's profile is dropped with a
+warning naming `cpu_enabled=False`. Renaming would cost the
+`process_cpu:cpu:nanoseconds:cpu:nanoseconds` type ID the UI and the integration
+tests use. The dump still runs, so the accumulator drains.
 
 ## Fragile invariants, no test
 
 ### The no-double-count rule for CPU time rests on two hoist loops
 
-`cpp/stack/src/echion/threads.cc:229,694`. `push_cputime` is unconditional on a
-thread's first sample and conditional on `on_cpu` afterwards, so avoiding
-double-counted CPU time depends entirely on the on-CPU task or greenlet being
-hoisted to index 0, where `render_task_begin` reuses the already-credited
-sample. The hoist is written twice with different loop bounds (asyncio: `i = 0`
-with an `if (i > 0)` guard; greenlets: `i = 1`), and the greenlet one keys off
-`snap.frame == Py_None`, greenlet's sentinel for the currently-running
-greenlet. If that sentinel ever changes, the swap silently no-ops and CPU time
-doubles.
-
-Vendored logic, and the failure is a plausible-looking 2x rather than a crash,
-which is exactly why it is written down here.
+`cpp/stack/src/echion/threads.cc` (`unwind_tasks` and the greenlet loop).
+`push_cputime` is conditional on `on_cpu` after a thread's first sample, so
+avoiding double-counted CPU time depends on the on-CPU task or greenlet being
+hoisted to index 0. The two loops use different bounds, and the greenlet one
+keys off `snap.frame == Py_None`: if that sentinel changes, the swap no-ops and
+CPU time doubles.
 
 ### `SampleManager::start_sample` assumes a single renderer thread
 
-`cpp/dd_wrapper/include/sample_manager.hpp:48`. The `thread_local` single-
-instance replacement for upstream's `StaticSamplePool` is sound only because
-(a) only the sampling thread renders and (b) `render_stack_end` always pairs
-`flush_sample()` with `drop_sample()` before the next `start_sample()`. Both
-hold today; neither is asserted. If a second renderer thread ever appears,
-revisit this before debugging the resulting corruption.
+`cpp/dd_wrapper/include/sample_manager.hpp`. The `thread_local` stand-in for
+upstream's `StaticSamplePool` is sound only because only the sampling thread
+renders and `render_stack_end` always pairs `flush_sample()` with
+`drop_sample()`. Neither is asserted.

@@ -62,6 +62,10 @@ upstream path over editing a vendored source.
   `stack_todo.md`. Put the explanation in `stack_todo.md`, not at the site.
 - A defect we decide to live with goes in `stack_known_bugs.md`, with the reason
   we are not fixing it. Do not re-file it as work in `stack_todo.md`.
+- Both docs are lists, not prose: an entry is a sentence or two, three lines at
+  most, and cites a symbol rather than a line number. A finished item becomes a
+  struck one-liner and loses its write-up. Write what a reader cannot derive
+  from the code, and nothing else.
 - Do not "fix" a vendored oddity without checking upstream first -- several are
   load-bearing, and `cpp/CMakeLists.txt` documents flags that must *not* be
   restored on a sync.
@@ -110,36 +114,19 @@ server with `scripts/tests/test_stack_cpu.py`.
 
 ### First-iteration choices -- provisional, not settled
 
-Each is a deliberate simplification, not an oversight. `stack_todo.md` carries
-the detail; do not read any of them as a decision to preserve.
+Deliberate simplifications, not oversights, and none of them a decision to
+preserve. `stack_todo.md` carries the detail.
 
-- **No labels, and no thread or task information.** `push_threadinfo`,
-  `push_task_name`, `push_span_id`, `push_local_root_span_id` and
-  `push_trace_type` are no-ops. The FFI accumulator keys on the location-id
-  vector alone and hardcodes `label: vec![]`, so carrying them means re-keying
-  it first.
-- **Native monitoring is neither used nor enabled.** The `sys.monitoring`
-  CALL-event tracker lived only in the deleted `stack/src/stack.cpp`, and
-  `NativeCallRegistry` is stubbed to an always-empty `lookup` (no map, no
-  mutex), so no native frames are spliced in.
-- **Adaptive sampling is off by default**, but no longer forced off:
-  `cpu_adaptive_sampling` and its two companions reach the sampler, and
-  `profile.period` now comes from `Sampler::get_interval_us()` rather than the
-  agent-wide `sample_rate`.
+- No labels, and no thread or task information.
+- Native monitoring is neither used nor enabled.
+- Adaptive sampling (`cpu_adaptive_sampling`) and fast copy (`cpu_fast_copy`)
+  are off by default but reach the sampler when asked for. Unlike upstream, fast
+  copy's SIGSEGV/SIGBUS handlers and the faulthandler patch install only when it
+  is on, from `configure()` rather than at import, and the first `configure()`
+  fixes the choice for the process.
 
-Fast copy (`safe_memcpy`) is opt-in via `configure(cpu_fast_copy=True)`, off by
-default as upstream, but unlike upstream its SIGSEGV/SIGBUS handlers and the
-faulthandler patch install only when it is on, from `configure()`, not at
-import. The first `configure()` fixes the choice for the process; handlers are
-never uninstalled. `cpu_fast_copy_warmup` sets the syscall-copy warmup
-(default 15 s).
-
-`stack_todo.md` is the tracking doc -- blocking work, gaps the port opened,
-free-threaded-build questions, and the TODOs inherited from upstream, kept
-separate so they are not confused with ours. `stack_known_bugs.md` is its
-counterpart: defects that are known and deliberately unfixed, each with the
-reason. Read both before picking up CPU profiler work, and check
-`stack_known_bugs.md` before "fixing" something that looks broken.
+Read `stack_todo.md` and `stack_known_bugs.md` before picking up CPU profiler
+work, and check the latter before "fixing" something that looks broken.
 
 ## Build and verify
 
