@@ -19,6 +19,25 @@ kept as a record. Cite a symbol, not a line number.
 - **The sampling thread can die unreported.** `Sampler::sampling_thread`
   catches, stashes and `break`s; `take_sampling_thread_error` has no caller
   here, so a dead sampler looks like an idle one.
+- **Report the sampler's own counters.** `ProfilerStats` drops every setter,
+  fast-copy flags included, while `Sampler::sampling_thread` computes all of
+  them each cycle; `copy_memory_error_count` and `sample_capture_cpu_time_us`
+  are the two worth a sink.
+- **Emit upstream's `<N frames omitted>` frame.** `Sample::incr_dropped_frames`
+  is a no-op, so frames past `max_nframes` vanish silently. Upstream appends the
+  marker in `Sample::export_sample`; `_memalloc_tb.cpp` feeds the counter too.
+- **Non-UTF-8 frame names are undefined behaviour.**
+  `pyroscope_string_table_intern_string` calls `from_utf8_unchecked` on bytes
+  copied out of another process. libdatadog sanitized lossily at that boundary;
+  our interner replaced it without replacing the check.
+- **Reach the asyncio task unwinder.** `Sampler::init_asyncio` and
+  `track_asyncio_loop` compile with no caller and no FFI export; upstream drives
+  them from `ddtrace/profiling/_asyncio.py`, which has no equivalent here.
+- **Reach the greenlet/gevent unwinder.** `Sampler::track_greenlet`,
+  `untrack_greenlet` and `link_greenlets` are unreachable for the same reason;
+  upstream's entry point is `_task.initialize_gevent_support()`.
+- **Reach uvloop unwinding.** `Sampler::set_uvloop_mode` has no caller; upstream
+  sets it from `_asyncio.py` once it detects a uvloop event loop.
 
 ## Traps
 

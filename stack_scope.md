@@ -23,8 +23,3 @@ no write-up of how to implement it.
 - **No native monitoring.** `NativeCallRegistry::lookup` always returns
   `nullopt`, and upstream's `native_call_tracker.{hpp,cpp}` and `extern "C"`
   entry points are not ported.
-- **No profiler self-diagnostics.** `ProfilerStats` and `ProfileBorrow`
-  (`cpp/pyroscope/Pyroscope.h`) drop every argument, the fast-copy flags
-  (`set_fast_copy_memory_enabled`, `_user_disabled`, `_capable`,
-  `_syscall_fallback`) included. The sampler computes the numbers, but there is
-  no sink to report them to -- upstream's is Datadog telemetry.

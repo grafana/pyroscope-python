@@ -76,13 +76,6 @@ instead: `pyroscope_stack_configure` rejects anything below
 
 ## Introduced by the port
 
-### Truncated stacks are silent
-
-`cpp/pyroscope/Pyroscope.h`. `Sample::push_frame` drops frames past
-`max_nframes` and reports it through `incr_dropped_frames()`, a no-op in our
-stats shim. The budget is configurable (`cpu_max_nframe`); only the reporting is
-missing, and self-diagnostics are out of scope (`stack_scope.md`).
-
 ### Threads not created through `threading.Thread` are invisible
 
 `rust/src/stack.rs` (`mod threads`). Registration hangs off
