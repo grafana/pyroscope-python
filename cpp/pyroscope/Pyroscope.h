@@ -181,7 +181,7 @@ namespace Pyroscope
 
         void push_frame(const string_id function_name, const string_id file_name, const int line)
         {
-            if (frames.size() == max_nframes)
+            if (frames.size() >= max_nframes)
             {
                 incr_dropped_frames();
                 return;
@@ -193,7 +193,7 @@ namespace Pyroscope
         void push_frame(const std::string_view function_name, const std::string_view file_name,
                         [[maybe_unused]] int address, const int line)
         {
-            if (frames.size() == max_nframes)
+            if (frames.size() >= max_nframes)
             {
                 incr_dropped_frames();
                 return;
