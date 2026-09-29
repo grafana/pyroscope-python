@@ -122,7 +122,7 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
 
     threads::install(py)?;
     if config.async_tracking {
-        asyncio::install(py)?;
+        asyncio::install(py);
     }
     Ok(())
 }
@@ -633,41 +633,44 @@ def install(asyncio, threading, uvloop, track_loop, init_asyncio, link_tasks, we
     /// Must run after `threads::install`: `track_asyncio_loop` is a
     /// find-then-mutate on echion's thread map and is dropped for a thread that
     /// is not registered yet.
-    pub fn install(py: Python<'_>) -> PyResult<()> {
-        if INSTALLED.get().is_some() {
-            return Ok(());
+    pub fn install(py: Python<'_>) {
+        if INSTALLED.set(()).is_err() {
+            return;
         }
 
-        let modules = py.import("sys")?.getattr("modules")?;
-        let Ok(asyncio) = modules.get_item("asyncio") else {
-            log::warn!(
-                target: "pyroscope-python",
-                "not tracking asyncio tasks: asyncio is not imported yet, and cpu_async only \
-                 patches what is imported when the agent starts"
-            );
-            let _ = INSTALLED.set(());
-            return Ok(());
-        };
+        let patched = (|| -> PyResult<()> {
+            let modules = py.import("sys")?.getattr("modules")?;
+            let Ok(asyncio) = modules.get_item("asyncio") else {
+                log::warn!(
+                    target: "pyroscope-python",
+                    "not tracking asyncio tasks: asyncio is not imported yet, and cpu_async only \
+                     patches what is imported when the agent starts"
+                );
+                return Ok(());
+            };
 
-        let module = PyModule::from_code(
-            py,
-            INSTALL_SRC,
-            c"pyroscope_stack_asyncio.py",
-            c"_pyroscope_stack_asyncio",
-        )?;
-        module.getattr("install")?.call1((
-            asyncio,
-            py.import("threading")?,
-            modules.get_item("uvloop").ok(),
-            wrap_pyfunction!(track_asyncio_loop, py)?,
-            wrap_pyfunction!(init_asyncio, py)?,
-            wrap_pyfunction!(link_tasks, py)?,
-            wrap_pyfunction!(weak_link_tasks, py)?,
-            wrap_pyfunction!(set_uvloop_mode, py)?,
-        ))?;
+            let module = PyModule::from_code(
+                py,
+                INSTALL_SRC,
+                c"pyroscope_stack_asyncio.py",
+                c"_pyroscope_stack_asyncio",
+            )?;
+            module.getattr("install")?.call1((
+                asyncio,
+                py.import("threading")?,
+                modules.get_item("uvloop").ok(),
+                wrap_pyfunction!(track_asyncio_loop, py)?,
+                wrap_pyfunction!(init_asyncio, py)?,
+                wrap_pyfunction!(link_tasks, py)?,
+                wrap_pyfunction!(weak_link_tasks, py)?,
+                wrap_pyfunction!(set_uvloop_mode, py)?,
+            ))?;
+            Ok(())
+        })();
 
-        let _ = INSTALLED.set(());
-        Ok(())
+        if let Err(err) = patched {
+            log::warn!(target: "pyroscope-python", "not tracking asyncio tasks: {err}");
+        }
     }
 }
 

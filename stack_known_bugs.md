@@ -135,6 +135,14 @@ class attributes, so a module that did `from asyncio import shield` first is not
 covered. `uvloop.run`'s `loop_factory` keyword default is the one alias we
 rebind by hand, because it is uvloop's own entry point.
 
+### A failed asyncio patch is never retried
+
+`rust/src/stack.rs` (`mod asyncio::install`), as upstream, whose
+`after_module_imported` hook fires at most once per module per process. Ours
+claims `INSTALLED` before patching for the same effect, because retrying would
+capture the first attempt's wrappers as the originals and chain a second layer
+onto them.
+
 ### The cpu/wall profile is dropped when py-spy is also running
 
 `rust/src/pyroscope.rs` (`PyroscopeAgent::snapshot`). Both sources publish
