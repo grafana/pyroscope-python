@@ -22,6 +22,7 @@ import (
 
 const (
 	cpuProfileTypeID              = "process_cpu:cpu:nanoseconds:cpu:nanoseconds"
+	wallProfileTypeID             = "process_cpu:wall:nanoseconds:cpu:nanoseconds"
 	memoryAllocSpaceProfileTypeID = "memory:alloc_space:bytes:space:bytes"
 	memoryInuseSpaceProfileTypeID = "memory:inuse_space:bytes:space:bytes"
 )
@@ -72,8 +73,30 @@ func TestPythonStackProfilerRestart(t *testing.T) {
 	selector := func(canary string) string {
 		return fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
 	}
-	requireProfileContains(t, workload, pyroscopeURL, selector(canaryFirst), "burn_first", 4*time.Minute)
-	requireProfileContains(t, workload, pyroscopeURL, selector(canarySecond), "burn_second", 3*time.Minute)
+	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector(canaryFirst), "burn_first", 4*time.Minute)
+	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector(canarySecond), "burn_second", 3*time.Minute)
+}
+
+func TestPythonStackProfilerAsyncio(t *testing.T) {
+	wheelDir := ensureWheel(t)
+
+	net := dockertest.CreateNetwork(t)
+	pyroscopeURL := startPyroscope(t, net)
+	appName := fmt.Sprintf("pyroscopers.python.test.asyncio.%d", time.Now().UnixNano())
+	canary := randomHex(t, 16)
+	workload := startPythonTestContainer(t, net, wheelDir, "async_workload.py", map[string]string{
+		"PYROSCOPE_APPLICATION_NAME": appName,
+		"CANARY":                     canary,
+	})
+	t.Cleanup(func() {
+		workload.Stop(t, 30*time.Second)
+	})
+
+	selector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
+	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector, "async_burn", 4*time.Minute)
+	// A coroutine parked in await is not on the thread stack, so this frame can
+	// only have come from echion's task unwinder.
+	requireProfileContains(t, workload, pyroscopeURL, wallProfileTypeID, selector, "async_idle", 3*time.Minute)
 }
 
 func TestPythonNonCPUIntegrationSuites(t *testing.T) {
@@ -368,6 +391,7 @@ func requireProfileContains(
 	t *testing.T,
 	workload *dockertest.Container,
 	pyroscopeURL string,
+	profileTypeID string,
 	labelSelector string,
 	needle string,
 	timeout time.Duration,
@@ -386,7 +410,7 @@ func requireProfileContains(
 			)
 		}
 
-		collapsed, err := queryProfile(pyroscopeURL, cpuProfileTypeID, labelSelector)
+		collapsed, err := queryProfile(pyroscopeURL, profileTypeID, labelSelector)
 		if err != nil {
 			t.Logf("query failed for %s: %v", needle, err)
 			return false

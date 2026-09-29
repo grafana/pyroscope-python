@@ -43,6 +43,7 @@ def configure(
         cpu_adaptive_sampling=False,
         cpu_adaptive_target_overhead=0.01,
         cpu_adaptive_max_interval_us=1000000,
+        cpu_async=False,
 ):
     if app_name is not None:
         warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
@@ -87,6 +88,7 @@ def configure(
         cpu_adaptive_sampling,
         cpu_adaptive_target_overhead,
         cpu_adaptive_max_interval_us,
+        cpu_async,
     )
 
 def shutdown():

@@ -27,17 +27,18 @@ kept as a record. Cite a symbol, not a line number.
   `pyroscope_string_table_intern_string` calls `from_utf8_unchecked` on bytes
   copied out of another process. libdatadog sanitized lossily at that boundary;
   our interner replaced it without replacing the check.
-- **Reach the asyncio task unwinder.** `Sampler::init_asyncio` and
-  `track_asyncio_loop` compile with no caller and no FFI export; upstream drives
-  them from `ddtrace/profiling/_asyncio.py`, which has no equivalent here.
 - **Reach the greenlet/gevent unwinder.** `Sampler::track_greenlet`,
-  `untrack_greenlet` and `link_greenlets` are unreachable for the same reason;
-  upstream's entry point is `_task.initialize_gevent_support()`.
-- **Reach uvloop unwinding.** `Sampler::set_uvloop_mode` has no caller; upstream
-  sets it from `_asyncio.py` once it detects a uvloop event loop.
+  `untrack_greenlet`, `link_greenlets` and `record_greenlet_switch` have no
+  caller and no FFI export; upstream's entry point is
+  `_task.initialize_gevent_support()`, and it reads thread idents from a
+  pre-monkeypatch `threading` that `stack::threads` has no equivalent of.
 
 ## Traps
 
+- **`asyncio::install` must stay after `threads::install`.**
+  `track_asyncio_loop` and `set_uvloop_mode` are find-then-mutate on echion's
+  thread map, so a loop tracked before its thread is registered is dropped with
+  no diagnostic, and the thread then unwinds as a plain stack.
 - **`threads::install` must stay after `pyroscope_stack_start`.**
   `Sampler::start` runs `one_time_setup`, which reaches
   `EchionSampler::postfork_child()` and placement-news `thread_info_map_`, so
@@ -77,9 +78,10 @@ kept as a record. Cite a symbol, not a line number.
 ## Verification
 
 `scripts/tests/test_stack_cpu.py` is the only test that proves samples are
-produced, and `scripts/tests/test_truncated_frames.py` the only one that proves
-a truncated stack carries its `<truncated>` marker. Build commands are in
-`CLAUDE.md`.
+produced; `test_stack_async.py` does the same for the task unwinder, and its
+`CPU_ASYNC`, `UVLOOP` and `CONFIGURE_INSIDE_LOOP` env knobs select the four
+shapes worth running; `test_truncated_frames.py` proves a truncated stack
+carries its `<truncated>` marker. Build commands are in `CLAUDE.md`.
 
 - After touching `ffikit`, run `test_memory.py`, `test_concurrency.py` and
   `test_atexit.py` too, and run the concurrency shape with
