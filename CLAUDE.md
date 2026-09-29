@@ -62,9 +62,12 @@ upstream path over editing a vendored source.
   `stack_todo.md`. Put the explanation in `stack_todo.md`, not at the site.
 - A defect we decide to live with goes in `stack_known_bugs.md`, with the reason
   we are not fixing it. Do not re-file it as work in `stack_todo.md`.
-- Both docs are lists, not prose: an entry is a sentence or two, three lines at
-  most, and cites a symbol rather than a line number. A finished item becomes a
-  struck one-liner and loses its write-up. Write what a reader cannot derive
+- Something we have decided not to do goes in `stack_scope.md`, and stays there.
+  It is not work: do not file it in `stack_todo.md`, and do not write up how it
+  would be implemented.
+- All three docs are lists, not prose: an entry is a sentence or two, three
+  lines at most, and cites a symbol rather than a line number. A finished item
+  is deleted -- git history is the record. Write what a reader cannot derive
   from the code, and nothing else.
 - Do not "fix" a vendored oddity without checking upstream first -- several are
   load-bearing, and `cpp/CMakeLists.txt` documents flags that must *not* be
@@ -102,8 +105,9 @@ design, so every ordering below is a real interleaving, not a theoretical one.
 
 `cpp/stack` compiles and archives warning-free on macOS/clang for Python
 3.11-3.14 and on Linux/gcc 13 for 3.12. There is no cargo feature gating the
-C++ half any more -- it is always built, and free-threaded interpreters are
-rejected outright by `setup.py` and by `cpp/CMakeLists.txt` at configure time.
+C++ half any more -- it is always built. No profiler here supports
+free-threaded interpreters, py-spy and memalloc included, so `setup.py` and
+`cpp/CMakeLists.txt` reject `Py_GIL_DISABLED` at configure time.
 
 **The sampler runs.** `cpu_implementation=ProfilerImplementation.Stack` drives
 it end to end: `crate::stack::start` configures and starts
@@ -112,21 +116,15 @@ to populate echion's thread info map, and the accumulated cpu+wall samples
 upload as `process_cpu` alongside the memory profile. Verified against a live
 server with `scripts/tests/test_stack_cpu.py`.
 
-### First-iteration choices -- provisional, not settled
+Adaptive sampling (`cpu_adaptive_sampling`) and fast copy (`cpu_fast_copy`) are
+off by default but reach the sampler when asked for. Unlike upstream, fast
+copy's SIGSEGV/SIGBUS handlers and the faulthandler patch install only when it
+is on, from `configure()` rather than at import, and the first `configure()`
+fixes the choice for the process.
 
-Deliberate simplifications, not oversights, and none of them a decision to
-preserve. `stack_todo.md` carries the detail.
-
-- No labels, and no thread or task information.
-- Native monitoring is neither used nor enabled.
-- Adaptive sampling (`cpu_adaptive_sampling`) and fast copy (`cpu_fast_copy`)
-  are off by default but reach the sampler when asked for. Unlike upstream, fast
-  copy's SIGSEGV/SIGBUS handlers and the faulthandler patch install only when it
-  is on, from `configure()` rather than at import, and the first `configure()`
-  fixes the choice for the process.
-
-Read `stack_todo.md` and `stack_known_bugs.md` before picking up CPU profiler
-work, and check the latter before "fixing" something that looks broken.
+Read all three tracking docs before picking up CPU profiler work:
+`stack_scope.md` for what this iteration is not doing, `stack_todo.md` for what
+is left, and `stack_known_bugs.md` before "fixing" something that looks broken.
 
 ## Build and verify
 

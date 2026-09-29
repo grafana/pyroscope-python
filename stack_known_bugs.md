@@ -2,7 +2,8 @@
 
 Accepted defects in `cpp/stack/`, `cpp/dd_wrapper/`, `cpp/pyroscope/stack_ffi.cpp`
 and `rust/src/stack.rs`. Work lives in `stack_todo.md`; a bug we decide to fix
-moves there. Most of these stay because a local fix to vendored logic is a
+moves there. Things this iteration has decided not to do are in
+`stack_scope.md`. Most of these stay because a local fix to vendored logic is a
 vendor-sync conflict we carry forever.
 
 Format: heading plus one to three lines -- where it is, what goes wrong, why it
@@ -85,7 +86,7 @@ instead: `pyroscope_stack_configure` rejects anything below
 `cpp/pyroscope/Pyroscope.h`. `Sample::push_frame` drops frames past
 `max_nframes` and reports it through `incr_dropped_frames()`, a no-op in our
 stats shim. The budget is configurable (`cpu_max_nframe`); only the reporting is
-missing, and it needs `ProfilerStats` to become real first.
+missing, and self-diagnostics are out of scope (`stack_scope.md`).
 
 ### Threads not created through `threading.Thread` are invisible
 
