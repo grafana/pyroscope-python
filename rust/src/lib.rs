@@ -164,6 +164,7 @@ fn initialize_agent(
     cpu_adaptive_sampling: bool,
     cpu_adaptive_target_overhead: f64,
     cpu_adaptive_max_interval_us: u64,
+    cpu_async: bool,
 ) -> bool {
     if !cpu_enabled && !mem_enabled {
         log::error!(
@@ -224,6 +225,7 @@ fn initialize_agent(
             adaptive_sampling: cpu_adaptive_sampling,
             adaptive_target_overhead: cpu_adaptive_target_overhead,
             adaptive_max_interval_us: cpu_adaptive_max_interval_us,
+            async_tracking: cpu_async,
         },
     )
     .tags(tags)

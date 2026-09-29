@@ -142,11 +142,16 @@ to populate echion's thread info map, and the accumulated cpu+wall samples
 upload as `process_cpu` alongside the memory profile. Verified against a live
 server with `scripts/tests/test_stack_cpu.py`.
 
-Adaptive sampling (`cpu_adaptive_sampling`) and fast copy (`cpu_fast_copy`) are
-off by default but reach the sampler when asked for. Unlike upstream, fast
-copy's SIGSEGV/SIGBUS handlers and the faulthandler patch install only when it
-is on, from `configure()` rather than at import, and the first `configure()`
-fixes the choice for the process.
+Adaptive sampling (`cpu_adaptive_sampling`), fast copy (`cpu_fast_copy`) and
+asyncio task unwinding (`cpu_async`, which covers uvloop too) are off by default
+but reach the sampler when asked for. `cpu_async` is the only one that stops at
+Rust: `mod asyncio` in `rust/src/stack.rs` patches `asyncio` and `uvloop` the
+way `mod threads` patches `threading`, and never touches
+`pyroscope_stack_configure`.
+
+Unlike upstream, fast copy's SIGSEGV/SIGBUS handlers and the faulthandler patch
+install only when it is on, from `configure()` rather than at import, and the
+first `configure()` fixes the choice for the process.
 
 Read all three tracking docs before picking up CPU profiler work:
 `stack_scope.md` for what this iteration is not doing, `stack_todo.md` for what

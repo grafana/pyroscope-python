@@ -145,10 +145,50 @@ pyroscope_stack_unregister_thread(uint64_t id)
     Datadog::SpanLinks::get_instance().unlink_span(id);
 }
 
+extern "C" void
+pyroscope_stack_init_asyncio(PyObject* scheduled_tasks, PyObject* eager_tasks)
+{
+    Datadog::Sampler::get().init_asyncio(scheduled_tasks, eager_tasks);
+}
+
+extern "C" void
+pyroscope_stack_track_asyncio_loop(uint64_t thread_id, PyObject* loop)
+{
+    Datadog::Sampler::get().track_asyncio_loop(static_cast<uintptr_t>(thread_id), loop);
+}
+
+extern "C" void
+pyroscope_stack_link_tasks(PyObject* parent, PyObject* child)
+{
+    Datadog::Sampler::get().link_tasks(parent, child);
+}
+
+extern "C" void
+pyroscope_stack_weak_link_tasks(PyObject* parent, PyObject* child)
+{
+    Datadog::Sampler::get().weak_link_tasks(parent, child);
+}
+
+extern "C" void
+pyroscope_stack_set_uvloop_mode(uint64_t thread_id, bool value)
+{
+    Datadog::Sampler::get().set_uvloop_mode(static_cast<uintptr_t>(thread_id), value);
+}
+
 extern "C" size_t
 pyroscope_stack_thread_count()
 {
     auto& echion = Datadog::Sampler::get().get_echion();
     const std::lock_guard<std::mutex> guard{ echion.thread_info_map_lock() };
     return echion.thread_info_map().size();
+}
+
+extern "C" uintptr_t
+pyroscope_stack_thread_asyncio_loop(uint64_t id)
+{
+    auto& echion = Datadog::Sampler::get().get_echion();
+    const std::lock_guard<std::mutex> guard{ echion.thread_info_map_lock() };
+    auto& map = echion.thread_info_map();
+    auto it = map.find(static_cast<uintptr_t>(id));
+    return it != map.end() ? it->second->asyncio_loop : 0;
 }

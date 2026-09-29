@@ -262,6 +262,7 @@ mod tests {
             adaptive_sampling: false,
             adaptive_target_overhead: 0.01,
             adaptive_max_interval_us: 1_000_000,
+            async_tracking: false,
         }
     }
 

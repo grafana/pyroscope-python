@@ -65,6 +65,13 @@ mis-spliced. Upstream's fix -- match every task stack against the thread stack
 of signalling an invalid frame, so the sample is short rather than marked bad.
 Fixing it means defining what that signal does to the renderer contract.
 
+### `set_uvloop_mode` keys on the thread that created the loop
+
+`rust/src/stack.rs` (`mod asyncio`), as upstream's `_asyncio.py`. Both the
+`uvloop.new_event_loop` and policy hooks pass `current_thread().ident`, so a
+uvloop loop created on one thread and run on another leaves the running thread
+detecting the `Handle._run` boundary instead of `Runner.run`.
+
 ### `adapt_sampling_interval` casts before it clamps
 
 `cpp/stack/src/sampler.cpp`. `static_cast<microsecond_t>(interval *
@@ -106,6 +113,27 @@ matches it.
 `native_call_registry.reset()`; all three are dead code here because nothing
 populates any of them. Restore each with whichever feature starts populating
 its structure.
+
+### The asyncio patch stays installed after `shutdown()`
+
+`rust/src/stack.rs` (`mod asyncio`). Once-per-process with no uninstall, as
+`mod threads` and upstream. The wrappers keep running with no agent up; the
+link maps are spared by a `STARTED` check, the per-call overhead is not.
+
+### `cpu_async` only patches what is imported when the agent starts
+
+`rust/src/stack.rs` (`mod asyncio::install`). Upstream hooks the `asyncio` and
+`uvloop` imports with `ModuleWatchdog`; we read `sys.modules` once, so a process
+that imports either after `configure()` gets no task unwinding. Interposing on
+every import in the process is not worth closing that window.
+
+### Aliases bound before `cpu_async` installs keep the unpatched function
+
+`rust/src/stack.rs` (`mod asyncio`). Upstream's `wrapping.wrap` rewrites the
+function's code object, which every existing alias follows; we assign module and
+class attributes, so a module that did `from asyncio import shield` first is not
+covered. `uvloop.run`'s `loop_factory` keyword default is the one alias we
+rebind by hand, because it is uvloop's own entry point.
 
 ### The cpu/wall profile is dropped when py-spy is also running
 
