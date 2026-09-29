@@ -52,7 +52,6 @@ func TestPythonStackProfilerOnCPU(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, stack: true})
 }
 
-// TODO(Pyroscope): red until the sampler survives a restart, see stack_todo.md.
 func TestPythonStackProfilerRestart(t *testing.T) {
 	wheelDir := ensureWheel(t)
 
