@@ -65,6 +65,18 @@ mis-spliced. Upstream's fix -- match every task stack against the thread stack
 of signalling an invalid frame, so the sample is short rather than marked bad.
 Fixing it means defining what that signal does to the renderer contract.
 
+### An already-running loop is registered without uvloop mode
+
+`rust/src/stack.rs` (`mod asyncio::install`), as upstream's
+`link_existing_loop_to_current_thread`: neither calls `set_uvloop_mode`, so a
+`configure()` inside `uvloop.run` mis-splices every suspended task.
+
+### `using_uvloop` is never cleared
+
+`rust/src/stack.rs` (`mod asyncio`), as upstream's `_asyncio.py`: only the
+uvloop hooks write it, and always `True`, so a thread that runs uvloop and then
+plain asyncio keeps looking for `Runner.run`.
+
 ### `set_uvloop_mode` keys on the thread that created the loop
 
 `rust/src/stack.rs` (`mod asyncio`), as upstream's `_asyncio.py`. Both the

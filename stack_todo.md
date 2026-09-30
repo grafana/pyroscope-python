@@ -11,6 +11,9 @@ kept as a record. Cite a symbol, not a line number.
 
 ## Open
 
+- **Configure the stack profiler once.** Move every `cpu_*` option except
+  `cpu_implementation` out of `configure()` into one exported function, and
+  document that only its first call per process takes effect, shutdown or not.
 - **The new upstream knobs are not exposed.** `set_gc_enabled`,
   `set_max_tasks_per_sample`, `set_baseline_core_pct`, `set_p_stable_window_s`
   and `set_p_stable_percentile` all sit at their upstream defaults because
