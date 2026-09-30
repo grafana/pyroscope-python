@@ -385,6 +385,7 @@ mod asyncio {
     static INSTALLED: OnceLock<()> = OnceLock::new();
 
     const INSTALL_SRC: &std::ffi::CStr = cr#"
+import inspect
 import sys
 
 
@@ -486,7 +487,7 @@ def install(asyncio, threading, uvloop, track_loop, init_asyncio, link_tasks, we
 
     original_as_completed = tasks.as_completed
 
-    def as_completed(*args, **kwargs):
+    def _as_completed(*args, **kwargs):
         parent = current_task()
         fs = arg(args, kwargs, 0, "fs")
         if parent is not None and fs is not None:
@@ -498,6 +499,17 @@ def install(asyncio, threading, uvloop, track_loop, init_asyncio, link_tasks, we
             else:
                 kwargs = {**kwargs, "fs": futures}
         return original_as_completed(*args, **kwargs)
+
+    # Pyroscope patch: upstream's code-object rewrite keeps the generator flag,
+    # so its wrapper runs on first next(); attribute assignment needs an
+    # explicit generator to keep as_completed lazy where the original is one.
+    if inspect.isgeneratorfunction(original_as_completed):
+
+        def as_completed(*args, **kwargs):
+            return (yield from _as_completed(*args, **kwargs))
+
+    else:
+        as_completed = _as_completed
 
     publish("as_completed", original_as_completed, as_completed)
 

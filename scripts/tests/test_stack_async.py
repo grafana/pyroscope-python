@@ -44,7 +44,13 @@ async def exercise_wrappers():
     total = await asyncio.shield(noop())
     finished, _ = await asyncio.wait([asyncio.create_task(noop()), asyncio.create_task(noop())])
     total += sum(task.result() for task in finished)
-    for future in asyncio.as_completed([noop(), noop()]):
+    # Before 3.13 as_completed is a generator and schedules nothing until it
+    # is first advanced; the wrapper must not pull that forward.
+    before = len(asyncio.all_tasks())
+    pending = asyncio.as_completed([noop(), noop()])
+    if sys.version_info < (3, 13):
+        assert len(asyncio.all_tasks()) == before, 'as_completed scheduled tasks before iteration'
+    for future in pending:
         total += await future
     if sys.version_info >= (3, 11):
         async with asyncio.TaskGroup() as group:
