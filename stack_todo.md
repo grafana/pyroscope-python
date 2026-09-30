@@ -11,6 +11,9 @@ kept as a record. Cite a symbol, not a line number.
 
 ## Open
 
+- **Investigate reusing dd-trace-py's Python source.** Assess whether it can
+  replace the reimplementations in `rust/src/stack.rs` (`threads`, `asyncio`)
+  and the Python modules defined from strings via `PyModule::from_code`.
 - **Configure the stack profiler once.** Move every `cpu_*` option except
   `cpu_implementation` out of `configure()` into one exported function, and
   document that only its first call per process takes effect, shutdown or not.
