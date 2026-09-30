@@ -678,6 +678,16 @@ def install(asyncio, threading, uvloop, track_loop, init_asyncio, link_tasks, we
                 return Ok(());
             };
 
+            let uvloop = modules.get_item("uvloop").ok();
+            if uvloop.is_none() {
+                log::warn!(
+                    target: "pyroscope-python",
+                    "not tracking uvloop event loops: uvloop is not imported yet, and cpu_async \
+                     only patches what is imported when the agent starts; harmless if this \
+                     process does not use uvloop, otherwise import uvloop before configure()"
+                );
+            }
+
             let module = PyModule::from_code(
                 py,
                 INSTALL_SRC,
@@ -687,7 +697,7 @@ def install(asyncio, threading, uvloop, track_loop, init_asyncio, link_tasks, we
             module.getattr("install")?.call1((
                 asyncio,
                 py.import("threading")?,
-                modules.get_item("uvloop").ok(),
+                uvloop,
                 wrap_pyfunction!(track_asyncio_loop, py)?,
                 wrap_pyfunction!(init_asyncio, py)?,
                 wrap_pyfunction!(link_tasks, py)?,

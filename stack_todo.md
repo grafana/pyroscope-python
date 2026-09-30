@@ -14,16 +14,12 @@ kept as a record. Cite a symbol, not a line number.
 - **Investigate reusing dd-trace-py's Python source.** Assess whether it can
   replace the reimplementations in `rust/src/stack.rs` (`threads`, `asyncio`)
   and the Python modules defined from strings via `PyModule::from_code`.
-- **Close the `async_tracking` install window, and make it loud until then.**
-  `asyncio::install` reads `sys.modules` once, so task unwinding can silently
-  do nothing and no profile distinguishes that from an idle loop:
+- **Close the `async_tracking` install window.** `asyncio::install` reads
+  `sys.modules` once, so a module imported later is never patched; both misses
+  warn now, but no profile distinguishes them from an idle loop:
   - Patch `asyncio` and `uvloop` when they are imported, not when the agent
     starts, as upstream's `ModuleWatchdog.after_module_imported` does. The
     hook must also fire for a module already imported by `configure()`.
-  - Until that lands, warn when `uvloop` is absent from `sys.modules`, the way
-    the `asyncio` branch already does. `uvloop` imported after `configure()`
-    loses `track_asyncio_loop` entirely, so `unwind_tasks` never runs and
-    nothing is logged.
   - `mod asyncio` is once-per-process, so a later `configure()` with
     `async_tracking=False` still unwinds tasks through the first call's wrappers.
   - `test_stack_async.py`'s `CPU_ASYNC=0` check reads one snapshot after the
