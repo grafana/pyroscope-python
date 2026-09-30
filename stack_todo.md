@@ -33,10 +33,6 @@ kept as a record. Cite a symbol, not a line number.
 - **GC frames are unreachable.** `set_gc_enabled` has no kwarg, and it is not
   enough on its own: `GCFrameTracker::install_current_interpreter` and its
   uninstall have no caller and need the GIL, which `pyroscope_stack_stop` drops.
-- **Report the sampler's own counters.** `ProfilerStats` drops every setter,
-  fast-copy flags included, while `Sampler::sampling_thread` computes all of
-  them each cycle; `copy_memory_error_count` and `sample_capture_cpu_time_us`
-  are the two worth a sink.
 - **Reach the greenlet/gevent unwinder.** `Sampler::track_greenlet`,
   `untrack_greenlet`, `link_greenlets` and `record_greenlet_switch` have no
   caller and no FFI export; upstream's entry point is

@@ -82,11 +82,18 @@ upstream path over editing a vendored source.
 
 ## Conventions
 
-- Where a shim's behaviour differs from the upstream symbol it stands in for,
-  mark it `// Pyroscope patch:` so a vendor sync can find it. Keep it to the
-  difference itself;
-- Unfinished work gets a `TODO(Pyroscope):` at the site, and an entry in
-  `stack_todo.md`. Put the explanation in `stack_todo.md`, not at the site.
+- **Write no comments in the Rust and C++ we author.** Not a header block, not
+  a rationale, not a one-liner above a tricky expression. What a reader cannot
+  derive from the code goes in `stack_todo.md`, `stack_known_bugs.md` or
+  `stack_scope.md`, each citing a symbol. If a comment feels necessary, the
+  answer is clearer code, a test that encodes the invariant, or a doc entry.
+- Vendored files keep upstream's comments verbatim. Do not strip them and do
+  not add to them -- the diff against upstream is the point.
+- Two markers are the only exception, because they are a grep index for the
+  next vendor sync rather than explanation. Both are one line, no prose:
+  `// Pyroscope patch:` naming the difference where a shim's behaviour departs
+  from the upstream symbol it stands in for, and `TODO(Pyroscope):` at an
+  unfinished site, whose explanation lives in `stack_todo.md`.
 - A defect we decide to live with goes in `stack_known_bugs.md`, with the reason
   we are not fixing it. Do not re-file it as work in `stack_todo.md`.
 - We do not fix upstream's bugs in this integration, and we do not report them
