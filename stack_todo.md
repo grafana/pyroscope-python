@@ -84,7 +84,7 @@ kept as a record. Cite a symbol, not a line number.
 produced; `test_stack_async.py` does the same for the task unwinder, and its
 `CPU_ASYNC`, `UVLOOP` and `CONFIGURE_INSIDE_LOOP` env knobs select the four
 shapes worth running; `test_truncated_frames.py` proves a truncated stack
-carries its `<truncated>` marker. Build commands are in `CLAUDE.md`.
+carries its `<truncated>` marker. Build commands are in `AGENTS.md`.
 
 - After touching `ffikit`, run `test_memory.py`, `test_concurrency.py` and
   `test_atexit.py` too, and run the concurrency shape with
