@@ -17,6 +17,21 @@ kept as a record. Cite a symbol, not a line number.
 - **Configure the stack profiler once.** Move every `cpu_*` option except
   `cpu_implementation` out of `configure()` into one exported function, and
   document that only its first call per process takes effect, shutdown or not.
+- **Close the `cpu_async` install window, and make it loud until then.**
+  `asyncio::install` reads `sys.modules` once, so task unwinding can silently
+  do nothing and no profile distinguishes that from an idle loop:
+  - Patch `asyncio` and `uvloop` when they are imported, not when the agent
+    starts, as upstream's `ModuleWatchdog.after_module_imported` does. The
+    hook must also fire for a module already imported by `configure()`.
+  - Until that lands, warn when `uvloop` is absent from `sys.modules`, the way
+    the `asyncio` branch already does. `uvloop` imported after `configure()`
+    loses `track_asyncio_loop` entirely, so `unwind_tasks` never runs and
+    nothing is logged.
+  - `mod asyncio` is once-per-process, so a later `configure()` with
+    `cpu_async=False` still unwinds tasks through the first call's wrappers.
+  - `test_stack_async.py`'s `CPU_ASYNC=0` check reads one snapshot after the
+    first `async_cpuburn` hit, which can precede any sample of the idle task;
+    it needs a settle window to mean anything.
 - **The new upstream knobs are not exposed.** `set_gc_enabled`,
   `set_max_tasks_per_sample`, `set_baseline_core_pct`, `set_p_stable_window_s`
   and `set_p_stable_percentile` all sit at their upstream defaults because

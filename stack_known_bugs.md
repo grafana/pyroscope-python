@@ -132,13 +132,6 @@ its structure.
 `mod threads` and upstream. The wrappers keep running with no agent up; the
 link maps are spared by a `STARTED` check, the per-call overhead is not.
 
-### `cpu_async` only patches what is imported when the agent starts
-
-`rust/src/stack.rs` (`mod asyncio::install`). Upstream hooks the `asyncio` and
-`uvloop` imports with `ModuleWatchdog`; we read `sys.modules` once, so a process
-that imports either after `configure()` gets no task unwinding. Interposing on
-every import in the process is not worth closing that window.
-
 ### Aliases bound before `cpu_async` installs keep the unpatched function
 
 `rust/src/stack.rs` (`mod asyncio`). Upstream's `wrapping.wrap` rewrites the
