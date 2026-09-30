@@ -148,16 +148,18 @@ to populate echion's thread info map, and the accumulated cpu+wall samples
 upload as `process_cpu` alongside the memory profile. Verified against a live
 server with `scripts/tests/test_stack_cpu.py`.
 
-Adaptive sampling (`cpu_adaptive_sampling`), fast copy (`cpu_fast_copy`) and
-asyncio task unwinding (`cpu_async`, which covers uvloop too) are off by default
-but reach the sampler when asked for. `cpu_async` is the only one that stops at
-Rust: `mod asyncio` in `rust/src/stack.rs` patches `asyncio` and `uvloop` the
-way `mod threads` patches `threading`, and never touches
-`pyroscope_stack_configure`.
+Every sampler setting except `cpu_implementation` lives on its own entry point,
+`pyroscope.configure_cpu_profiler`, because none of them is re-appliable:
+`stack::set_options` takes the first call per process and refuses the rest,
+shutdown or not, and a session that starts the sampler fixes them too. Fast copy
+is on by default; adaptive sampling (`adaptive_sampling`) and asyncio task
+unwinding (`async_tracking`, which covers uvloop too) are off. `async_tracking`
+is the only one that stops at Rust: `mod asyncio` in `rust/src/stack.rs` patches
+`asyncio` and `uvloop` the way `mod threads` patches `threading`, and never
+touches `pyroscope_stack_configure`.
 
 Unlike upstream, fast copy's SIGSEGV/SIGBUS handlers and the faulthandler patch
-install only when it is on, from `configure()` rather than at import, and the
-first `configure()` fixes the choice for the process.
+install only when it is on, from `stack::start` rather than at import.
 
 Read all three tracking docs before picking up CPU profiler work:
 `stack_scope.md` for what this iteration is not doing, `stack_todo.md` for what

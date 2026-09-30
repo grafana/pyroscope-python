@@ -82,13 +82,13 @@ def wait_render(profile_type, canary, needle):
 
 
 def configure(canary):
+    pyroscope.configure_cpu_profiler(async_tracking=cpu_async)
     pyroscope.configure(
         application_name=app_name,
         server_address='http://localhost:4040',
         enable_logging=True,
         cpu_enabled=True,
         cpu_implementation=pyroscope.ProfilerImplementation.Stack,
-        cpu_async=cpu_async,
         mem_enabled=False,
         tags={
             'canary': canary,

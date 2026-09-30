@@ -47,6 +47,10 @@ fn bump_upload_seq() {}
 #[derive(Clone)]
 pub struct Config {
     pub enabled: bool,
+}
+
+#[derive(Debug)]
+pub struct Options {
     pub fast_copy: bool,
     pub fast_copy_warmup_s: f64,
     pub max_nframe: u32,
@@ -57,15 +61,50 @@ pub struct Config {
     pub async_tracking: bool,
 }
 
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            fast_copy: true,
+            fast_copy_warmup_s: 15.0,
+            max_nframe: 128,
+            max_threads: 25,
+            adaptive_sampling: false,
+            adaptive_target_overhead: 0.01,
+            adaptive_max_interval_us: 1_000_000,
+            async_tracking: false,
+        }
+    }
+}
+
 /// Tracks whether `pyroscope_stack_start` succeeded, so `stop` never calls
 /// `Sampler::stop()` on a sampler that was never started. That call bumps
 /// `thread_seq_num` unconditionally, and `Sampler::prefork` reads the
 /// counter's *parity* to decide whether to restart after a fork.
 static STARTED: AtomicBool = AtomicBool::new(false);
 
-/// The first `configure()` decides fast copy for the process: its SIGSEGV/SIGBUS
-/// handlers are installed at most once and never removed.
-static FAST_COPY: OnceLock<bool> = OnceLock::new();
+static OPTIONS: OnceLock<Options> = OnceLock::new();
+
+pub fn set_options(options: Options) -> bool {
+    set_options_in(&OPTIONS, options)
+}
+
+fn set_options_in(lock: &OnceLock<Options>, options: Options) -> bool {
+    if lock.set(options).is_err() {
+        log::warn!(
+            target: "pyroscope-python",
+            "ignoring configure_cpu_profiler: the CPU profiler options are already fixed for \
+             this process, by an earlier call or by the session that started the sampler; \
+             in effect: {:?}",
+            lock.get()
+        );
+        return false;
+    }
+    true
+}
+
+fn options() -> &'static Options {
+    OPTIONS.get_or_init(Options::default)
+}
 
 /// Start the vendored echion sampler, then register the live threads with it.
 ///
@@ -80,25 +119,8 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
         return Ok(());
     }
 
-    let interval_s = 1.0 / f64::from(sample_rate.max(1));
-    let fast_copy = *FAST_COPY.get_or_init(|| config.fast_copy);
-    if fast_copy != config.fast_copy {
-        log::warn!(
-            target: "pyroscope-python",
-            "ignoring cpu_fast_copy={}: fast copy is fixed by the first configure() call to {fast_copy}",
-            config.fast_copy
-        );
-    }
-    configure(
-        interval_s,
-        fast_copy,
-        config.fast_copy_warmup_s,
-        config.max_nframe,
-        config.max_threads,
-        config.adaptive_sampling,
-        config.adaptive_target_overhead,
-        config.adaptive_max_interval_us,
-    );
+    let options = options();
+    configure(1.0 / f64::from(sample_rate.max(1)), options);
 
     if is_safe_copy_failed() {
         log::error!(
@@ -121,7 +143,7 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
     STARTED.store(true, Ordering::Release);
 
     threads::install(py)?;
-    if config.async_tracking {
+    if options.async_tracking {
         asyncio::install(py);
     }
     Ok(())
@@ -145,27 +167,17 @@ pub fn postfork_child() {
 }
 
 #[cfg(not(miri))]
-#[allow(clippy::too_many_arguments)]
-fn configure(
-    interval_s: f64,
-    fast_copy: bool,
-    fast_copy_warmup_s: f64,
-    max_nframes: u32,
-    max_threads: u32,
-    adaptive_sampling: bool,
-    target_overhead: f64,
-    max_sampling_period_us: u64,
-) {
+fn configure(interval_s: f64, options: &Options) {
     unsafe {
         pyroscope_stack_configure(
             interval_s,
-            fast_copy,
-            fast_copy_warmup_s,
-            max_nframes,
-            max_threads,
-            adaptive_sampling,
-            target_overhead,
-            max_sampling_period_us,
+            options.fast_copy,
+            options.fast_copy_warmup_s,
+            options.max_nframe,
+            options.max_threads,
+            options.adaptive_sampling,
+            options.adaptive_target_overhead,
+            options.adaptive_max_interval_us,
         )
     }
 }
@@ -196,18 +208,7 @@ fn sampler_stop() {
 }
 
 #[cfg(miri)]
-#[allow(clippy::too_many_arguments)]
-fn configure(
-    _interval_s: f64,
-    _fast_copy: bool,
-    _fast_copy_warmup_s: f64,
-    _max_nframes: u32,
-    _max_threads: u32,
-    _adaptive_sampling: bool,
-    _target_overhead: f64,
-    _max_sampling_period_us: u64,
-) {
-}
+fn configure(_interval_s: f64, _options: &Options) {}
 
 #[cfg(miri)]
 fn fast_copy_initialized() -> bool {
@@ -1011,6 +1012,27 @@ mod tests {
         profile.string_table[index as usize].as_str()
     }
 
+    #[test]
+    fn cpu_options_are_fixed_by_the_first_call() {
+        let lock = OnceLock::new();
+
+        assert!(set_options_in(
+            &lock,
+            Options {
+                max_nframe: 7,
+                ..Options::default()
+            }
+        ));
+        assert!(!set_options_in(
+            &lock,
+            Options {
+                max_nframe: 9,
+                ..Options::default()
+            }
+        ));
+        assert_eq!(lock.get().expect("the first call seals").max_nframe, 7);
+    }
+
     #[cfg(not(miri))]
     fn upload_seq() -> Option<u64> {
         Some(unsafe { pyroscope_stack_upload_seq() })
@@ -1028,7 +1050,13 @@ mod tests {
     fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
         // 50 Hz on the sampler against the 100 Hz passed to dump_pprof, so the
         // period asserted below can only have come from the sampler.
-        configure(1.0 / 50.0, false, 0.0, 64, 25, false, 0.01, 1_000_000);
+        configure(
+            1.0 / 50.0,
+            &Options {
+                fast_copy: false,
+                ..Options::default()
+            },
+        );
 
         let frames = [FFIFrame {
             function_name: intern("stack::tests::some_function"),

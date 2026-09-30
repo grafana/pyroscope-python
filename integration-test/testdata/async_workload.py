@@ -52,13 +52,15 @@ def main():
     signal.signal(signal.SIGINT, request_shutdown)
     signal.signal(signal.SIGTERM, request_shutdown)
 
+    if not pyroscope.configure_cpu_profiler(async_tracking=True):
+        raise AssertionError("configure_cpu_profiler() returned False")
+
     if not pyroscope.configure(
         application_name=os.environ["PYROSCOPE_APPLICATION_NAME"],
         server_address=os.environ["PYROSCOPE_SERVER_ADDRESS"],
         enable_logging=True,
         cpu_enabled=True,
         cpu_implementation=pyroscope.ProfilerImplementation.Stack,
-        cpu_async=True,
         mem_enabled=False,
         upload_interval=1,
         tags={"canary": os.environ["CANARY"]},

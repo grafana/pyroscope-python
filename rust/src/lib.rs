@@ -132,6 +132,38 @@ fn initialize_logging(logging_level: u32) -> bool {
 
 #[allow(clippy::too_many_arguments)]
 #[pyfunction]
+fn configure_cpu_profiler(
+    fast_copy: bool,
+    fast_copy_warmup: f64,
+    max_nframe: u32,
+    max_threads: u32,
+    adaptive_sampling: bool,
+    adaptive_target_overhead: f64,
+    adaptive_max_interval_us: u64,
+    async_tracking: bool,
+) -> bool {
+    if !fast_copy_warmup.is_finite() || fast_copy_warmup < 0.0 {
+        log::error!(
+            target: "pyroscope-python",
+            "fast_copy_warmup must be a finite, non-negative number of seconds, got {fast_copy_warmup}"
+        );
+        return false;
+    }
+
+    stack::set_options(stack::Options {
+        fast_copy,
+        fast_copy_warmup_s: fast_copy_warmup,
+        max_nframe,
+        max_threads,
+        adaptive_sampling,
+        adaptive_target_overhead,
+        adaptive_max_interval_us,
+        async_tracking,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+#[pyfunction]
 fn initialize_agent(
     py: Python<'_>,
     application_name: String,
@@ -157,26 +189,11 @@ fn initialize_agent(
     mem_enable_mem_domain: bool,
     cpu_enabled: bool,
     cpu_implementation: ProfilerImplementation,
-    cpu_fast_copy: bool,
-    cpu_fast_copy_warmup: f64,
-    cpu_max_nframe: u32,
-    cpu_max_threads: u32,
-    cpu_adaptive_sampling: bool,
-    cpu_adaptive_target_overhead: f64,
-    cpu_adaptive_max_interval_us: u64,
-    cpu_async: bool,
 ) -> bool {
     if !cpu_enabled && !mem_enabled {
         log::error!(
             target: "pyroscope-python",
             "at least one of CPU or memory profiling must be enabled"
-        );
-        return false;
-    }
-    if !cpu_fast_copy_warmup.is_finite() || cpu_fast_copy_warmup < 0.0 {
-        log::error!(
-            target: "pyroscope-python",
-            "cpu_fast_copy_warmup must be a finite, non-negative number of seconds, got {cpu_fast_copy_warmup}"
         );
         return false;
     }
@@ -218,14 +235,6 @@ fn initialize_agent(
         },
         stack::Config {
             enabled: cpu_enabled && cpu_implementation == ProfilerImplementation::Stack,
-            fast_copy: cpu_fast_copy,
-            fast_copy_warmup_s: cpu_fast_copy_warmup,
-            max_nframe: cpu_max_nframe,
-            max_threads: cpu_max_threads,
-            adaptive_sampling: cpu_adaptive_sampling,
-            adaptive_target_overhead: cpu_adaptive_target_overhead,
-            adaptive_max_interval_us: cpu_adaptive_max_interval_us,
-            async_tracking: cpu_async,
         },
     )
     .tags(tags)
@@ -306,6 +315,7 @@ fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ProfilerImplementation>()?;
     m.add_function(wrap_pyfunction!(initialize_logging, m)?)?;
     m.add_function(wrap_pyfunction!(initialize_agent, m)?)?;
+    m.add_function(wrap_pyfunction!(configure_cpu_profiler, m)?)?;
     m.add_function(wrap_pyfunction!(drop_agent, m)?)?;
     m.add_function(wrap_pyfunction!(add_thread_tag, m)?)?;
     m.add_function(wrap_pyfunction!(remove_thread_tag, m)?)?;

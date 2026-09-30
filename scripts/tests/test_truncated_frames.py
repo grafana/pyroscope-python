@@ -71,13 +71,13 @@ def main():
     canary = uuid.uuid4().hex
     logging.info('canary %s', canary)
 
+    pyroscope.configure_cpu_profiler(max_nframe=4)
     pyroscope.configure(
         application_name=app_name,
         server_address='http://localhost:4040',
         enable_logging=True,
         cpu_enabled=True,
         cpu_implementation=pyroscope.ProfilerImplementation.Stack,
-        cpu_max_nframe=4,
         mem_enabled=True,
         mem_max_nframe=4,
         tags={

@@ -23,8 +23,8 @@ no getter for faulthandler's `file` or `all_threads`.
 `rust/src/stack.rs` (`_patched_enable`). The `disable()` + `enable()` pair stops
 faulthandler recording itself as its own previous handler, but `disable()`
 restores the saved handler for all five of its signals, so a handler installed
-between two `enable()` calls is wiped. Reachable only with fast copy on, which
-is not the default.
+between two `enable()` calls is wiped. Reachable whenever fast copy is on, which
+is the default.
 
 ### `enable()` during the fast-copy warmup loses fast copy permanently
 
@@ -139,7 +139,7 @@ its structure.
 `mod threads` and upstream. The wrappers keep running with no agent up; the
 link maps are spared by a `STARTED` check, the per-call overhead is not.
 
-### Aliases bound before `cpu_async` installs keep the unpatched function
+### Aliases bound before `async_tracking` installs keep the unpatched function
 
 `rust/src/stack.rs` (`mod asyncio`). Upstream's `wrapping.wrap` rewrites the
 function's code object, which every existing alias follows; we assign module and

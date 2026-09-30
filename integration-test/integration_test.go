@@ -114,8 +114,8 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 	scenarios := []string{
 		"import_installs_nothing",
 		"pyspy_and_memory_install_nothing",
-		"default_installs_nothing",
-		"first_configure_wins",
+		"fast_copy_off_installs_nothing",
+		"first_cpu_configure_wins",
 		"stack_installs_both",
 		"fast_copy_off_leaves_faulthandler_unpatched",
 		"reconfigure_keeps_handlers",

@@ -14,10 +14,7 @@ kept as a record. Cite a symbol, not a line number.
 - **Investigate reusing dd-trace-py's Python source.** Assess whether it can
   replace the reimplementations in `rust/src/stack.rs` (`threads`, `asyncio`)
   and the Python modules defined from strings via `PyModule::from_code`.
-- **Configure the stack profiler once.** Move every `cpu_*` option except
-  `cpu_implementation` out of `configure()` into one exported function, and
-  document that only its first call per process takes effect, shutdown or not.
-- **Close the `cpu_async` install window, and make it loud until then.**
+- **Close the `async_tracking` install window, and make it loud until then.**
   `asyncio::install` reads `sys.modules` once, so task unwinding can silently
   do nothing and no profile distinguishes that from an idle loop:
   - Patch `asyncio` and `uvloop` when they are imported, not when the agent
@@ -28,15 +25,15 @@ kept as a record. Cite a symbol, not a line number.
     loses `track_asyncio_loop` entirely, so `unwind_tasks` never runs and
     nothing is logged.
   - `mod asyncio` is once-per-process, so a later `configure()` with
-    `cpu_async=False` still unwinds tasks through the first call's wrappers.
+    `async_tracking=False` still unwinds tasks through the first call's wrappers.
   - `test_stack_async.py`'s `CPU_ASYNC=0` check reads one snapshot after the
     first `async_cpuburn` hit, which can precede any sample of the idle task;
     it needs a settle window to mean anything.
 - **The new upstream knobs are not exposed.** `set_gc_enabled`,
   `set_max_tasks_per_sample`, `set_baseline_core_pct`, `set_p_stable_window_s`
   and `set_p_stable_percentile` all sit at their upstream defaults because
-  `pyroscope_stack_configure` does not pass them; `configure()` has no kwarg
-  for any of them.
+  `pyroscope_stack_configure` does not pass them; `configure_cpu_profiler` has
+  no kwarg for any of them.
 - **The sampling thread can die unreported.** `Sampler::sampling_thread`
   catches, stashes and `break`s; `take_sampling_thread_error` has no caller
   here, so a dead sampler looks like an idle one.
@@ -85,7 +82,7 @@ kept as a record. Cite a symbol, not a line number.
 - **On every vendor sync, re-delete `Datadog::PauseResult`.** It comes back in
   `sampler.hpp` and in three `Sampler::pause` returns; keeping
   `SamplerPauseResult` is what makes an upstream variant change a compile error.
-- **`cpu_fast_copy=True` is refused for embedded interpreters.** Upstream's
+- **`fast_copy=True` is refused for embedded interpreters.** Upstream's
   `is_python_embedded()` in `init_safe_copy` treats an unreadable
   `/proc/self/exe` as embedded, so fast copy silently stays on the syscall copy.
 - **Enabling GC frames takes more than `set_gc_enabled`.** Upstream's

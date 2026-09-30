@@ -36,14 +36,6 @@ def configure(
         mem_enable_mem_domain=True,
         cpu_enabled=True,
         cpu_implementation=ProfilerImplementation.PySpy,
-        cpu_fast_copy=False,
-        cpu_fast_copy_warmup=15.0,
-        cpu_max_nframe=64,
-        cpu_max_threads=25,
-        cpu_adaptive_sampling=False,
-        cpu_adaptive_target_overhead=0.01,
-        cpu_adaptive_max_interval_us=1000000,
-        cpu_async=False,
 ):
     if app_name is not None:
         warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
@@ -81,14 +73,34 @@ def configure(
         mem_enable_mem_domain,
         cpu_enabled,
         cpu_implementation,
-        cpu_fast_copy,
-        cpu_fast_copy_warmup,
-        cpu_max_nframe,
-        cpu_max_threads,
-        cpu_adaptive_sampling,
-        cpu_adaptive_target_overhead,
-        cpu_adaptive_max_interval_us,
-        cpu_async,
+    )
+
+def configure_cpu_profiler(
+        fast_copy=True,
+        fast_copy_warmup=15.0,
+        max_nframe=128,
+        max_threads=25,
+        adaptive_sampling=False,
+        adaptive_target_overhead=0.01,
+        adaptive_max_interval_us=1000000,
+        async_tracking=False,
+):
+    """Set the options of the stack CPU profiler, for the whole process.
+
+    Only the first call takes effect. A later call is refused and returns
+    False, including after shutdown(), and so is any call made once a
+    configure() with cpu_implementation=ProfilerImplementation.Stack has
+    started the profiler.
+    """
+    return lib.configure_cpu_profiler(
+        fast_copy,
+        fast_copy_warmup,
+        max_nframe,
+        max_threads,
+        adaptive_sampling,
+        adaptive_target_overhead,
+        adaptive_max_interval_us,
+        async_tracking,
     )
 
 def shutdown():

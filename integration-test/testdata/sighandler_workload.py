@@ -38,10 +38,10 @@ def expect(cond, message):
         raise AssertionError(message)
 
 
-def configure(**kwargs):
+def configure(fast_copy=True, fast_copy_warmup=WARMUP_SECONDS, **kwargs):
     kwargs.setdefault("cpu_implementation", pyroscope.ProfilerImplementation.Stack)
-    kwargs.setdefault("cpu_fast_copy", True)
-    kwargs.setdefault("cpu_fast_copy_warmup", WARMUP_SECONDS)
+    # Refused after the first call, which reconfigure_keeps_handlers relies on.
+    pyroscope.configure_cpu_profiler(fast_copy=fast_copy, fast_copy_warmup=fast_copy_warmup)
     expect(
         pyroscope.configure(
             application_name=os.environ["PYROSCOPE_APPLICATION_NAME"],
@@ -88,17 +88,21 @@ def pyspy_and_memory_install_nothing():
     shutdown()
 
 
-def default_installs_nothing():
-    configure(cpu_fast_copy=False)
+def fast_copy_off_installs_nothing():
+    configure(fast_copy=False)
     expect(handlers() == (0, 0), f"fast copy off installed handlers: {handlers()}")
     shutdown()
 
 
-def first_configure_wins():
-    configure(cpu_fast_copy=False)
+def first_cpu_configure_wins():
+    configure(fast_copy=False)
     shutdown()
-    configure(cpu_fast_copy=True)
-    expect(handlers() == (0, 0), f"a later configure() changed fast copy: {handlers()}")
+    expect(
+        not pyroscope.configure_cpu_profiler(fast_copy=True),
+        "configure_cpu_profiler() was accepted a second time",
+    )
+    configure(fast_copy=True)
+    expect(handlers() == (0, 0), f"a later configure_cpu_profiler() changed fast copy: {handlers()}")
     shutdown()
 
 
@@ -111,7 +115,7 @@ def stack_installs_both():
 
 def fast_copy_off_leaves_faulthandler_unpatched():
     enable, disable = faulthandler.enable, faulthandler.disable
-    configure(cpu_fast_copy=False)
+    configure(fast_copy=False)
     expect(faulthandler.enable is enable, "fast copy off patched faulthandler.enable")
     expect(faulthandler.disable is disable, "fast copy off patched faulthandler.disable")
     shutdown()
@@ -186,7 +190,7 @@ def disable_after_warmup_keeps_ours():
 
 
 def enable_during_warmup_falls_back():
-    configure(cpu_fast_copy_warmup=3)
+    configure(fast_copy_warmup=3)
     time.sleep(0.5)
     faulthandler.enable()
     time.sleep(4)
@@ -219,8 +223,8 @@ class Scenario(NamedTuple):
 SCENARIOS = {
     "import_installs_nothing": Scenario(),
     "pyspy_and_memory_install_nothing": Scenario(),
-    "default_installs_nothing": Scenario(),
-    "first_configure_wins": Scenario(),
+    "fast_copy_off_installs_nothing": Scenario(),
+    "first_cpu_configure_wins": Scenario(),
     "stack_installs_both": Scenario(),
     "fast_copy_off_leaves_faulthandler_unpatched": Scenario(),
     "reconfigure_keeps_handlers": Scenario(),

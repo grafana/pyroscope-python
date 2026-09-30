@@ -94,8 +94,8 @@ Two commits, unrelated but tiny.
 `stack_ffi.cpp`, the `pyroscope_stack` cmake target, `rust/src/stack.rs`,
 `CpuWallProfile` and `SamplerPauseResult`, every `stack::` arm in
 `ffi.rs`/`ffikit.rs`/`lib.rs`, `pyroscope.rs`'s `process_cpu` dump,
-`session.rs`'s `disabled_stack_config`, `ProfilerImplementation` and the eight
-`cpu_*` knobs, `test_stack_cpu.py`, `fork_workload.py`,
+`session.rs`'s `disabled_stack_config`, `ProfilerImplementation` and
+`configure_cpu_profiler` with its eight options, `test_stack_cpu.py`, `fork_workload.py`,
 `sighandler_workload.py`, `restart_workload.py` and their Go tests, and the four
 tracking docs.
 
