@@ -29,11 +29,9 @@ kept as a record. Cite a symbol, not a line number.
   - `test_stack_async.py`'s `CPU_ASYNC=0` check reads one snapshot after the
     first `async_cpuburn` hit, which can precede any sample of the idle task;
     it needs a settle window to mean anything.
-- **The new upstream knobs are not exposed.** `set_gc_enabled`,
-  `set_max_tasks_per_sample`, `set_baseline_core_pct`, `set_p_stable_window_s`
-  and `set_p_stable_percentile` all sit at their upstream defaults because
-  `pyroscope_stack_configure` does not pass them; `configure_cpu_profiler` has
-  no kwarg for any of them.
+- **GC frames are unreachable.** `set_gc_enabled` has no kwarg, and it is not
+  enough on its own: `GCFrameTracker::install_current_interpreter` and its
+  uninstall have no caller and need the GIL, which `pyroscope_stack_stop` drops.
 - **The sampling thread can die unreported.** `Sampler::sampling_thread`
   catches, stashes and `break`s; `take_sampling_thread_error` has no caller
   here, so a dead sampler looks like an idle one.
@@ -85,9 +83,6 @@ kept as a record. Cite a symbol, not a line number.
 - **`fast_copy=True` is refused for embedded interpreters.** Upstream's
   `is_python_embedded()` in `init_safe_copy` treats an unreadable
   `/proc/self/exe` as embedded, so fast copy silently stays on the syscall copy.
-- **Enabling GC frames takes more than `set_gc_enabled`.** Upstream's
-  `stack_start_impl` also pairs `GCFrameTracker::install_current_interpreter()`
-  with an uninstall on stop, both under the GIL.
 
 ## Verification
 

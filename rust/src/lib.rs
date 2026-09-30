@@ -137,9 +137,13 @@ fn configure_cpu_profiler(
     fast_copy_warmup: f64,
     max_nframe: u32,
     max_threads: u32,
+    max_tasks: u32,
     adaptive_sampling: bool,
     adaptive_target_overhead: f64,
     adaptive_max_interval_us: u64,
+    adaptive_baseline: f64,
+    adaptive_p_stable_window_s: u32,
+    adaptive_p_stable_percentile: f64,
     async_tracking: bool,
 ) -> bool {
     if !fast_copy_warmup.is_finite() || fast_copy_warmup < 0.0 {
@@ -150,14 +154,38 @@ fn configure_cpu_profiler(
         return false;
     }
 
+    if !adaptive_baseline.is_finite() || adaptive_baseline < 0.0 {
+        log::error!(
+            target: "pyroscope-python",
+            "adaptive_baseline must be a finite, non-negative number of core-percent units, \
+             got {adaptive_baseline}"
+        );
+        return false;
+    }
+
+    if !adaptive_p_stable_percentile.is_finite()
+        || !(0.0..=100.0).contains(&adaptive_p_stable_percentile)
+    {
+        log::error!(
+            target: "pyroscope-python",
+            "adaptive_p_stable_percentile must be a percentage between 0 and 100, \
+             got {adaptive_p_stable_percentile}"
+        );
+        return false;
+    }
+
     stack::set_options(stack::Options {
         fast_copy,
         fast_copy_warmup_s: fast_copy_warmup,
         max_nframe,
         max_threads,
+        max_tasks,
         adaptive_sampling,
         adaptive_target_overhead,
         adaptive_max_interval_us,
+        adaptive_baseline,
+        adaptive_p_stable_window_s,
+        adaptive_p_stable_percentile,
         async_tracking,
     })
 }

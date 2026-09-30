@@ -80,9 +80,13 @@ def configure_cpu_profiler(
         fast_copy_warmup=15.0,
         max_nframe=128,
         max_threads=25,
+        max_tasks=50,
         adaptive_sampling=False,
         adaptive_target_overhead=0.01,
         adaptive_max_interval_us=1000000,
+        adaptive_baseline=0.0,
+        adaptive_p_stable_window_s=600,
+        adaptive_p_stable_percentile=95.0,
         async_tracking=False,
 ):
     """Set the options of the stack CPU profiler, for the whole process.
@@ -91,15 +95,28 @@ def configure_cpu_profiler(
     False, including after shutdown(), and so is any call made once a
     configure() with cpu_implementation=ProfilerImplementation.Stack has
     started the profiler.
+
+    max_threads and max_tasks cap how many threads, and how many leaf asyncio
+    tasks or greenlets, one sampling cycle covers; past the cap the sampler
+    picks a uniform random subset. 0 means no cap.
+
+    Everything named adaptive_* is inert unless adaptive_sampling is True.
+    adaptive_target_overhead is a fraction of one core, adaptive_baseline is an
+    overhead floor in core-percent units (1 = 0.01 core, 0 disables the floor),
+    and adaptive_p_stable_percentile is a percentage between 0 and 100.
     """
     return lib.configure_cpu_profiler(
         fast_copy,
         fast_copy_warmup,
         max_nframe,
         max_threads,
+        max_tasks,
         adaptive_sampling,
         adaptive_target_overhead,
         adaptive_max_interval_us,
+        adaptive_baseline,
+        adaptive_p_stable_window_s,
+        adaptive_p_stable_percentile,
         async_tracking,
     )
 

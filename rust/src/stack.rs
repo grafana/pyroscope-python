@@ -20,9 +20,13 @@ unsafe extern "C" {
         fast_copy_warmup_s: f64,
         max_nframes: u32,
         max_threads: u32,
+        max_tasks: u32,
         adaptive_sampling: bool,
         target_overhead: f64,
         max_sampling_period_us: u64,
+        baseline_core_pct: f64,
+        p_stable_window_s: u32,
+        p_stable_percentile: f64,
     );
     fn pyroscope_stack_fast_copy_initialized() -> bool;
     fn pyroscope_stack_interval_us() -> u64;
@@ -55,9 +59,13 @@ pub struct Options {
     pub fast_copy_warmup_s: f64,
     pub max_nframe: u32,
     pub max_threads: u32,
+    pub max_tasks: u32,
     pub adaptive_sampling: bool,
     pub adaptive_target_overhead: f64,
     pub adaptive_max_interval_us: u64,
+    pub adaptive_baseline: f64,
+    pub adaptive_p_stable_window_s: u32,
+    pub adaptive_p_stable_percentile: f64,
     pub async_tracking: bool,
 }
 
@@ -68,9 +76,13 @@ impl Default for Options {
             fast_copy_warmup_s: 15.0,
             max_nframe: 128,
             max_threads: 25,
+            max_tasks: 50,
             adaptive_sampling: false,
             adaptive_target_overhead: 0.01,
             adaptive_max_interval_us: 1_000_000,
+            adaptive_baseline: 0.0,
+            adaptive_p_stable_window_s: 600,
+            adaptive_p_stable_percentile: 95.0,
             async_tracking: false,
         }
     }
@@ -175,9 +187,13 @@ fn configure(interval_s: f64, options: &Options) {
             options.fast_copy_warmup_s,
             options.max_nframe,
             options.max_threads,
+            options.max_tasks,
             options.adaptive_sampling,
             options.adaptive_target_overhead,
             options.adaptive_max_interval_us,
+            options.adaptive_baseline,
+            options.adaptive_p_stable_window_s,
+            options.adaptive_p_stable_percentile,
         )
     }
 }
@@ -1049,11 +1065,17 @@ mod tests {
     #[test]
     fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
         // 50 Hz on the sampler against the 100 Hz passed to dump_pprof, so the
-        // period asserted below can only have come from the sampler.
+        // period asserted below can only have come from the sampler. The
+        // non-default knobs are here so every setter behind
+        // pyroscope_stack_configure is crossed at least once.
         configure(
             1.0 / 50.0,
             &Options {
                 fast_copy: false,
+                max_tasks: 0,
+                adaptive_baseline: 1.0,
+                adaptive_p_stable_window_s: 5,
+                adaptive_p_stable_percentile: 50.0,
                 ..Options::default()
             },
         );

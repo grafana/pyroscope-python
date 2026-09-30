@@ -25,17 +25,24 @@ static constexpr double g_min_target_overhead = 1e-4;
  * adapt_sampling_interval divides by target_overhead, then casts to int64_t
  * before clamping, so a small divisor makes that conversion undefined. The
  * floor keeps us clear of it by ~9 orders of magnitude; see
- * stack_known_bugs.md for why the cast itself is left alone. Every other
- * setter here either clamps or accepts its whole range. */
+ * stack_known_bugs.md for why the cast itself is left alone.
+ *
+ * p_stable_percentile indexes the sorted window unguarded, so anything outside
+ * [0, 100] reads out of bounds. Every other setter here either clamps or
+ * accepts its whole range. */
 extern "C" void
 pyroscope_stack_configure(double interval_s,
                           bool fast_copy,
                           double fast_copy_warmup_s,
                           uint32_t max_nframes,
                           uint32_t max_threads,
+                          uint32_t max_tasks,
                           bool adaptive_sampling,
                           double target_overhead,
-                          uint64_t max_sampling_period_us)
+                          uint64_t max_sampling_period_us,
+                          double baseline_core_pct,
+                          uint32_t p_stable_window_s,
+                          double p_stable_percentile)
 {
     static std::once_flag safe_copy_once;
     std::call_once(safe_copy_once, init_safe_copy, fast_copy);
@@ -44,11 +51,17 @@ pyroscope_stack_configure(double interval_s,
     auto& sampler = Datadog::Sampler::get();
     sampler.set_max_frames(max_nframes);
     sampler.set_max_threads_per_sample(max_threads);
+    sampler.set_max_tasks_per_sample(max_tasks);
     sampler.set_adaptive_sampling(adaptive_sampling);
     if (std::isfinite(target_overhead) && target_overhead >= g_min_target_overhead) {
         sampler.set_target_overhead(target_overhead);
     }
     sampler.set_max_sampling_period(static_cast<microsecond_t>(max_sampling_period_us));
+    sampler.set_baseline_core_pct(baseline_core_pct);
+    sampler.set_p_stable_window_s(p_stable_window_s);
+    if (std::isfinite(p_stable_percentile) && p_stable_percentile >= 0.0 && p_stable_percentile <= 100.0) {
+        sampler.set_p_stable_percentile(p_stable_percentile);
+    }
     sampler.set_interval(interval_s);
     sampler.set_fast_copy_warmup_seconds(fast_copy_warmup_s);
 }

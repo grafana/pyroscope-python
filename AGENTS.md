@@ -153,10 +153,11 @@ Every sampler setting except `cpu_implementation` lives on its own entry point,
 `stack::set_options` takes the first call per process and refuses the rest,
 shutdown or not, and a session that starts the sampler fixes them too. Fast copy
 is on by default; adaptive sampling (`adaptive_sampling`) and asyncio task
-unwinding (`async_tracking`, which covers uvloop too) are off. `async_tracking`
-is the only one that stops at Rust: `mod asyncio` in `rust/src/stack.rs` patches
-`asyncio` and `uvloop` the way `mod threads` patches `threading`, and never
-touches `pyroscope_stack_configure`.
+unwinding (`async_tracking`, which covers uvloop too) are off, so the rest of
+the `adaptive_*` group is inert too. `async_tracking` is the only one that stops
+at Rust: `mod asyncio` in `rust/src/stack.rs` patches `asyncio` and `uvloop` the
+way `mod threads` patches `threading`, and never touches
+`pyroscope_stack_configure`.
 
 Unlike upstream, fast copy's SIGSEGV/SIGBUS handlers and the faulthandler patch
 install only when it is on, from `stack::start` rather than at import.
