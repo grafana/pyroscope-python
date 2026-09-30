@@ -174,6 +174,7 @@ fn initialize_agent(
         sampling_rate: sample_rate.into(),
         include_idle: !oncpu,
         include_thread_ids: true,
+        include_thread_names: report_thread_name,
         subprocesses: false,
         gil_only,
         lineno: line_no.into(),
