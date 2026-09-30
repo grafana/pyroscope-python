@@ -162,9 +162,9 @@ StackRenderer::render_frame(Frame& frame)
             name_str = missing_name;
         }
 
-        // Pyroscope patch: Pyroscope::intern_string is infallible (index 0, the
+        // Pyroscope patch: Pyroscope::intern_utf8_string is infallible (index 0, the
         // empty string, on any failure), so upstream's nullopt guard is gone.
-        name_id = Pyroscope::intern_string(name_str);
+        name_id = Pyroscope::intern_utf8_string(name_str);
         string_id_cache.insert({ frame.name, name_id });
     } else {
         name_id = maybe_name_id->second;
@@ -182,7 +182,7 @@ StackRenderer::render_frame(Frame& frame)
         }
 
         // Pyroscope patch: infallible; see the name_id case above.
-        filename_id = Pyroscope::intern_string(filename_str);
+        filename_id = Pyroscope::intern_utf8_string(filename_str);
         string_id_cache.insert({ frame.filename, filename_id });
     } else {
         filename_id = maybe_filename_id->second;
@@ -223,13 +223,13 @@ StackRenderer::render_native_frame(const std::string& name, const std::string& m
     }
 
     std::string display_name = module.empty() ? name : module + "." + name;
-    auto name_id = Pyroscope::intern_string(display_name);
+    auto name_id = Pyroscope::intern_utf8_string(display_name);
 
     // Native frames have no source file. Use a synthetic filename so the backend
     // attributes them to third-party ("library") code via the code-provenance
     // manifest. This sentinel must match the entry added in code_provenance.py.
     static constexpr std::string_view native_filename = "<native>";
-    auto filename_id = Pyroscope::intern_string(native_filename);
+    auto filename_id = Pyroscope::intern_utf8_string(native_filename);
 
     sample->push_frame(name_id, filename_id, 0);
 }

@@ -33,6 +33,13 @@ Both swaps act only `if (fast_copy_active)`, which `sampling_thread` holds false
 for the whole warmup, so faulthandler lands on top of our handler and the
 process stays on the syscall copy. Pinned by `enable_during_warmup_falls_back`.
 
+### A latin-1 frame name is read from the wrong offset
+
+`cpp/stack/src/echion/strings.cc` (`pyunicode_to_utf8`). It accepts
+`state.kind == 1` without checking `state.ascii`, and CPython puts latin-1
+compact data after `PyCompactUnicodeObject`, so `def café()` yields header
+bytes.
+
 ### Thread CPU time is reported as task CPU time
 
 `cpp/stack/src/stack_renderer.cpp` (`render_cpu_time`), carrying upstream's own

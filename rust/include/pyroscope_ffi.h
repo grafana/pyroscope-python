@@ -59,6 +59,8 @@ void pyroscope_push_sample(PprofBuilderType builder_type,
 
 extern void memalloc_heap_postfork_child(void);
 
-FFIInternedString pyroscope_string_table_intern_string(FFIStringView s);
+FFIInternedString pyroscope_string_table_intern_utf8(FFIStringView s);
+
+FFIInternedString pyroscope_string_table_intern_ascii(FFIStringView s);
 
 #endif  /* PYROSCOPE_FFI_H_ */

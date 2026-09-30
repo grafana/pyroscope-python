@@ -44,10 +44,6 @@ kept as a record. Cite a symbol, not a line number.
   fast-copy flags included, while `Sampler::sampling_thread` computes all of
   them each cycle; `copy_memory_error_count` and `sample_capture_cpu_time_us`
   are the two worth a sink.
-- **Non-UTF-8 frame names are undefined behaviour.**
-  `pyroscope_string_table_intern_string` calls `from_utf8_unchecked` on bytes
-  copied out of another process. libdatadog sanitized lossily at that boundary;
-  our interner replaced it without replacing the check.
 - **Reach the greenlet/gevent unwinder.** `Sampler::track_greenlet`,
   `untrack_greenlet`, `link_greenlets` and `record_greenlet_switch` have no
   caller and no FFI export; upstream's entry point is
@@ -85,7 +81,7 @@ kept as a record. Cite a symbol, not a line number.
   onto the teardown path itself.
 - **Do not spell `BITS_TO_PTR_MASKED` as `PyStackRef_AsPyObjectBorrow`.** Under
   `Py_STACKREF_DEBUG` the latter consults a debug table, which is wrong for a
-  stackref copied out of another process.
+  stackref copied out of another thread without the GIL.
 - **On every vendor sync, re-delete `Datadog::PauseResult`.** It comes back in
   `sampler.hpp` and in three `Sampler::pause` returns; keeping
   `SamplerPauseResult` is what makes an upstream variant change a compile error.

@@ -16,7 +16,7 @@
  * already re-aliases Datadog::string_id to Pyroscope::string_id.
  *
  * intern_string and intern_function are not re-exported here: the vendored
- * stack sampler calls Pyroscope::intern_string directly, and there is no
+ * stack sampler calls Pyroscope::intern_utf8_string directly, and there is no
  * function interning (commits "replace Datadog::intern_string with a shared
  * string table" and "replace Datadog::intern_function by reusing the encoder's
  * dedup"). */

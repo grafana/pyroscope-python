@@ -55,7 +55,7 @@ The non-cpu/wall half of `31c489a`, `32f9649`, `9907aaf`, `b326d9e`.
   `FFISample` gone. Leave `CpuWallProfile`, the `cpu_time`/`wall_time` slots and
   their three tests behind.
 - New `encode/interner.rs`: the process-wide `LeakableMutex<StringTable>`,
-  `pyroscope_string_table_intern_string`, `string_table()`, `clear()`,
+  `pyroscope_string_table_intern_utf8`, `string_table()`, `clear()`,
   `postfork_child()`, the interner-before-builder lock order, its test.
 - New `ffi.rs`: `pyroscope_push_sample` with the `Memory` and no-op `Cpu` arms.
 - `memory.rs`: drop the local `STRING_TABLE` and both `pyroscope_memprof_*`
@@ -65,7 +65,7 @@ The non-cpu/wall half of `31c489a`, `32f9649`, `9907aaf`, `b326d9e`.
   `stop` and `at_fork_after_in_child`. **The change to flag in review:** the
   string table now clears at agent teardown, not in `memory::stop`, so
   `start()`'s rollback no longer invalidates ids.
-- `Pyroscope.h`: `string_id`, `inline intern_string`, the `string_id`
+- `Pyroscope.h`: `string_id`, `inline intern_utf8_string`, the `string_id`
   `push_frame` overload, `Sample(max_nframes, PprofBuilderType)` (see
   `_memalloc_tb.cpp:136`). `ProfilerStats`/`ProfileBorrow` stay behind.
 - `cbindgen.toml` `[enum] prefix_with_name`; regenerate the header with `make

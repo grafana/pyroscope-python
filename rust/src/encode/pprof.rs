@@ -739,9 +739,8 @@ mod tests {
 
     #[test]
     fn new_string_table_interns_empty_at_zero() {
-        // Every "interning failed, so index 0" path in encode::interner (and
-        // the FFI contract documented on Pyroscope::intern_string) depends on
-        // index 0 being the empty string.
+        // Every "interning failed, so index 0" path in encode::interner
+        // depends on index 0 being the empty string.
         let mut strings = StringTable::new();
         assert_eq!(strings.add("").index, 0);
     }

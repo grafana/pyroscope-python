@@ -4,6 +4,12 @@ Python profiling agent. Ships as a single `pyroscope._native` extension: a Rust
 core (`rust/`) that owns session management, pprof encoding and upload, plus
 vendored C++ profilers (`cpp/`) that Rust drives over a cbindgen FFI boundary.
 
+**Every profiler here runs inside the process it profiles.** There is no
+out-of-process agent and nothing attaches to a foreign pid. Where a sampler
+reads memory with `process_vm_readv` / `mach_vm_read_overwrite`, the target is
+our own process: the syscall buys a fault-free read of another *thread* without
+taking the GIL, not access across a process boundary.
+
 ## What this branch is doing
 
 **Vendoring dd-trace-py's CPU profiler into Pyroscope**, reimplementing every
@@ -11,10 +17,10 @@ piece of it that depends on libdatadog.
 
 dd-trace-py's CPU profiler is an echion-based sampling stack profiler: a
 dedicated sampling thread walks other threads' Python frames out-of-band,
-reading CPython internals through `process_vm_readv` / `mach_vm_read_overwrite`
-rather than holding the GIL. It handles asyncio tasks, greenlets, uvloop, and
-native frames via `sys.monitoring`. That machinery is what we want; its
-transport is not.
+reading this process's own CPython internals through `process_vm_readv` /
+`mach_vm_read_overwrite` rather than holding the GIL. It handles asyncio tasks,
+greenlets, uvloop, and native frames via `sys.monitoring`. That machinery is
+what we want; its transport is not.
 
 This repeats what was already done for dd-trace-py's **memory** profiler
 (`cpp/memalloc/`), which is vendored, wired up and shipping. The CPU profiler
@@ -63,7 +69,7 @@ hand-synced.
 | `cpp/stack/` | upstream `profiling/stack/` | The echion CPU sampler, mirrored path for path. Runs and produces data. Upstream's `stack/src/stack.cpp` (the `_stack` CPython module) is **deleted**, replaced by `cpp/pyroscope/stack_ffi.cpp`. |
 | `cpp/dd_wrapper/` | upstream `profiling/dd_wrapper/` | Upstream's shared C++ layer. Mostly our shims; a few verbatim copies. |
 | `cpp/memalloc/` | upstream `profiling/memalloc/` | Memory profiler. Done and shipping. |
-| `cpp/pyroscope/Pyroscope.h` | ours | The central shim: `Sample`, `intern_string`, `string_id`, `ProfilerStats`, `ProfileBorrow`. Shared by both profilers. |
+| `cpp/pyroscope/Pyroscope.h` | ours | The central shim: `Sample`, `intern_utf8_string`, `string_id`, `ProfilerStats`, `ProfileBorrow`. Shared by both profilers. |
 | `cpp/profiling_helpers/` | upstream | Version-gated CPython frame accessors. |
 | `rust/src/encode/` | ours | pprof builder + the process-wide string interner the C++ side interns into. |
 | `rust/src/stack.rs` | ours | The cpu/wall accumulator and dump path behind `PprofBuilderType::CpuWall`. |
