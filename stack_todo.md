@@ -28,9 +28,6 @@ kept as a record. Cite a symbol, not a line number.
 - **GC frames are unreachable.** `set_gc_enabled` has no kwarg, and it is not
   enough on its own: `GCFrameTracker::install_current_interpreter` and its
   uninstall have no caller and need the GIL, which `pyroscope_stack_stop` drops.
-- **The sampling thread can die unreported.** `Sampler::sampling_thread`
-  catches, stashes and `break`s; `take_sampling_thread_error` has no caller
-  here, so a dead sampler looks like an idle one.
 - **Report the sampler's own counters.** `ProfilerStats` drops every setter,
   fast-copy flags included, while `Sampler::sampling_thread` computes all of
   them each cycle; `copy_memory_error_count` and `sample_capture_cpu_time_us`

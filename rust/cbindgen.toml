@@ -46,6 +46,7 @@ exclude = [
   "pyroscope_stack_reinstall_segv_handler",
   "pyroscope_stack_start",
   "pyroscope_stack_stop",
+  "pyroscope_stack_take_sampling_thread_error",
   "pyroscope_stack_upload_seq",
   "pyroscope_stack_register_thread",
   "pyroscope_stack_unregister_thread",

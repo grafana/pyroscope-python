@@ -281,6 +281,7 @@ impl PyroscopeAgent {
             }
         }
 
+        stack::report_sampling_thread_error();
         // The dump runs even when its profile is dropped, so the accumulator
         // drains every window instead of growing without bound.
         match (

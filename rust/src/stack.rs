@@ -33,6 +33,7 @@ unsafe extern "C" {
     fn pyroscope_stack_is_safe_copy_failed() -> bool;
     fn pyroscope_stack_start() -> bool;
     fn pyroscope_stack_stop();
+    fn pyroscope_stack_take_sampling_thread_error() -> bool;
 }
 
 #[cfg(all(test, not(miri)))]
@@ -223,6 +224,11 @@ fn sampler_stop() {
     unsafe { pyroscope_stack_stop() }
 }
 
+#[cfg(not(miri))]
+fn sampling_thread_failed() -> bool {
+    unsafe { pyroscope_stack_take_sampling_thread_error() }
+}
+
 #[cfg(miri)]
 fn configure(_interval_s: f64, _options: &Options) {}
 
@@ -248,6 +254,11 @@ fn sampler_start() -> bool {
 
 #[cfg(miri)]
 fn sampler_stop() {}
+
+#[cfg(miri)]
+fn sampling_thread_failed() -> bool {
+    false
+}
 
 pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
     if let Ok(mut pb) = PROFILE_BUILDER.mutex().lock() {
@@ -281,6 +292,16 @@ pub fn dump_pprof(sample_rate: u32, time_range: &TimeRange) -> Option<Vec<u8>> {
     }?;
     bump_upload_seq();
     Some(profile.encode_to_vec())
+}
+
+pub fn report_sampling_thread_error() {
+    if STARTED.load(Ordering::Acquire) && sampling_thread_failed() {
+        log::error!(
+            target: "pyroscope-python",
+            "the CPU stack sampler's sampling thread died and stopped sampling; \
+             its cpu/wall profiles are empty from here on"
+        );
+    }
 }
 
 /// Asks the sampler rather than restating `1 / sample_rate`, because adaptive
@@ -956,6 +977,11 @@ mod thread_registration_tests {
             before,
             "both threads unregistered"
         );
+    }
+
+    #[test]
+    fn a_sampler_that_never_started_stashed_no_error() {
+        assert!(!super::sampling_thread_failed());
     }
 
     /// `track_asyncio_loop` is a find-then-mutate on echion's thread map, so an

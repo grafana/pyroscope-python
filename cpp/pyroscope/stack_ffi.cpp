@@ -105,6 +105,12 @@ pyroscope_stack_stop()
     sampler.get_echion().renderer().reset_string_cache();
 }
 
+extern "C" bool
+pyroscope_stack_take_sampling_thread_error() noexcept
+{
+    return Datadog::Sampler::get().take_sampling_thread_error().has_value();
+}
+
 extern "C" SamplerPauseResult
 pyroscope_stack_pause_sampling()
 {
