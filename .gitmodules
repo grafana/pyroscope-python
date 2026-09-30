@@ -1,0 +1,4 @@
+[submodule "dd-trace-py"]
+	path = dd-trace-py
+	url = git@github.com:korniltsev-grafanista/dd-trace-py.git
+	branch = main
