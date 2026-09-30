@@ -14,6 +14,11 @@ kept as a record. Cite a symbol, not a line number.
 - **Investigate reusing dd-trace-py's Python source.** Assess whether it can
   replace the reimplementations in `rust/src/stack.rs` (`threads`, `asyncio`)
   and the Python modules defined from strings via `PyModule::from_code`.
+- **Measure what `PyModule::from_code` costs at start.** `threads::install`,
+  `asyncio::install` and `faulthandler::install` each compile their `INSTALL_SRC`
+  from source at startup; compare against shipping them as `.py` files whose
+  `.pyc` CPython can cache.
+
 - **Close the `async_tracking` install window.** `asyncio::install` reads
   `sys.modules` once, so a module imported later is never patched; both misses
   warn now, but no profile distinguishes them from an idle loop:
