@@ -182,13 +182,17 @@ jobs:
         include:
           - target: x86_64-apple-darwin
             mk-arch: amd64
-            macos-version: "14"
+            runs-on: macos-15-intel
+            pyroscope-arch: amd64
+            pyroscope-sha256: ff380e029706f95262733d3b1225bf87059139176ae1ddcc17e93cd3d584c8a3
           - target: aarch64-apple-darwin
             mk-arch: arm64
-            macos-version: "14"
+            runs-on: macos-15
+            pyroscope-arch: arm64
+            pyroscope-sha256: 465f72bd963e7ad49e760af5fc174d73d9068b67f59da76196416a402fdf6827
 
     name: Python macOS - ${{ matrix.target }} - ${{ matrix.python-version }}
-    runs-on: macos-${{ matrix.macos-version }}
+    runs-on: ${{ matrix.runs-on }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -202,6 +206,10 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
         with:
           python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: stable
+          cache-dependency-path: integration-test/go.mod
 
       - run: python -m pip install build wheel
       - run: make mac/${{ matrix.mk-arch }}
@@ -214,6 +222,31 @@ jobs:
               unzip -p "$whl" '*.dist-info/WHEEL'
               unzip -p "$whl" '*.dist-info/WHEEL' | grep -qE 'Tag:.*macosx_11_0_' || { echo "ERROR: expected macosx_11_0 tag not found"; exit 1; }
           done
+
+      - name: Download Pyroscope
+        env:
+          PYROSCOPE_ARCH: ${{ matrix.pyroscope-arch }}
+          PYROSCOPE_SHA256: ${{ matrix.pyroscope-sha256 }}
+          PYROSCOPE_VERSION: "2.0.6"
+        run: |
+          set -euxo pipefail
+          archive="pyroscope_${PYROSCOPE_VERSION}_darwin_${PYROSCOPE_ARCH}.tar.gz"
+          url="https://github.com/grafana/pyroscope/releases/download/v${PYROSCOPE_VERSION}/${archive}"
+          mkdir -p "$RUNNER_TEMP/pyroscope"
+          curl --fail --location --silent --show-error --output "$RUNNER_TEMP/$archive" "$url"
+          echo "${PYROSCOPE_SHA256}  $RUNNER_TEMP/$archive" | shasum -a 256 --check
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/pyroscope" pyroscope
+
+      - name: Run integration tests
+        run: make test
+        working-directory: integration-test
+        env:
+          PYROSCOPE_BINARY: ${{ runner.temp }}/pyroscope/pyroscope
+          PYROSCOPE_INTEGRATION_TEST_MODE: native
+          PYROSCOPE_PYTHON_BINARY: python
+          PYROSCOPE_WHEEL_DIR: ${{ github.workspace }}/dist
+          PYROSCOPE_WHEEL_TARGET: mac/${{ matrix.mk-arch }}
+          GO_TEST_TIMEOUT: 30m
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

@@ -3,10 +3,12 @@ ci-matrix:
 	@output="$$(go test -list . -json .)" && \
 		printf '%s\n' "$$output" | jq -sc '[.[] | select(.Action=="output") | .Output | rtrimstr("\n") | select(startswith("Test"))]'
 
+UNAME_SYSTEM := $(shell uname -s)
 UNAME_MACHINE := $(shell uname -m)
 WHEEL_ARCH := $(if $(filter arm64 aarch64,$(UNAME_MACHINE)),arm64,amd64)
-WHEEL_PLATFORM := $(if $(findstring alpine,$(PYTHON_IMAGE_SUFFIX)),musllinux,linux)
+WHEEL_PLATFORM := $(if $(filter Darwin,$(UNAME_SYSTEM)),mac,$(if $(findstring alpine,$(PYTHON_IMAGE_SUFFIX)),musllinux,linux))
 WHEEL_TARGET := $(or $(PYROSCOPE_WHEEL_TARGET),$(WHEEL_PLATFORM)/$(WHEEL_ARCH))
+GO_TEST_TIMEOUT ?= 20m
 
 .PHONY: wheel
 wheel:
@@ -18,4 +20,8 @@ wheel:
 
 .PHONY: test/%
 test/%: wheel
-	go test -v -timeout 20m -count=1 -run '^$*$$' .
+	go test -v -timeout $(GO_TEST_TIMEOUT) -count=1 -run '^$*$$' .
+
+.PHONY: test
+test: wheel
+	go test -v -timeout $(GO_TEST_TIMEOUT) -count=1 .
