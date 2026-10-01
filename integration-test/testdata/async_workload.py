@@ -7,6 +7,11 @@ import threading
 
 import pyroscope
 
+try:
+    import uvloop
+except ImportError:
+    uvloop = None
+
 
 logger = logging.getLogger(__name__)
 shutdown_requested = threading.Event()
@@ -31,6 +36,9 @@ def request_shutdown(signum, _frame):
 
 
 async def amain():
+    loop = type(asyncio.get_running_loop())
+    logger.info("event loop %s.%s", loop.__module__, loop.__qualname__)
+
     idle = asyncio.create_task(async_idle())
     stop = threading.Event()
     burners = asyncio.gather(async_burn(stop), async_burn(stop))
@@ -52,6 +60,8 @@ def main():
     signal.signal(signal.SIGINT, request_shutdown)
     signal.signal(signal.SIGTERM, request_shutdown)
 
+    runner = asyncio.run if uvloop is None else uvloop.run
+
     if not pyroscope.configure_cpu_profiler(async_tracking=True):
         raise AssertionError("configure_cpu_profiler() returned False")
 
@@ -67,7 +77,7 @@ def main():
     ):
         raise AssertionError("configure() returned False")
 
-    asyncio.run(amain())
+    runner(amain())
 
     if not pyroscope.shutdown():
         raise AssertionError("shutdown() returned False")

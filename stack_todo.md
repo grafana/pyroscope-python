@@ -36,14 +36,16 @@ kept as a record. Cite a symbol, not a line number.
   - `test_stack_async.py`'s `CPU_ASYNC=0` check reads one snapshot after the
     first `async_cpuburn` hit, which can precede any sample of the idle task;
     it needs a settle window to mean anything.
-- **Automate the uvloop test.** `test_stack_async.py`'s `UVLOOP=1` path only
-  runs by hand, so nothing in CI imports uvloop: the `integration-test` workload
-  container installs with `pip install --no-index` and cannot reach its wheel.
+- **Prove `set_uvloop_mode` fired in the uvloop integration test.**
+  `TestPythonStackProfilerAsyncio/uvloop` pins the loop class, not the splice:
+  asserting `amain`'s parent frame fails because echion drops the class
+  qualifier before 3.11 and both scenarios emit mis-spliced `async_idle` lines.
 - **Reach the greenlet/gevent unwinder.** `Sampler::track_greenlet`,
   `untrack_greenlet`, `link_greenlets` and `record_greenlet_switch` have no
   caller and no FFI export; upstream's entry point is
   `_task.initialize_gevent_support()`, and it reads thread idents from a
   pre-monkeypatch `threading` that `stack::threads` has no equivalent of.
+  gevent ships no cp310 aarch64 wheel, so its workload needs a `ci.yml` exclusion.
 
 ## Traps
 
