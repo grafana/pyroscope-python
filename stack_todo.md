@@ -36,6 +36,9 @@ kept as a record. Cite a symbol, not a line number.
   - `test_stack_async.py`'s `CPU_ASYNC=0` check reads one snapshot after the
     first `async_cpuburn` hit, which can precede any sample of the idle task;
     it needs a settle window to mean anything.
+- **Automate the uvloop test.** `test_stack_async.py`'s `UVLOOP=1` path only
+  runs by hand, so nothing in CI imports uvloop: the `integration-test` workload
+  container installs with `pip install --no-index` and cannot reach its wheel.
 - **Reach the greenlet/gevent unwinder.** `Sampler::track_greenlet`,
   `untrack_greenlet`, `link_greenlets` and `record_greenlet_switch` have no
   caller and no FFI export; upstream's entry point is
