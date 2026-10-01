@@ -19,6 +19,12 @@ kept as a record. Cite a symbol, not a line number.
   from source at startup; compare against shipping them as `.py` files whose
   `.pyc` CPython can cache.
 
+- **Fold the stack module's globals into `ffikit::STATE`.** `STARTED`,
+  `OPTIONS`, `threads`/`asyncio`/`faulthandler`'s `INSTALLED` and
+  `PROFILE_BUILDER` each carry their own once-per-process lifetime, which is
+  the session lifetime `STATE` already tracks; moving them there would make the
+  start/stop ordering one piece of state instead of five.
+
 - **Close the `async_tracking` install window.** `asyncio::install` reads
   `sys.modules` once, so a module imported later is never patched; both misses
   warn now, but no profile distinguishes them from an idle loop:
