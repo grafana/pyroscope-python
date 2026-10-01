@@ -36,9 +36,6 @@ kept as a record. Cite a symbol, not a line number.
   - `test_stack_async.py`'s `CPU_ASYNC=0` check reads one snapshot after the
     first `async_cpuburn` hit, which can precede any sample of the idle task;
     it needs a settle window to mean anything.
-- **GC frames are unreachable.** `set_gc_enabled` has no kwarg, and it is not
-  enough on its own: `GCFrameTracker::install_current_interpreter` and its
-  uninstall have no caller and need the GIL, which `pyroscope_stack_stop` drops.
 - **Reach the greenlet/gevent unwinder.** `Sampler::track_greenlet`,
   `untrack_greenlet`, `link_greenlets` and `record_greenlet_switch` have no
   caller and no FFI export; upstream's entry point is

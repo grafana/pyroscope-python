@@ -27,3 +27,8 @@ no write-up of how to implement it.
 - **No native monitoring.** `NativeCallRegistry::lookup` always returns
   `nullopt`, and upstream's `native_call_tracker.{hpp,cpp}` and `extern "C"`
   entry points are not ported.
+- **No GC frames.** `Sampler::set_gc_enabled` has no kwarg, and
+  `GCFrameTracker::install_current_interpreter` and its uninstall have no
+  caller, so `GCFrameTracker::capture` never runs. Reopen it only for 3.15+,
+  where `capture` reads the interpreter's own `gc.frame` and no `gc.callbacks`
+  callback needs installing under the GIL that `pyroscope_stack_stop` drops.
