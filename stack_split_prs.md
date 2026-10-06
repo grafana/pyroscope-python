@@ -1,6 +1,6 @@
 # CPU stack profiler: PRs to submit ahead of it
 
-Four PRs that main can take with no `cpp/stack` present. Landing them takes the
+Three PRs that main can take with no `cpp/stack` present. Landing them takes the
 sampler patch from ~9.2k lines / 87 files to ~8.2k / ~60, and the non-vendored
 part a reviewer must judge from ~3.4k to ~2.4k.
 
@@ -10,23 +10,6 @@ commit pairs are net-zero (`95c9fb6`, `0b40a0d`, `9ab2042` delete shims added
 earlier; `cebfee0` adds a `ci.yml` and `test_free_threaded.py` that `2844aca`
 deletes). Diff against the branch base `22c9c2f`, not local `main`, which is
 behind it.
-
-## A. C++ layout and build hygiene (~145 lines)
-
-`2a9c1fd`, `ed1bda3`, `e2ad430`, `bf7dbfb`, and `45158ce` minus every
-`pyroscope_stack` line.
-
-- `cpp/*` -> `cpp/memalloc/`, `cpp/Pyroscope.h` -> `cpp/pyroscope/`, and
-  `_memalloc_frame.h` includes `profiling_helpers/...` without the `../`.
-- cmake: `pyroscope_common` INTERFACE library, `MEMALLOC_SOURCES` as the
-  `pyroscope_memalloc` OBJECT library. The sampler PR then only *adds* a target.
-- cmake: drop the global `_POSIX_C_SOURCE`/`_DARWIN_C_SOURCE`, keeping the
-  `// Pyroscope patch:` note. macOS fix: they hide the BSD types abseil needs.
-- `build.rs`: `NATIVE_SOURCES` -> recursive `emit_rerun_for_dir`. After the move
-  every entry names a dead path, so C++ edits trigger no rebuild.
-
-Verify: cmake + `cargo test` + `python3 -m build --wheel`, on macOS and
-`ssh orb`; touch a file under `cpp/memalloc/` and confirm cargo rebuilds.
 
 ## B. Always build the C++ profiler, reject free-threaded CPython (~90 lines)
 
