@@ -3,8 +3,9 @@ include rust/Cargo.lock
 include rust/build.rs
 recursive-include rust/src/ *.rs
 include rust/include/pyroscope_ffi.h
-include cpp/CMakeLists.txt
-include cpp/BundleStaticLibrary.cmake
-recursive-include cpp/ *.h
-recursive-include cpp/ *.cpp
-recursive-include cpp/ *.hpp
+include dd-trace-py/CMakeLists.txt
+include dd-trace-py/BundleStaticLibrary.cmake
+include dd-trace-py/pyroscope/Pyroscope.h
+recursive-include dd-trace-py/ddtrace *.h
+recursive-include dd-trace-py/ddtrace *.cpp
+recursive-include dd-trace-py/ddtrace *.hpp

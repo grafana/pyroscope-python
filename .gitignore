@@ -15,5 +15,5 @@ dist/
 flamegraph.svg
 perf.data
 perf.data.*
-/cpp/cmake-build-*/
+/dd-trace-py/cmake-build-*/
 python/pyroscope_io.egg-info/

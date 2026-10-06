@@ -4,21 +4,22 @@ use std::path::{Path, PathBuf};
 
 const NATIVE_SOURCES: &[&str] = &[
     "CMakeLists.txt",
-    "Pyroscope.h",
-    "_memalloc.cpp",
-    "_memalloc_debug.h",
-    "_memalloc_frame.h",
-    "_memalloc_gc_guard.hpp",
-    "_memalloc_heap.cpp",
-    "_memalloc_heap.h",
-    "_memalloc_reentrant.cpp",
-    "_memalloc_reentrant.h",
-    "_memalloc_tb.cpp",
-    "_memalloc_tb.h",
-    "_pymacro.h",
-    "profiling_helpers/frame_accessors.h",
-    "profiling_helpers/linetable_parser.h",
-    "profiling_helpers/version_compat.h",
+    "BundleStaticLibrary.cmake",
+    "pyroscope/Pyroscope.h",
+    "ddtrace/profiling/collector/_memalloc.cpp",
+    "ddtrace/profiling/collector/_memalloc_debug.h",
+    "ddtrace/profiling/collector/_memalloc_frame.h",
+    "ddtrace/profiling/collector/_memalloc_gc_guard.hpp",
+    "ddtrace/profiling/collector/_memalloc_heap.cpp",
+    "ddtrace/profiling/collector/_memalloc_heap.h",
+    "ddtrace/profiling/collector/_memalloc_reentrant.cpp",
+    "ddtrace/profiling/collector/_memalloc_reentrant.h",
+    "ddtrace/profiling/collector/_memalloc_tb.cpp",
+    "ddtrace/profiling/collector/_memalloc_tb.h",
+    "ddtrace/profiling/collector/_pymacro.h",
+    "ddtrace/internal/datadog/profiling/profiling_helpers/frame_accessors.h",
+    "ddtrace/internal/datadog/profiling/profiling_helpers/linetable_parser.h",
+    "ddtrace/internal/datadog/profiling/profiling_helpers/version_compat.h",
 ];
 
 fn main() {
@@ -27,12 +28,13 @@ fn main() {
     }
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let cpp_dir = manifest_dir.join("../cpp");
+    let cpp_dir = manifest_dir.join("../dd-trace-py");
     let cpp_dir = cpp_dir.canonicalize().unwrap();
 
     rerun_if_native_sources_changed(&manifest_dir, &cpp_dir);
 
     let mut cfg = Config::new(&cpp_dir);
+    cfg.define("PYROSCOPE_FFI_INCLUDE_DIR", manifest_dir.join("include"));
 
     println!("cargo:rerun-if-env-changed=Python3_ROOT_DIR");
     let python_root = env::var_os("Python3_ROOT_DIR")
