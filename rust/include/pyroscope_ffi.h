@@ -22,12 +22,6 @@ typedef enum {
   PprofBuilderType_CpuWall,
 } PprofBuilderType;
 
-typedef enum {
-  SamplerPauseResult_Paused,
-  SamplerPauseResult_NotRunning,
-  SamplerPauseResult_Timeout,
-} SamplerPauseResult;
-
 typedef struct {
   uint32_t index;
 } FFIInternedString;

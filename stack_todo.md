@@ -75,9 +75,9 @@ kept as a record. Cite a symbol, not a line number.
 - **Do not spell `BITS_TO_PTR_MASKED` as `PyStackRef_AsPyObjectBorrow`.** Under
   `Py_STACKREF_DEBUG` the latter consults a debug table, which is wrong for a
   stackref copied out of another thread without the GIL.
-- **On every vendor sync, re-delete `Datadog::PauseResult`.** It comes back in
-  `sampler.hpp` and in three `Sampler::pause` returns; keeping
-  `SamplerPauseResult` is what makes an upstream variant change a compile error.
+- **On every vendor sync, check `Datadog::PauseResult` against `stack::PauseResult`.**
+  The Rust side is a hand-written `repr(u8)` mirror, so a new or renumbered
+  upstream variant compiles silently and reaches `pause_sampling` as an invalid value.
 - **`fast_copy=True` is refused for embedded interpreters.** Upstream's
   `is_python_embedded()` in `init_safe_copy` treats an unreadable
   `/proc/self/exe` as embedded, so fast copy silently stays on the syscall copy.

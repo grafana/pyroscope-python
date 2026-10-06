@@ -75,7 +75,7 @@ Two commits, unrelated but tiny.
 
 `cpp/stack/**`, `cpp/dd_wrapper/**` (no memalloc source includes it),
 `stack_ffi.cpp`, the `pyroscope_stack` cmake target, `rust/src/stack.rs`,
-`CpuWallProfile` and `SamplerPauseResult`, every `stack::` arm in
+`CpuWallProfile` and the `PauseResult` mirror, every `stack::` arm in
 `ffi.rs`/`ffikit.rs`/`lib.rs`, `pyroscope.rs`'s `process_cpu` dump,
 `session.rs`'s `disabled_stack_config`, `ProfilerImplementation` and
 `configure_cpu_profiler` with its twelve options, `test_stack_cpu.py`, `fork_workload.py`,

@@ -758,16 +758,17 @@ mod faulthandler {
     use pyo3::wrap_pyfunction;
     use std::sync::OnceLock;
 
+    // Keep in sync with Datadog::PauseResult in dd-trace-py's stack/include/sampler.hpp.
     #[allow(dead_code)]
-    #[repr(C)]
-    pub enum SamplerPauseResult {
-        Paused,
-        NotRunning,
-        Timeout,
+    #[repr(u8)]
+    enum PauseResult {
+        Paused = 0,
+        NotRunning = 1,
+        Timeout = 2,
     }
 
     unsafe extern "C" {
-        fn pyroscope_stack_pause_sampling() -> SamplerPauseResult;
+        fn pyroscope_stack_pause_sampling() -> PauseResult;
         fn pyroscope_stack_resume_sampling();
         fn pyroscope_stack_uninstall_segv_handler();
         fn pyroscope_stack_reinstall_segv_handler();
@@ -858,9 +859,9 @@ def install(faulthandler, threading, pause_sampling, resume_sampling, uninstall_
     #[pyfunction]
     fn pause_sampling(py: Python<'_>) -> Option<bool> {
         match py.detach(|| unsafe { pyroscope_stack_pause_sampling() }) {
-            SamplerPauseResult::Paused => Some(true),
-            SamplerPauseResult::NotRunning => Some(false),
-            SamplerPauseResult::Timeout => None,
+            PauseResult::Paused => Some(true),
+            PauseResult::NotRunning => Some(false),
+            PauseResult::Timeout => None,
         }
     }
 
