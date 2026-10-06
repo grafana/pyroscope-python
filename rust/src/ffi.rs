@@ -15,9 +15,9 @@ pub extern "C" fn pyroscope_push_sample(
     let values = unsafe { &*values };
     match builder_type {
         PprofBuilderType::Memory => crate::memory::push_sample(frames, values),
+        PprofBuilderType::CpuWall => crate::stack::push_sample(frames, values),
         // py-spy samples never cross the FFI boundary.
         PprofBuilderType::Cpu => {}
-        PprofBuilderType::CpuWall => {}
     }
 }
 
@@ -65,7 +65,7 @@ mod tests {
         pyroscope_push_sample(PprofBuilderType::Memory, frames.as_ptr(), 0, &values);
 
         // py-spy has no accumulator behind this boundary; a valid push must
-        // still be a no-op.
+        // still be a no-op. The CpuWall route is covered in crate::stack.
         pyroscope_push_sample(
             PprofBuilderType::Cpu,
             frames.as_ptr(),
