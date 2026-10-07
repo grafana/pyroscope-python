@@ -54,7 +54,7 @@ The C++ lives in the `dd-trace-py/` submodule: grafana/dd-trace-py, branch `CPU`
 
 | Path | Origin | Notes |
 |---|---|---|
-| `profiling/stack/` | upstream | The echion CPU sampler. Runs and produces data. Upstream's `stack/src/stack.cpp` (the `_stack` CPython module) is **deleted**, replaced by `dd-trace-py/pyroscope/stack_ffi.cpp`. |
+| `profiling/stack/` | upstream | The echion CPU sampler. Runs and produces data. Upstream's `stack/src/stack.cpp` (the `_stack` CPython module) is kept but **not built**, replaced by `dd-trace-py/pyroscope/stack_ffi.cpp`. |
 | `profiling/dd_wrapper/` | upstream | Upstream's shared C++ layer. Mostly our shims; a few verbatim copies. |
 | `collector/_memalloc*` | upstream | Memory profiler. Done and shipping. |
 | `dd-trace-py/pyroscope/Pyroscope.h` | ours | The central shim: `Sample`, `intern_utf8_string`, `string_id`, `ProfilerStats`, `ProfileBorrow`. Shared by both profilers. |

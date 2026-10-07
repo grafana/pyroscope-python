@@ -62,7 +62,7 @@ kept as a record. Cite a symbol, not a line number.
 - **`target_overhead` is a fraction here**, a `1..100` percentage in upstream's
   `stack.py`.
 - **Restore the SYSTEM marking on `stack/include/util`** if
-  `stack/src/stack.cpp` ever comes back -- it silenced `-Wold-style-cast` and
+  `stack/src/stack.cpp` is ever built -- it silenced `-Wold-style-cast` and
   `-Wcast-function-type-mismatch` on `cast_to_pyfunc.hpp`.
 - **Restore `SpanLinks::reset()`, `OriginTaskLinks::disable_and_reset()` and
   `native_call_registry.reset()`** in `pyroscope_stack_stop` with whichever
