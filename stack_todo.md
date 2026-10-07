@@ -33,9 +33,6 @@ kept as a record. Cite a symbol, not a line number.
     hook must also fire for a module already imported by `configure()`.
   - `mod asyncio` is once-per-process, so a later `configure()` with
     `async_tracking=False` still unwinds tasks through the first call's wrappers.
-  - `test_stack_async.py`'s `CPU_ASYNC=0` check reads one snapshot after the
-    first `async_cpuburn` hit, which can precede any sample of the idle task;
-    it needs a settle window to mean anything.
 - **Reach the greenlet/gevent unwinder.** `Sampler::track_greenlet`,
   `untrack_greenlet`, `link_greenlets` and `record_greenlet_switch` have no
   caller and no FFI export; upstream's entry point is
@@ -84,11 +81,9 @@ kept as a record. Cite a symbol, not a line number.
 
 ## Verification
 
-`scripts/tests/test_stack_cpu.py` is the only test that proves samples are
-produced; `test_stack_async.py` does the same for the task unwinder, and its
-`CPU_ASYNC`, `UVLOOP` and `CONFIGURE_INSIDE_LOOP` env knobs select the four
-shapes worth running; `test_truncated_frames.py` proves a truncated stack
-carries its `<truncated>` marker. Build commands are in `AGENTS.md`.
+`TestPythonStackProfilerOnCPU` and `TestPythonStackProfilerAsyncio` in
+`integration-test/` are the only tests that prove samples are produced; nothing
+covers the `<truncated>` marker. Build commands are in `AGENTS.md`.
 
 - After touching `ffikit`, run `test_memory.py`, `test_concurrency.py` and
   `test_atexit.py` too, and run the concurrency shape with

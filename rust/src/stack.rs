@@ -1,7 +1,7 @@
 use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
 use crate::encode::pprof::{CpuWallProfile, PProfBuilder};
-use crate::utils::TimeRange;
 use crate::forksafety::LeakableMutex;
+use crate::utils::TimeRange;
 use prost::Message;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -271,7 +271,10 @@ pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
 /// See `crate::memory::implementation::clear_samples` for the reasoning,
 /// including why the shared string table is deliberately left alone.
 pub fn clear_samples() {
-    let mut pb = PROFILE_BUILDER.mutex().lock().unwrap_or_else(|e| e.into_inner());
+    let mut pb = PROFILE_BUILDER
+        .mutex()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     pb.reset();
 }
 

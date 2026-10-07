@@ -131,7 +131,7 @@ design, so every ordering below is a real interleaving, not a theoretical one.
 ## Status and open work
 
 The C++ compiles and archives warning-free for Python 3.10-3.14 under Apple
-clang 21, clang 21 on `manylinux_2_28`, clang 20 on `musllinux_1_2`, and gcc
+clang 21, clang 22 on `manylinux2014` and `musllinux_1_2`, and gcc
 10.2/13/14. There is no cargo feature gating the
 C++ half any more -- it is always built. No profiler here supports
 free-threaded interpreters, py-spy and memalloc included, so `setup.py` and
@@ -142,7 +142,7 @@ it end to end: `crate::stack::start` configures and starts
 `Datadog::Sampler` through `dd-trace-py/pyroscope/stack_ffi.cpp`, patches `threading`
 to populate echion's thread info map, and the accumulated cpu+wall samples
 upload as `process_cpu` alongside the memory profile. Verified against a live
-server with `scripts/tests/test_stack_cpu.py`.
+server by `TestPythonStackProfilerOnCPU` in `integration-test/`.
 
 Every sampler setting except `cpu_implementation` lives on its own entry point,
 `pyroscope.configure_cpu_profiler`, because none of them is re-appliable:
@@ -192,10 +192,8 @@ Caveats worth knowing before trusting a green build:
 - `PL_LINUX` selects different code in `vm.cc` and `danger.cc`, so macOS alone
   misses real breakage. Build on Linux too (`ssh orb`, where these sources are
   mounted at identical paths).
-- The wheels are built with clang, not gcc: clang 21 from AlmaLinux 8 appstream
-  in `manylinux_2_28`, clang 20 from `apk add clang20` in `musllinux_1_2`. On
-  glibc, `docker/wheels.sh` pins clang's gcc installation so its libstdc++
-  headers match the `libstdc++.a` the rust link step consumes.
+- The wheels are built with clang 22, not gcc, installed by
+  `manylinux-install-clang` in `manylinux2014` and `musllinux_1_2`.
 - `-Werror` is on for `pyroscope_memalloc` and `pyroscope_stack`, and only
   those two: abseil is not warning-free. There is no switch to turn it off.
 - Regenerate the FFI header with `make ffi/python/header` after touching the
