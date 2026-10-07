@@ -1,5 +1,4 @@
 use crate::utils::TimeRange;
-#[cfg(feature = "memory")]
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 
@@ -16,17 +15,6 @@ pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
         return Ok(());
     }
 
-    #[cfg(not(feature = "memory"))]
-    {
-        let _ = py;
-        log::warn!(
-            target: "pyroscope-python",
-            "Memory profiling was enabled, but this build does not include memory profiling support; mem_enabled will be ignored."
-        );
-        Ok(())
-    }
-
-    #[cfg(feature = "memory")]
     unsafe {
         if let Some(err) = PyErr::take(py) {
             return Err(err);
@@ -70,7 +58,6 @@ pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u
     implementation::dump_pprof(heap_sample_size, time_range)
 }
 
-#[cfg(feature = "memory")]
 mod implementation {
     use crate::encode::pprof::PProfBuilder;
     use crate::encode::pprof::ffi::{FFIInternedString, FFISample, FFIStringView};
@@ -164,20 +151,5 @@ mod implementation {
             }
         })??;
         Some(profile.encode_to_vec())
-    }
-}
-
-#[cfg(not(feature = "memory"))]
-mod implementation {
-    use crate::utils::TimeRange;
-
-    pub unsafe fn memalloc_stop() {}
-
-    pub unsafe fn memalloc_heap_postfork_child() {}
-
-    pub fn clear_state() {}
-
-    pub fn dump_pprof(_heap_sample_size: u64, _time_range: &TimeRange) -> Option<Vec<u8>> {
-        None
     }
 }
