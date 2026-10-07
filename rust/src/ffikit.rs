@@ -36,32 +36,38 @@ fn create_http_client() -> Result<reqwest::blocking::Client> {
 }
 
 pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
-    let mut guard = STATE.mutex().lock()?;
-    match *guard {
-        State::Idle => {}
-        State::Busy => return Err(PyroscopeError::ConcurrentOperation),
-        State::Running(_) => return Err(PyroscopeError::AgentAlreadyRunning),
+    // Don't hold STATE while starting: future start code may run Python and yield the GIL to a thread that then blocks on STATE.
+    {
+        let mut guard = STATE.mutex().lock()?;
+        match *guard {
+            State::Idle => {}
+            State::Busy => return Err(PyroscopeError::ConcurrentOperation),
+            State::Running(_) => return Err(PyroscopeError::AgentAlreadyRunning),
+        }
+        *guard = State::Busy;
     }
+
     let mem_config = agent.config.mem_config.clone();
-    let start_agent = || -> Result<PyroscopeAgent> {
+
+    let started = (|| -> Result<PyroscopeAgent> {
+        memory::start(py, &mem_config).map_err(|err| {
+            PyroscopeError::new(&format!("failed to start memory profiler: {err}"))
+        })?;
         // Create the client only after the Idle check, so an already-running or
         // busy agent doesn't build (and, on macOS, spawn a thread for) a client
         // that would just be thrown away.
         let http_client = create_http_client()?;
         agent.build(http_client)?.start()
-    };
+    })();
 
-    memory::start(py, &mem_config)
-        .map_err(|err| PyroscopeError::new(&format!("failed to start memory profiler: {err}")))?;
-
-    let agent = start_agent();
-    match agent {
+    match started {
         Ok(agent) => {
-            *guard = State::Running(Box::new(agent));
+            *STATE.mutex().lock()? = State::Running(Box::new(agent));
             Ok(())
         }
         Err(err) => {
             memory::stop(py);
+            *STATE.mutex().lock()? = State::Idle;
             Err(err)
         }
     }
