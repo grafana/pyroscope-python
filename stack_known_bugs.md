@@ -1,7 +1,7 @@
 # CPU stack profiler: known bugs we are not fixing
 
 Accepted defects in `profiling/stack/`, `profiling/dd_wrapper/`, `dd-trace-py/pyroscope/stack_ffi.cpp`
-and `rust/src/stack.rs`. Work lives in `stack_todo.md`; an upstream bug never
+and `rust/src/stack/`. Work lives in `stack_todo.md`; an upstream bug never
 moves there -- we document it here and leave it. Things this iteration has
 decided not to do are in `stack_scope.md`. Most of these stay because a local
 fix to vendored logic is a vendor-sync conflict we carry forever.
@@ -13,14 +13,14 @@ stays. Cite a symbol, not a line number.
 
 ### A failing `faulthandler.enable()` leaves faulthandler disabled
 
-`rust/src/stack.rs` (`_patched_enable`). It runs `_original_disable()` before
+`rust/src/stack/faulthandler.rs` (`_patched_enable`). It runs `_original_disable()` before
 `_original_enable(*args)`, so `enable(file=closed_file)` raises and drops crash
 reporting that was active before the call. Not restorable faithfully: there is
 no getter for faulthandler's `file` or `all_threads`.
 
 ### `faulthandler.enable()` clobbers foreign handlers on its other signals
 
-`rust/src/stack.rs` (`_patched_enable`). The `disable()` + `enable()` pair stops
+`rust/src/stack/faulthandler.rs` (`_patched_enable`). The `disable()` + `enable()` pair stops
 faulthandler recording itself as its own previous handler, but `disable()`
 restores the saved handler for all five of its signals, so a handler installed
 between two `enable()` calls is wiped. Reachable whenever fast copy is on, which
@@ -74,19 +74,19 @@ Fixing it means defining what that signal does to the renderer contract.
 
 ### An already-running loop is registered without uvloop mode
 
-`rust/src/stack.rs` (`mod asyncio::install`), as upstream's
+`rust/src/stack/asyncio.rs` (`install`), as upstream's
 `link_existing_loop_to_current_thread`: neither calls `set_uvloop_mode`, so a
 `configure()` inside `uvloop.run` mis-splices every suspended task.
 
 ### `using_uvloop` is never cleared
 
-`rust/src/stack.rs` (`mod asyncio`), as upstream's `_asyncio.py`: only the
+`rust/src/stack/asyncio.rs`, as upstream's `_asyncio.py`: only the
 uvloop hooks write it, and always `True`, so a thread that runs uvloop and then
 plain asyncio keeps looking for `Runner.run`.
 
 ### `set_uvloop_mode` keys on the thread that created the loop
 
-`rust/src/stack.rs` (`mod asyncio`), as upstream's `_asyncio.py`. Both the
+`rust/src/stack/asyncio.rs`, as upstream's `_asyncio.py`. Both the
 `uvloop.new_event_loop` and policy hooks pass `current_thread().ident`, so a
 uvloop loop created on one thread and run on another leaves the running thread
 detecting the `Handle._run` boundary instead of `Runner.run`.
@@ -104,7 +104,7 @@ instead: `pyroscope_stack_configure` rejects anything below
 
 ### Threads not created through `threading.Thread` are invisible
 
-`rust/src/stack.rs` (`mod threads`). Registration hangs off
+`rust/src/stack/threads.rs`. Registration hangs off
 `Thread._set_native_id` / `_bootstrap_inner` plus a one-time sweep of
 `threading._active`, so raw `_thread.start_new_thread` threads, C-created
 threads and late `_DummyThread`s never register. The alternative --
@@ -114,7 +114,7 @@ kernel TID out-of-band, which `ThreadInfo::create` no longer needs a live
 
 ### `threading` stays patched after `shutdown()`
 
-`rust/src/stack.rs` (`mod threads`). Once-per-process with no uninstall, as
+`rust/src/stack/threads.rs`. Once-per-process with no uninstall, as
 upstream, so the wrappers keep registering with no agent running. Bounded by the
 live thread count; consequence is that a non-empty map is not proof the agent is
 up.
@@ -135,13 +135,13 @@ its structure.
 
 ### The asyncio patch stays installed after `shutdown()`
 
-`rust/src/stack.rs` (`mod asyncio`). Once-per-process with no uninstall, as
+`rust/src/stack/asyncio.rs`. Once-per-process with no uninstall, as
 `mod threads` and upstream. The wrappers keep running with no agent up; the
 link maps are spared by a `STARTED` check, the per-call overhead is not.
 
 ### Aliases bound before `async_tracking` installs keep the unpatched function
 
-`rust/src/stack.rs` (`mod asyncio`). Upstream's `wrapping.wrap` rewrites the
+`rust/src/stack/asyncio.rs`. Upstream's `wrapping.wrap` rewrites the
 function's code object, which every existing alias follows; we assign module and
 class attributes, so a module that did `from asyncio import shield` first is not
 covered. `uvloop.run`'s `loop_factory` keyword default is the one alias we
@@ -149,7 +149,7 @@ rebind by hand, because it is uvloop's own entry point.
 
 ### A failed asyncio patch is never retried
 
-`rust/src/stack.rs` (`mod asyncio::install`), as upstream, whose
+`rust/src/stack/asyncio.rs` (`install`), as upstream, whose
 `after_module_imported` hook fires at most once per module per process. Ours
 claims `INSTALLED` before patching for the same effect, because retrying would
 capture the first attempt's wrappers as the originals and chain a second layer

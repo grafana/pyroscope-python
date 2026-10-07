@@ -61,7 +61,7 @@ The C++ lives in the `dd-trace-py/` submodule: grafana/dd-trace-py, branch `CPU`
 | `profiling/profiling_helpers/` | upstream | Version-gated CPython frame accessors. |
 | `dd-trace-py/CMakeLists.txt` | ours | Builds both profilers into the static library `rust/build.rs` links. |
 | `rust/src/encode/` | ours | pprof builder + the process-wide string interner the C++ side interns into. |
-| `rust/src/stack.rs` | ours | The cpu/wall accumulator and dump path behind `PprofBuilderType::CpuWall`. |
+| `rust/src/stack/` | ours | The cpu/wall accumulator and dump path behind `PprofBuilderType::CpuWall`; `sampler.rs` wraps the C++ FFI, `threads.rs`, `asyncio.rs` and `faulthandler.rs` patch the Python modules. |
 
 `profiling/` is on the include path, so upstream's `#include
 "dd_wrapper/include/..."` lines resolve unchanged. **Preserving upstream paths
@@ -151,8 +151,8 @@ shutdown or not, and a session that starts the sampler fixes them too. Fast copy
 is on by default; adaptive sampling (`adaptive_sampling`) and asyncio task
 unwinding (`async_tracking`, which covers uvloop too) are off, so the rest of
 the `adaptive_*` group is inert too. `async_tracking` is the only one that stops
-at Rust: `mod asyncio` in `rust/src/stack.rs` patches `asyncio` and `uvloop` the
-way `mod threads` patches `threading`, and never touches
+at Rust: `rust/src/stack/asyncio.rs` patches `asyncio` and `uvloop` the
+way `threads.rs` patches `threading`, and never touches
 `pyroscope_stack_configure`.
 
 Unlike upstream, fast copy's SIGSEGV/SIGBUS handlers and the faulthandler patch

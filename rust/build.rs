@@ -36,20 +36,6 @@ fn main() {
     }
 }
 
-/// Emit a `rerun-if-changed` for every C++ source in the `dd-trace-py` submodule, plus the
-/// generated FFI header.
-///
-/// This walks the tree rather than naming files. A hand-maintained list was
-/// tried first and silently rotted: every entry still pointed at a flat
-/// `cpp/_memalloc.cpp`-style path after the sources moved into `cpp/memalloc/`
-/// and `cpp/pyroscope/`, so cargo watched nothing that existed and C++ edits
-/// never triggered a rebuild. Since then `cpp/stack/` and `cpp/dd_wrapper/`
-/// arrived too, which a list would also have missed.
-///
-/// CMake build trees are skipped. In-source `cmake-build-*` directories (what
-/// CLion creates) hold generated copies of these same headers plus the fetched
-/// abseil checkout; watching them would make every configure look like a source
-/// change.
 fn rerun_if_native_sources_changed(manifest_dir: &Path, cpp_dir: &Path) {
     let ffi_header = manifest_dir.join("include/pyroscope_ffi.h");
     println!("cargo:rerun-if-changed={}", ffi_header.display());
