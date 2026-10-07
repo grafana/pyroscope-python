@@ -1,9 +1,13 @@
 # syntax=docker/dockerfile:1.23@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 ARG PLATFORM=x86_64
-FROM quay.io/pypa/manylinux2014_${PLATFORM} AS builder
+FROM quay.io/pypa/manylinux2014_${PLATFORM}:2026.09.26-1 AS builder
 ARG OPENSSL_VERSION=3.5.9
 
-RUN yum -y install gcc perl-core glibc-devel make
+RUN yum -y install perl-core glibc-devel make
+RUN manylinux-install-clang -v v22.1.8.1
+
+ENV CC=clang
+ENV CXX=clang++
 
 # Build OpenSSL from source
 RUN curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
