@@ -184,11 +184,17 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 func startPyroscope(t *testing.T, net *dockertest.Network) string {
 	t.Helper()
 	c := dockertest.StartContainer(t, dockertest.ContainerRequest{
-		Image:          envOrDefault("PYROSCOPE_IMAGE", "grafana/pyroscope"),
+		Image:          envOrDefault("PYROSCOPE_IMAGE", "grafana/pyroscope:2.3.1"),
 		ExposedPorts:   []string{"4040/tcp"},
 		Network:        net.Name,
 		NetworkAliases: []string{"pyroscope"},
-		WaitFor:        dockertest.WaitForHTTP("/ready", "4040/tcp", 2*time.Minute),
+		Cmd: []string{
+			"-config.file=/etc/pyroscope/config.yaml",
+			"-architecture.storage=v2",
+			"-segment-writer.min-ready-duration=0s",
+			"-metastore.min-ready-duration=0s",
+		},
+		WaitFor: dockertest.WaitForHTTP("/ready", "4040/tcp", 2*time.Minute),
 	})
 	return fmt.Sprintf("http://%s", c.HostPort(t, "4040/tcp"))
 }
