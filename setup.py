@@ -21,9 +21,13 @@ env.update({
     "Python3_EXECUTABLE": sys.executable,
 })
 
-features = []
-if sysconfig.get_config_var("Py_GIL_DISABLED") != 1:
-    features.append("memory")
+if sysconfig.get_config_var("Py_GIL_DISABLED") == 1:
+    raise SystemExit(
+        f"pyroscope-io does not support free-threaded CPython: {sys.executable} is a "
+        "Py_GIL_DISABLED build. The C++ memalloc profiler reads CPython internals that "
+        "this build lays out differently, and py-spy cannot attach to it at all "
+        "(https://github.com/grafana/pyroscope-python/issues/163)."
+    )
 
 setup(
     rust_extensions=[
@@ -32,7 +36,6 @@ setup(
             path="rust/Cargo.toml",
             binding=Binding.PyO3,
             cargo_manifest_args=["--locked"],
-            features=features,
             env=env,
         )
     ],
