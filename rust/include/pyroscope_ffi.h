@@ -10,14 +10,21 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef enum {
+  PprofBuilderType_Memory,
+  /*
+   py-spy.
+   */
+  PprofBuilderType_Cpu,
+  /*
+   The vendored dd-trace-py stack sampler.
+   */
+  PprofBuilderType_CpuWall,
+} PprofBuilderType;
+
 typedef struct {
   uint32_t index;
 } FFIInternedString;
-
-typedef struct {
-  const char *data;
-  uintptr_t len;
-} FFIStringView;
 
 typedef struct {
   FFIInternedString function_name;
@@ -26,22 +33,28 @@ typedef struct {
 } FFIFrame;
 
 typedef struct {
-  uintptr_t heap_space;
-  uintptr_t heap_count;
+  int64_t cpu_time;
+  int64_t wall_time;
   uintptr_t alloc_space;
   uintptr_t alloc_count;
-} FFIHeapSampleValues;
+  uintptr_t heap_space;
+  uintptr_t heap_count;
+} FFISampleValues;
 
 typedef struct {
-  const FFIFrame *frames;
+  const char *data;
   uintptr_t len;
-  FFIHeapSampleValues values;
-} FFISample;
+} FFIStringView;
+
+void pyroscope_push_sample(PprofBuilderType builder_type,
+                           const FFIFrame *frames,
+                           uintptr_t len,
+                           const FFISampleValues *values);
 
 extern void memalloc_heap_postfork_child(void);
 
-FFIInternedString pyroscope_memprof_string_table_intern_string(FFIStringView s);
+FFIInternedString pyroscope_string_table_intern_utf8(FFIStringView s);
 
-void pyroscope_memprof_push_sample(FFISample sample);
+FFIInternedString pyroscope_string_table_intern_ascii(FFIStringView s);
 
 #endif  /* PYROSCOPE_FFI_H_ */

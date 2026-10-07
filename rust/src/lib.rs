@@ -1,3 +1,4 @@
+mod ffi;
 mod memory;
 mod pyspy_backend;
 
@@ -43,7 +44,8 @@ fn at_fork_after_in_parent(py: Python<'_>) -> PyResult<()> {
 #[pyfunction]
 fn at_fork_after_in_child(py: Python<'_>) -> PyResult<()> {
     memory::postfork_child();
-    memory::stop(py);
+    encode::interner::postfork_child();
+    ffikit::stop_profilers(py);
     ffikit::at_fork_after_in_child(py);
     AGENT_RUNNING.store(false, Ordering::Release);
     Ok(())

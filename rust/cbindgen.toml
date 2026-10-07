@@ -13,6 +13,9 @@ braces = "SameLine"
 tab_width = 2
 line_length = 80
 
+[enum]
+prefix_with_name = true
+
 [parse]
 parse_deps = false
 
@@ -21,10 +24,11 @@ include = [
   "FFIInternedString",
   "FFIStringView",
   "FFIFrame",
-  "FFIHeapSampleValues",
-  "FFISample",
-  "pyroscope_memprof_string_table_intern_string",
-  "pyroscope_memprof_push_sample",
+  "FFISampleValues",
+  "pyroscope_string_table_intern_utf8",
+  "pyroscope_string_table_intern_ascii",
+  "PprofBuilderType",
+  "pyroscope_push_sample",
 ]
 exclude = [
   "memalloc_start",
