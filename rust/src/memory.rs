@@ -1,3 +1,4 @@
+use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
 use crate::utils::TimeRange;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
@@ -30,7 +31,7 @@ pub fn start(py: Python<'_>, config: &Config) -> PyResult<()> {
             (0, None) => Ok(()),
             (0, Some(err)) => {
                 implementation::memalloc_stop();
-                implementation::clear_state();
+                implementation::clear_samples();
                 Err(err)
             }
             (_, Some(err)) => Err(err),
@@ -45,13 +46,18 @@ pub fn stop(_py: Python<'_>) {
     unsafe {
         implementation::memalloc_stop();
     }
-    implementation::clear_state();
+    implementation::clear_samples();
 }
 
 pub fn postfork_child() {
     unsafe {
         implementation::memalloc_heap_postfork_child();
     }
+    implementation::postfork_child();
+}
+
+pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
+    implementation::push_sample(frames, values);
 }
 
 pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u8>> {
@@ -59,23 +65,16 @@ pub fn dump_pprof(heap_sample_size: u64, time_range: &TimeRange) -> Option<Vec<u
 }
 
 mod implementation {
-    use crate::encode::pprof::PProfBuilder;
-    use crate::encode::pprof::ffi::{FFIInternedString, FFISample, FFIStringView};
-    use crate::encode::pprof::{StringID, StringTable};
+    use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
+    use crate::encode::pprof::{MemoryProfile, PProfBuilder};
+    use crate::forksafety::LeakableMutex;
     use crate::utils::TimeRange;
-    use lazy_static::lazy_static;
     use prost::Message;
     use pyo3::prelude::*;
     use std::ops::{Deref, DerefMut};
-    use std::sync::Mutex;
 
-    lazy_static! {
-        static ref STRING_TABLE: Mutex<StringTable> = Mutex::new(StringTable::new());
-    }
+    static PROFILE_BUILDER: LeakableMutex<PProfBuilder<MemoryProfile>> = LeakableMutex::new();
 
-    lazy_static! {
-        static ref PROFILE_BUILDER: Mutex<PProfBuilder> = Mutex::new(PProfBuilder::new());
-    }
     unsafe extern "C" {
         pub fn memalloc_start(
             max_nframe: u16,
@@ -88,48 +87,36 @@ mod implementation {
         pub fn memalloc_heap_postfork_child();
     }
 
-    #[unsafe(no_mangle)]
-    pub extern "C" fn pyroscope_memprof_string_table_intern_string(
-        s: FFIStringView,
-    ) -> FFIInternedString {
-        if s.data.is_null() || s.len == 0 {
-            return StringID::empty_ffi_string();
-        }
-        let unsafe_str = unsafe {
-            let s = std::slice::from_raw_parts(s.data as *const u8, s.len);
-            std::str::from_utf8_unchecked(s)
-        };
-        match STRING_TABLE.lock() {
-            Ok(mut string_table) => (&string_table.add(unsafe_str)).into(),
-            Err(_) => StringID::empty_ffi_string(),
-        }
-    }
-    #[unsafe(no_mangle)]
-    pub extern "C" fn pyroscope_memprof_push_sample(sample: FFISample) {
-        if sample.frames.is_null() || sample.len == 0 {
-            return;
-        }
-        let frames = unsafe { std::slice::from_raw_parts(sample.frames, sample.len) };
-        if let Ok(mut pb) = PROFILE_BUILDER.lock() {
-            pb.add_ffi_sample(frames, &sample.values);
+    pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
+        if let Ok(mut pb) = PROFILE_BUILDER.mutex().lock() {
+            pb.add_ffi_sample(frames, values);
         }
     }
 
-    /// Discard all interned strings and buffered samples.
+    pub fn postfork_child() {
+        #[cfg(not(miri))]
+        PROFILE_BUILDER.leak_and_reset();
+        #[cfg(miri)]
+        let _ = PROFILE_BUILDER.leak_and_reset();
+    }
+
+    /// Discard the samples buffered for the next memory profile.
     ///
     /// Called from `stop()` after the allocator hooks are uninstalled. Every
     /// hook runs with the GIL held and `stop()` itself holds the GIL, so no
-    /// hook can be mid-push here and no live C++ traceback references the
-    /// interned string IDs anymore. Without this, samples buffered by a
-    /// stopped session (or inherited from the parent after fork, since the
-    /// fork-child handler also goes through `stop()`) would leak into the
-    /// next session's first profile, and the string table would grow for the
-    /// lifetime of the process.
-    pub fn clear_state() {
-        let mut st = STRING_TABLE.lock().unwrap_or_else(|e| e.into_inner());
-        *st = StringTable::new();
-        drop(st);
-        let mut pb = PROFILE_BUILDER.lock().unwrap_or_else(|e| e.into_inner());
+    /// hook can be mid-push here. Without this, samples buffered by a stopped
+    /// session (or inherited from the parent after fork, since the fork-child
+    /// handler also goes through `stop()`) would leak into the next session's
+    /// first profile.
+    ///
+    /// Interned strings are deliberately *not* dropped here: this is also
+    /// reached from `start()`'s rollback, and the table in
+    /// `crate::encode::interner` is cleared by `ffikit::stop_profilers`.
+    pub fn clear_samples() {
+        let mut pb = PROFILE_BUILDER
+            .mutex()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         pb.reset();
     }
 
@@ -140,11 +127,11 @@ mod implementation {
             unsafe {
                 memalloc_heap_py();
             }
-            let st = STRING_TABLE.lock();
-            let pb = PROFILE_BUILDER.lock();
+            let st = crate::encode::interner::string_table().lock();
+            let pb = PROFILE_BUILDER.mutex().lock();
             match (st, pb) {
                 (Ok(mut st), Ok(mut pb)) => {
-                    pb.set_memory_profile_type(st.deref_mut(), heap_sample_size);
+                    pb.set_profile_type(st.deref_mut(), heap_sample_size);
                     pb.take_profile_and_reset(st.deref(), time_range)
                 }
                 _ => None,

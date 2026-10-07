@@ -66,11 +66,19 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
             Ok(())
         }
         Err(err) => {
-            memory::stop(py);
+            stop_profilers(py);
             *STATE.mutex().lock()? = State::Idle;
             Err(err)
         }
     }
+}
+
+/// Whole-agent teardown, and the only caller of `encode::interner::clear()`:
+/// a per-profiler stop cannot know whether another profiler still holds
+/// interned string indices.
+pub fn stop_profilers(py: Python<'_>) {
+    memory::stop(py);
+    crate::encode::interner::clear();
 }
 
 pub fn add_thread_tag(tid: ThreadId, tag: Tag) -> Result<()> {
@@ -122,7 +130,7 @@ pub fn stop(py: Python<'_>) -> Result<()> {
     //   _native::__pyfunction_drop_agent
     // so run it on a fresh thread via no_dispatch_semaphore.
     let res = py.detach(|| forksafety::no_dispatch_semaphore(|| agent.stop()));
-    crate::memory::stop(py);
+    stop_profilers(py);
     *STATE.mutex().lock()? = State::Idle;
     res
 }
