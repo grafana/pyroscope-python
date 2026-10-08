@@ -282,22 +282,14 @@ impl PyroscopeAgent {
         }
 
         stack::report_sampling_thread_error();
-        // The dump runs even when its profile is dropped, so the accumulator
-        // drains every window instead of growing without bound.
-        match (
-            stack::dump_pprof(config.sample_rate, &time_range),
-            reporter.is_some(),
-        ) {
-            (Some(pprof), false) => batch.push(ReportBatch {
-                profile_type: "process_cpu".to_string(),
-                data: ReportData::RawPprof(pprof),
-            }),
-            (Some(_), true) => log::warn!(
-                target: LOG_TAG,
-                "discarding the stack sampler's cpu/wall profile: py-spy already publishes process_cpu; \
-                 pass cpu_implementation=ProfilerImplementation.Stack to configure() instead"
-            ),
-            (None, _) => {}
+        if config.stack_config.enabled {
+            let pprof = stack::dump_pprof(config.sample_rate, &time_range);
+            if let Some(pprof) = pprof {
+                batch.push(ReportBatch {
+                    profile_type: "process_cpu".to_string(),
+                    data: ReportData::RawPprof(pprof),
+                })
+            }
         }
 
         if let Some(reporter) = reporter {
