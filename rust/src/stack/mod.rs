@@ -38,10 +38,6 @@ impl Default for Options {
     }
 }
 
-/// Tracks whether `pyroscope_stack_start` succeeded, so `stop` never calls
-/// `Sampler::stop()` on a sampler that was never started. That call bumps
-/// `thread_seq_num` unconditionally, and `Sampler::prefork` reads the
-/// counter's *parity* to decide whether to restart after a fork.
 static STARTED: AtomicBool = AtomicBool::new(false);
 
 static OPTIONS: OnceLock<Options> = OnceLock::new();
