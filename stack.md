@@ -1,0 +1,13 @@
+# Stack CPU profiler
+
+## Included
+
+`cpu_implementation=ProfilerImplementation.Stack`, syscall memory copy, thread registration via `threading`, cpu+wall upload as `process_cpu`, fork child and restart handling, `configure_experimental_stack_profiler(max_nframe, max_threads)`.
+
+## Intentionally excluded
+
+Labels and thread/task info, dropped-frame counts, `samples/count`, native frames, GC frames, free-threaded CPython.
+
+## Follow-ups
+
+Fast copy (safe_memcpy, SIGSEGV/SIGBUS handlers, faulthandler patch, warmup), adaptive sampling, asyncio/uvloop task unwinding and `max_tasks`, gevent/greenlets.

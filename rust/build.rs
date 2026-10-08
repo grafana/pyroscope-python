@@ -2,26 +2,6 @@ use cmake::Config;
 use std::env;
 use std::path::{Path, PathBuf};
 
-const NATIVE_SOURCES: &[&str] = &[
-    "CMakeLists.txt",
-    "BundleStaticLibrary.cmake",
-    "pyroscope/Pyroscope.h",
-    "ddtrace/profiling/collector/_memalloc.cpp",
-    "ddtrace/profiling/collector/_memalloc_debug.h",
-    "ddtrace/profiling/collector/_memalloc_frame.h",
-    "ddtrace/profiling/collector/_memalloc_gc_guard.hpp",
-    "ddtrace/profiling/collector/_memalloc_heap.cpp",
-    "ddtrace/profiling/collector/_memalloc_heap.h",
-    "ddtrace/profiling/collector/_memalloc_reentrant.cpp",
-    "ddtrace/profiling/collector/_memalloc_reentrant.h",
-    "ddtrace/profiling/collector/_memalloc_tb.cpp",
-    "ddtrace/profiling/collector/_memalloc_tb.h",
-    "ddtrace/profiling/collector/_pymacro.h",
-    "ddtrace/internal/datadog/profiling/profiling_helpers/frame_accessors.h",
-    "ddtrace/internal/datadog/profiling/profiling_helpers/linetable_parser.h",
-    "ddtrace/internal/datadog/profiling/profiling_helpers/version_compat.h",
-];
-
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let cpp_dir = manifest_dir.join("../dd-trace-py");
@@ -30,15 +10,14 @@ fn main() {
     rerun_if_native_sources_changed(&manifest_dir, &cpp_dir);
 
     let mut cfg = Config::new(&cpp_dir);
-    cfg.define("PYROSCOPE_FFI_INCLUDE_DIR", manifest_dir.join("include"));
 
     println!("cargo:rerun-if-env-changed=Python3_ROOT_DIR");
     let python_root = env::var_os("Python3_ROOT_DIR")
-        .expect("Python3_ROOT_DIR must be set (passed from setup.py) so the C++ memalloc profiler is compiled against the target Python version");
+        .expect("Python3_ROOT_DIR must be set (passed from setup.py) so the C++ profilers are compiled against the target Python version");
     cfg.define("Python3_ROOT_DIR", &python_root);
     println!("cargo:rerun-if-env-changed=Python3_EXECUTABLE");
     let python_executable = env::var_os("Python3_EXECUTABLE")
-        .expect("Python3_EXECUTABLE must be set (passed from setup.py) so the C++ memalloc profiler is compiled against the exact target Python interpreter");
+        .expect("Python3_EXECUTABLE must be set (passed from setup.py) so the C++ profilers are compiled against the exact target Python interpreter");
     cfg.define("Python3_EXECUTABLE", &python_executable);
     cfg.define("Python3_FIND_STRATEGY", "LOCATION");
 
@@ -57,11 +36,36 @@ fn main() {
 }
 
 fn rerun_if_native_sources_changed(manifest_dir: &Path, cpp_dir: &Path) {
-    for source in NATIVE_SOURCES {
-        let path = cpp_dir.join(source);
-        println!("cargo:rerun-if-changed={}", path.display());
-    }
-
     let ffi_header = manifest_dir.join("include/pyroscope_ffi.h");
     println!("cargo:rerun-if-changed={}", ffi_header.display());
+
+    emit_rerun_for_dir(cpp_dir);
+}
+
+fn emit_rerun_for_dir(dir: &Path) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) => panic!("failed to read {}: {e}", dir.display()),
+    };
+
+    for entry in entries {
+        let entry = entry.expect("failed to read directory entry");
+        let path = entry.path();
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+
+        if path.is_dir() {
+            if name.starts_with("cmake-build") || name.starts_with('.') {
+                continue;
+            }
+            emit_rerun_for_dir(&path);
+        } else if name == "CMakeLists.txt"
+            || matches!(
+                path.extension().and_then(|e| e.to_str()),
+                Some("c" | "cc" | "cpp" | "h" | "hpp" | "cmake")
+            )
+        {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+    }
 }

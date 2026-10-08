@@ -9,6 +9,7 @@ from contextlib import contextmanager
 LOGGER = logging.getLogger(__name__)
 
 LineNo = lib.LineNo
+ProfilerImplementation = lib.ProfilerImplementation
 
 def configure(
         app_name=None,
@@ -34,6 +35,7 @@ def configure(
         mem_heap_sample_size=512 * 1024,
         mem_enable_mem_domain=True,
         cpu_enabled=True,
+        cpu_implementation=ProfilerImplementation.PySpy,
 ):
     if app_name is not None:
         warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
@@ -70,6 +72,26 @@ def configure(
         mem_heap_sample_size,
         mem_enable_mem_domain,
         cpu_enabled,
+        cpu_implementation,
+    )
+
+def configure_experimental_stack_profiler(
+        max_nframe=128,
+        max_threads=25,
+):
+    """Set the options of the stack CPU profiler, for the whole process.
+
+    Only the first call takes effect. A later call is refused and returns
+    False, including after shutdown(), and so is any call made once a
+    configure() with cpu_implementation=ProfilerImplementation.Stack has
+    started the profiler.
+
+    max_threads caps how many threads one sampling cycle covers; past the cap
+    the sampler picks a uniform random subset. 0 means no cap.
+    """
+    return lib.configure_experimental_stack_profiler(
+        max_nframe,
+        max_threads,
     )
 
 def shutdown():
@@ -118,3 +140,24 @@ def build_summary():
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
 def test_logger():
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
+
+def _install_stack_threads(threading, register, unregister):
+    Thread = threading.Thread
+    orig_set_native_id = Thread._set_native_id
+    orig_bootstrap_inner = Thread._bootstrap_inner
+
+    def _set_native_id(self):
+        orig_set_native_id(self)
+        if self.ident is not None and self.native_id is not None:
+            register(self.ident, self.native_id, self.name)
+
+    def _bootstrap_inner(self, *args, **kwargs):
+        orig_bootstrap_inner(self, *args, **kwargs)
+        if self.ident is not None:
+            unregister(self.ident)
+
+    Thread._set_native_id = _set_native_id
+    Thread._bootstrap_inner = _bootstrap_inner
+
+    for tid, thread in list(threading._active.items()):
+        register(tid, getattr(thread, "native_id", None) or tid, thread.name)
