@@ -2,11 +2,10 @@
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-use std::ffi::c_char;
 use std::sync::OnceLock;
 
 unsafe extern "C" {
-    fn pyroscope_stack_register_thread(id: u64, native_id: u64, name: *const c_char);
+    fn pyroscope_stack_register_thread(id: u64, native_id: u64);
     fn pyroscope_stack_unregister_thread(id: u64);
 }
 
@@ -18,7 +17,7 @@ fn register_thread(py: Python<'_>, id: u64, native_id: u64) {
         target: "pyroscope-python",
         "registering thread id={id} native_id={native_id}"
     );
-    py.detach(|| unsafe { pyroscope_stack_register_thread(id, native_id, c"".as_ptr()) });
+    py.detach(|| unsafe { pyroscope_stack_register_thread(id, native_id) });
 }
 
 #[pyfunction]

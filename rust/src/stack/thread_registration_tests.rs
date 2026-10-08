@@ -1,8 +1,7 @@
-use std::ffi::{CString, c_char};
 use std::sync::mpsc;
 
 unsafe extern "C" {
-    fn pyroscope_stack_register_thread(id: u64, native_id: u64, name: *const c_char);
+    fn pyroscope_stack_register_thread(id: u64, native_id: u64);
     fn pyroscope_stack_unregister_thread(id: u64);
     fn pyroscope_stack_thread_count() -> usize;
 }
@@ -15,17 +14,15 @@ fn threads_register_and_unregister_over_the_ffi() {
     let before = unsafe { pyroscope_stack_thread_count() };
 
     let (registered_tx, registered_rx) = mpsc::channel();
-    let name = CString::new("stack::registration_test").unwrap();
 
     let mut handles = Vec::new();
     let mut releases = Vec::new();
     for _ in 0..2 {
         let (release_tx, release_rx) = mpsc::channel::<()>();
         let registered_tx = registered_tx.clone();
-        let name = name.clone();
         handles.push(std::thread::spawn(move || {
             let id = unsafe { libc::pthread_self() } as u64;
-            unsafe { pyroscope_stack_register_thread(id, id, name.as_ptr()) };
+            unsafe { pyroscope_stack_register_thread(id, id) };
             registered_tx.send(id).unwrap();
             release_rx.recv().unwrap();
             unsafe { pyroscope_stack_unregister_thread(id) };
