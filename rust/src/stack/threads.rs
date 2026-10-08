@@ -1,7 +1,6 @@
 //! Ported from dd-trace-py `ddtrace/profiling/collector/threading.py::init_stack`.
 
 use pyo3::prelude::*;
-use pyo3::types::PyModule;
 use pyo3::wrap_pyfunction;
 use std::ffi::{CString, c_char};
 use std::sync::OnceLock;
@@ -12,29 +11,6 @@ unsafe extern "C" {
 }
 
 static INSTALLED: OnceLock<()> = OnceLock::new();
-
-const INSTALL_SRC: &std::ffi::CStr = cr#"
-def install(threading, register, unregister):
-    Thread = threading.Thread
-    orig_set_native_id = Thread._set_native_id
-    orig_bootstrap_inner = Thread._bootstrap_inner
-
-    def _set_native_id(self):
-        orig_set_native_id(self)
-        if self.ident is not None and self.native_id is not None:
-            register(self.ident, self.native_id, self.name)
-
-    def _bootstrap_inner(self, *args, **kwargs):
-        orig_bootstrap_inner(self, *args, **kwargs)
-        if self.ident is not None:
-            unregister(self.ident)
-
-    Thread._set_native_id = _set_native_id
-    Thread._bootstrap_inner = _bootstrap_inner
-
-    for tid, thread in list(threading._active.items()):
-        register(tid, getattr(thread, "native_id", None) or tid, thread.name)
-"#;
 
 #[pyfunction]
 fn register_thread(py: Python<'_>, id: u64, native_id: u64, name: &str) {
@@ -66,17 +42,13 @@ pub fn install(py: Python<'_>) -> PyResult<()> {
         return Ok(());
     }
 
-    let module = PyModule::from_code(
-        py,
-        INSTALL_SRC,
-        c"pyroscope_stack_threads.py",
-        c"_pyroscope_stack_threads",
-    )?;
-    module.getattr("install")?.call1((
-        py.import("threading")?,
-        wrap_pyfunction!(register_thread, py)?,
-        wrap_pyfunction!(unregister_thread, py)?,
-    ))?;
+    py.import("pyroscope")?
+        .getattr("_install_stack_threads")?
+        .call1((
+            py.import("threading")?,
+            wrap_pyfunction!(register_thread, py)?,
+            wrap_pyfunction!(unregister_thread, py)?,
+        ))?;
 
     let _ = INSTALLED.set(());
     Ok(())

@@ -110,8 +110,8 @@ design, so every ordering below is a real interleaving, not a theoretical one.
 - **Never hold `ffikit::STATE` across anything that needs the GIL.** A thread
   entering `run`/`stop` blocks on that mutex *while holding the GIL*, so a
   holder that then waits for the GIL deadlocks both. This already happened:
-  `stack::start` reaches `PyModule::from_code`, whose module body lets CPython
-  drop the GIL, and two concurrent `configure()` calls wedged permanently.
+  `stack::start` calls into Python (`pyroscope._install_stack_*`), which lets
+  CPython drop the GIL, and two concurrent `configure()` calls wedged permanently.
   `run` and `stop` therefore claim a `State::Busy` marker, release the lock,
   and only then start or stop profilers.
 - **Never block on a C++ profiler from under the GIL.** `stack::stop` wraps

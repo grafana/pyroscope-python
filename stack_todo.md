@@ -13,11 +13,7 @@ kept as a record. Cite a symbol, not a line number.
 
 - **Investigate reusing dd-trace-py's Python source.** Assess whether it can
   replace the reimplementations in `rust/src/stack/threads.rs` and `asyncio.rs`
-  and the Python modules defined from strings via `PyModule::from_code`.
-- **Measure what `PyModule::from_code` costs at start.** `threads::install`,
-  `asyncio::install` and `faulthandler::install` each compile their `INSTALL_SRC`
-  from source at startup; compare against shipping them as `.py` files whose
-  `.pyc` CPython can cache.
+  and their `_install_stack_*` halves in `python/pyroscope/__init__.py`.
 
 - **Fold the stack module's globals into `ffikit::STATE`.** `STARTED`,
   `OPTIONS`, `threads`/`asyncio`/`faulthandler`'s `INSTALLED` and
