@@ -11,3 +11,6 @@ Labels and thread/task info, dropped-frame counts, `samples/count`, native frame
 ## Follow-ups
 
 Fast copy (safe_memcpy, SIGSEGV/SIGBUS handlers, faulthandler patch, warmup), adaptive sampling, asyncio/uvloop task unwinding and `max_tasks`, gevent/greenlets.
+
+## Known upstream issues that we're not fixing in this port
+-  Sampler::stop() timeout leads to a data race against reset_string_cache / interner::clear 
