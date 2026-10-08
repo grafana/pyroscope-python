@@ -27,3 +27,4 @@
 ## Known upstream issues that we're not fixing in this port
 - Sampler::stop() timeout leads to a data race against reset_string_cache / interner::clear 
 - Thread registration releases the GIL, allowing thread ID reuse to overwrite a newer registration with a stale native ID and lose CPU samples on Linux; this port's startup snapshot widens the race window.
+- Threads that pass `_set_native_id` before patch installation but are still in `threading._limbo` during the startup snapshot miss registration entirely and produce no CPU or wall samples.
