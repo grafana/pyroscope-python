@@ -149,7 +149,7 @@ def _install_stack_threads(threading, register, unregister):
     def _set_native_id(self):
         orig_set_native_id(self)
         if self.ident is not None and self.native_id is not None:
-            register(self.ident, self.native_id, self.name)
+            register(self.ident, self.native_id)
 
     def _bootstrap_inner(self, *args, **kwargs):
         orig_bootstrap_inner(self, *args, **kwargs)
@@ -160,4 +160,4 @@ def _install_stack_threads(threading, register, unregister):
     Thread._bootstrap_inner = _bootstrap_inner
 
     for tid, thread in list(threading._active.items()):
-        register(tid, getattr(thread, "native_id", None) or tid, thread.name)
+        register(tid, getattr(thread, "native_id", None) or tid)

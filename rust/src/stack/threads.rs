@@ -2,7 +2,7 @@
 
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-use std::ffi::{CString, c_char};
+use std::ffi::c_char;
 use std::sync::OnceLock;
 
 unsafe extern "C" {
@@ -13,19 +13,12 @@ unsafe extern "C" {
 static INSTALLED: OnceLock<()> = OnceLock::new();
 
 #[pyfunction]
-fn register_thread(py: Python<'_>, id: u64, native_id: u64, name: &str) {
-    let Ok(name) = CString::new(name) else {
-        log::warn!(
-            target: "pyroscope-python",
-            "not registering thread {id}: its name contains an interior NUL"
-        );
-        return;
-    };
+fn register_thread(py: Python<'_>, id: u64, native_id: u64) {
     log::debug!(
         target: "pyroscope-python",
-        "registering thread id={id} native_id={native_id} name={name:?}"
+        "registering thread id={id} native_id={native_id}"
     );
-    py.detach(|| unsafe { pyroscope_stack_register_thread(id, native_id, name.as_ptr()) });
+    py.detach(|| unsafe { pyroscope_stack_register_thread(id, native_id, c"".as_ptr()) });
 }
 
 #[pyfunction]
