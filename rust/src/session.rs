@@ -252,6 +252,10 @@ mod tests {
             .collect()
     }
 
+    fn disabled_stack_config() -> crate::stack::Config {
+        crate::stack::Config { enabled: false }
+    }
+
     fn disabled_memory_config() -> memory::Config {
         memory::Config {
             enabled: false,
@@ -270,6 +274,7 @@ mod tests {
             "pyspy",
             "1.0.12",
             disabled_memory_config(),
+            disabled_stack_config(),
         )
         .tags(tags([("env", "prod")]))
         .runtime("cpython".to_string(), "3.12.4".to_string());
@@ -322,6 +327,7 @@ mod tests {
             "pyspy",
             "1.0.12",
             disabled_memory_config(),
+            disabled_stack_config(),
         )
         .tags(tags([
             (LABEL_SCOPE_NAME, "user-supplied-scope"),
@@ -381,6 +387,7 @@ mod tests {
             "pyspy",
             "1.0.12",
             disabled_memory_config(),
+            disabled_stack_config(),
         )
         .tags(tags([
             (LABEL_SERVICE_NAME, "user-service"),

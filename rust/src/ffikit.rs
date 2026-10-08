@@ -48,10 +48,15 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
     }
 
     let mem_config = agent.config.mem_config.clone();
+    let stack_config = agent.config.stack_config.clone();
+    let sample_rate = agent.config.sample_rate;
 
     let started = (|| -> Result<PyroscopeAgent> {
         memory::start(py, &mem_config).map_err(|err| {
             PyroscopeError::new(&format!("failed to start memory profiler: {err}"))
+        })?;
+        crate::stack::start(py, &stack_config, sample_rate).map_err(|err| {
+            PyroscopeError::new(&format!("failed to start CPU stack sampler: {err}"))
         })?;
         // Create the client only after the Idle check, so an already-running or
         // busy agent doesn't build (and, on macOS, spawn a thread for) a client
@@ -78,6 +83,7 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
 /// interned string indices.
 pub fn stop_profilers(py: Python<'_>) {
     memory::stop(py);
+    crate::stack::stop(py);
     crate::encode::interner::clear();
 }
 
