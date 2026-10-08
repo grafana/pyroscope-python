@@ -78,11 +78,8 @@ upstream path over editing a vendored source.
   answer is clearer code, a test that encodes the invariant, or a doc entry.
 - Vendored files keep upstream's comments verbatim. Do not strip them and do
   not add to them -- the diff against upstream is the point.
-- Two markers are the only exception, because they are a grep index for the
-  next vendor sync rather than explanation. Both are one line, no prose:
-  `// Pyroscope patch:` naming the difference where a shim's behaviour departs
-  from the upstream symbol it stands in for, and `TODO(Pyroscope):` at an
-  unfinished site, whose explanation lives in `stack_todo.md`.
+- The one exception is a `TODO(Pyroscope):` marker at an unfinished site, one
+  line, no prose, whose explanation lives in `stack_todo.md`.
 - A defect we decide to live with goes in `stack_known_bugs.md`, with the reason
   we are not fixing it. Do not re-file it as work in `stack_todo.md`.
 - We do not fix upstream's bugs in this integration, and we do not report them
@@ -97,8 +94,8 @@ upstream path over editing a vendored source.
   is deleted -- git history is the record. Write what a reader cannot derive
   from the code, and nothing else.
 - Do not "fix" a vendored oddity without checking upstream first -- several are
-  load-bearing, and `dd-trace-py/CMakeLists.txt` documents flags that must *not* be
-  restored on a sync.
+  load-bearing. Never restore memalloc's `_POSIX_C_SOURCE` / `_DARWIN_C_SOURCE`
+  defines on a sync: on macOS they hide BSD types Abseil and echion need.
 
 ## Locking rules
 
