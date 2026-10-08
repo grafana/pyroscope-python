@@ -170,8 +170,7 @@ interpreter passed down (normally by `setup.py`):
 ```sh
 # fast loop on the C++ static library alone
 cmake -S dd-trace-py -B /tmp/ddbuild -G Ninja \
-  -DPython3_EXECUTABLE=$(which python3) -DPython3_FIND_STRATEGY=LOCATION \
-  -DPYROSCOPE_FFI_INCLUDE_DIR=$PWD/rust/include
+  -DPython3_EXECUTABLE=$(which python3) -DPython3_FIND_STRATEGY=LOCATION
 cmake --build /tmp/ddbuild
 
 # Rust, including the C++ build

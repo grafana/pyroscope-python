@@ -10,7 +10,6 @@ fn main() {
     rerun_if_native_sources_changed(&manifest_dir, &cpp_dir);
 
     let mut cfg = Config::new(&cpp_dir);
-    cfg.define("PYROSCOPE_FFI_INCLUDE_DIR", manifest_dir.join("include"));
 
     println!("cargo:rerun-if-env-changed=Python3_ROOT_DIR");
     let python_root = env::var_os("Python3_ROOT_DIR")
