@@ -13,8 +13,7 @@ mod sampler;
 mod threads;
 
 use sampler::{
-    bump_upload_seq, configure, is_safe_copy_failed, sampler_start, sampler_stop,
-    sampling_thread_failed,
+    configure, is_safe_copy_failed, sampler_start, sampler_stop, sampling_thread_failed,
 };
 static PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuWallProfile>> = LeakableMutex::new();
 
@@ -149,7 +148,6 @@ pub fn dump_pprof(sample_rate: u32, time_range: &TimeRange) -> Option<Vec<u8>> {
         }
         _ => None,
     }?;
-    bump_upload_seq();
     Some(profile.encode_to_vec())
 }
 

@@ -5,10 +5,6 @@ use crate::encode::pprof::PprofBuilderType;
 use crate::encode::pprof::ffi::FFIInternedString;
 use std::time::{Duration, UNIX_EPOCH};
 
-unsafe extern "C" {
-    fn pyroscope_stack_upload_seq() -> u64;
-}
-
 fn intern(s: &str) -> FFIInternedString {
     (&interner::string_table().lock().unwrap().add(s)).into()
 }
@@ -60,10 +56,6 @@ fn cpu_options_are_fixed_by_the_first_call() {
     assert_eq!(lock.get().expect("the first call seals").max_nframe, 7);
 }
 
-fn upload_seq() -> Option<u64> {
-    (!cfg!(miri)).then(|| unsafe { pyroscope_stack_upload_seq() })
-}
-
 /// Deliberately a single test: it drains the process-wide accumulator and
 /// moves the sampler's interval, so a second test touching either in
 /// parallel would race.
@@ -81,7 +73,6 @@ fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
     push(&frames, &values(3, 5));
     push(&frames, &values(7, 11));
 
-    let seq_before = upload_seq();
     let bytes = dump_pprof(100, &time_range).expect("a profile with one sample");
     let profile = Profile::decode(bytes.as_slice()).expect("a decodable pprof");
 
@@ -119,21 +110,9 @@ fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
     assert_eq!(profile.location.len(), 1);
     assert_eq!(profile.location[0].line[0].line, 42);
 
-    let seq_after_dump = upload_seq();
-    assert_eq!(
-        seq_after_dump,
-        seq_before.map(|s| s + 1),
-        "one upload, one bump"
-    );
-
     assert!(
         dump_pprof(100, &time_range).is_none(),
         "a drained accumulator must not produce a second profile"
-    );
-    assert_eq!(
-        upload_seq(),
-        seq_after_dump,
-        "an empty window is not an upload"
     );
 
     push(&frames, &values(1, 2));
