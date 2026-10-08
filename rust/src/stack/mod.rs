@@ -79,12 +79,9 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
     configure(1.0 / f64::from(sample_rate.max(1)), options);
 
     if is_safe_copy_failed() {
-        log::error!(
-            target: "pyroscope-python",
-            "no safe memory copy method available (process_vm_readv failed); \
-             the CPU stack sampler stays off"
-        );
-        return Ok(());
+        return Err(PyRuntimeError::new_err(
+            "no safe memory copy method available (process_vm_readv failed)",
+        ));
     }
 
     if !sampler_start() {
