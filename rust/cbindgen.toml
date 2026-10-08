@@ -41,5 +41,4 @@ exclude = [
   "pyroscope_stack_take_sampling_thread_error",
   "pyroscope_stack_register_thread",
   "pyroscope_stack_unregister_thread",
-  "pyroscope_stack_thread_count",
 ]
