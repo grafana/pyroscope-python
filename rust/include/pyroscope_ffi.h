@@ -20,6 +20,10 @@ typedef enum {
    The vendored dd-trace-py stack sampler.
    */
   PprofBuilderType_CpuWall,
+  /*
+   The vendored dd-trace-py stack sampler with `oncpu`.
+   */
+  PprofBuilderType_OnCpu,
 } PprofBuilderType;
 
 typedef struct {

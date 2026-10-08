@@ -16,6 +16,7 @@ pub extern "C" fn pyroscope_push_sample(
     match builder_type {
         PprofBuilderType::Memory => crate::memory::push_sample(frames, values),
         PprofBuilderType::CpuWall => crate::stack::push_sample(frames, values),
+        PprofBuilderType::OnCpu => crate::stack::push_oncpu_sample(frames, values),
         // py-spy samples never cross the FFI boundary.
         PprofBuilderType::Cpu => {}
     }
