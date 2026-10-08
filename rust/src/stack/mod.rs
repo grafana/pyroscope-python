@@ -163,7 +163,7 @@ fn period_ns(sample_rate: u32) -> i64 {
 }
 
 #[cfg(all(test, not(miri)))]
-mod thread_registration_tests;
+mod sampler_tests;
 
 #[cfg(test)]
 mod tests;
