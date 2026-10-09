@@ -5,7 +5,8 @@
 - cpu profiling; `oncpu=True` skips unwinding idle threads and uploads cpu only, `oncpu=False` uploads cpu+wall
 - syscall memory copy
 - thread registration via `threading`
-- fork child and restart handling `configure_experimental_stack_profiler(max_nframe, max_threads)`.
+- fork child and restart handling `configure_experimental_stack_profiler(max_nframe, max_threads, adaptive_*)`.
+- adaptive sampling, on by default; `sample_rate` only sets the starting interval
 
 ## Intentionally excluded
 
@@ -19,7 +20,6 @@
 ## Follow-ups
 
 - Fast copy (safe_memcpy, SIGSEGV/SIGBUS handlers, faulthandler patch, warmup)
-- adaptive sampling
 - asyncio/uvloop task unwinding and `max_tasks`
 - gevent/greenlets.
 
