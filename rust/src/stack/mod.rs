@@ -9,6 +9,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+mod asyncio;
 mod faulthandler;
 mod sampler;
 mod threads;
@@ -32,12 +33,14 @@ pub struct Options {
     pub fast_copy_warmup_s: f64,
     pub max_nframe: u32,
     pub max_threads: u32,
+    pub max_tasks: u32,
     pub adaptive_sampling: bool,
     pub adaptive_target_overhead: f64,
     pub adaptive_max_interval_us: u64,
     pub adaptive_baseline: f64,
     pub adaptive_p_stable_window_s: u32,
     pub adaptive_p_stable_percentile: f64,
+    pub async_tracking: bool,
 }
 
 impl Default for Options {
@@ -47,12 +50,14 @@ impl Default for Options {
             fast_copy_warmup_s: 15.0,
             max_nframe: 128,
             max_threads: 25,
+            max_tasks: 50,
             adaptive_sampling: true,
             adaptive_target_overhead: 0.01,
             adaptive_max_interval_us: 100_000,
             adaptive_baseline: 0.0,
             adaptive_p_stable_window_s: 600,
             adaptive_p_stable_percentile: 95.0,
+            async_tracking: false,
         }
     }
 }
@@ -159,6 +164,9 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
     STARTED.store(true, Ordering::Release);
 
     threads::install(py)?;
+    if options.async_tracking {
+        asyncio::install(py);
+    }
     Ok(())
 }
 
@@ -263,6 +271,9 @@ fn period_ns(sample_rate: u32) -> i64 {
 
 #[cfg(all(test, not(miri)))]
 mod sampler_tests;
+
+#[cfg(all(test, not(miri)))]
+mod thread_registration_tests;
 
 #[cfg(test)]
 mod tests;

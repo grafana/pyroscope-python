@@ -47,4 +47,9 @@ exclude = [
   "pyroscope_stack_take_sampling_thread_error",
   "pyroscope_stack_register_thread",
   "pyroscope_stack_unregister_thread",
+  "pyroscope_stack_init_asyncio",
+  "pyroscope_stack_track_asyncio_loop",
+  "pyroscope_stack_link_tasks",
+  "pyroscope_stack_weak_link_tasks",
+  "pyroscope_stack_set_uvloop_mode",
 ]

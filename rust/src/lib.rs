@@ -137,24 +137,28 @@ fn configure_experimental_stack_profiler(
     fast_copy_warmup: f64,
     max_nframe: u32,
     max_threads: u32,
+    max_tasks: u32,
     adaptive_sampling: bool,
     adaptive_target_overhead: f64,
     adaptive_max_interval_us: u64,
     adaptive_baseline: f64,
     adaptive_p_stable_window_s: u32,
     adaptive_p_stable_percentile: f64,
+    async_tracking: bool,
 ) -> bool {
     stack::set_options(stack::Options {
         fast_copy,
         fast_copy_warmup_s: fast_copy_warmup,
         max_nframe,
         max_threads,
+        max_tasks,
         adaptive_sampling,
         adaptive_target_overhead,
         adaptive_max_interval_us,
         adaptive_baseline,
         adaptive_p_stable_window_s,
         adaptive_p_stable_percentile,
+        async_tracking,
     })
 }
 

@@ -80,12 +80,14 @@ def configure_experimental_stack_profiler(
         fast_copy_warmup=15.0,
         max_nframe=128,
         max_threads=25,
+        max_tasks=50,
         adaptive_sampling=True,
         adaptive_target_overhead=0.01,
         adaptive_max_interval_us=100000,
         adaptive_baseline=0.0,
         adaptive_p_stable_window_s=600,
         adaptive_p_stable_percentile=95.0,
+        async_tracking=False,
 ):
     """Set the options of the stack CPU profiler, for the whole process.
 
@@ -98,8 +100,9 @@ def configure_experimental_stack_profiler(
     handlers instead of a syscall, after fast_copy_warmup seconds on the
     syscall copy.
 
-    max_threads caps how many threads one sampling cycle covers; past the cap
-    the sampler picks a uniform random subset. 0 means no cap.
+    max_threads and max_tasks cap how many threads, and how many leaf asyncio
+    tasks, one sampling cycle covers; past the cap the sampler picks a uniform
+    random subset. 0 means no cap.
 
     adaptive_sampling moves the sampling interval between 100us and
     adaptive_max_interval_us to keep the sampler near adaptive_target_overhead,
@@ -107,18 +110,23 @@ def configure_experimental_stack_profiler(
     in core-percent units (1 = 0.01 core, 0 disables the floor), and
     adaptive_p_stable_percentile is a percentage between 0 and 100 of the app
     CPU seen over the last adaptive_p_stable_window_s seconds.
+
+    async_tracking unwinds asyncio tasks, uvloop included. It patches asyncio
+    and uvloop only if they are imported before configure().
     """
     return lib.configure_experimental_stack_profiler(
         fast_copy,
         fast_copy_warmup,
         max_nframe,
         max_threads,
+        max_tasks,
         adaptive_sampling,
         adaptive_target_overhead,
         adaptive_max_interval_us,
         adaptive_baseline,
         adaptive_p_stable_window_s,
         adaptive_p_stable_percentile,
+        async_tracking,
     )
 
 def shutdown():
@@ -258,3 +266,201 @@ def _install_stack_faulthandler(faulthandler, threading, pause_sampling, resume_
 
     faulthandler.enable = _patched_enable
     faulthandler.disable = _patched_disable
+
+def _install_stack_asyncio(asyncio, threading, uvloop, track_loop, init_asyncio, link_tasks, weak_link_tasks, set_uvloop_mode):
+    import inspect
+    from asyncio import events, tasks
+
+    def arg(args, kwargs, index, name):
+        if len(args) > index:
+            return args[index]
+        return kwargs.get(name)
+
+    def ident():
+        return threading.current_thread().ident
+
+    def running_loop():
+        try:
+            return asyncio.get_running_loop()
+        except RuntimeError:
+            return None
+
+    def current_task():
+        try:
+            return asyncio.current_task()
+        except RuntimeError:
+            return None
+
+    def init():
+        if sys.hexversion >= 0x030C0000:
+            scheduled = getattr(tasks, "_scheduled_tasks", None)
+            eager = getattr(tasks, "_eager_tasks", None)
+        else:
+            scheduled = getattr(tasks, "_all_tasks", None)
+            eager = None
+        data = getattr(scheduled, "data", None)
+        if data is not None:
+            init_asyncio(data, eager)
+
+    def publish(name, original, wrapper):
+        setattr(tasks, name, wrapper)
+        if getattr(asyncio, name, None) is original:
+            setattr(asyncio, name, wrapper)
+
+    original_set_event_loop = events.set_event_loop
+
+    def set_event_loop(*args, **kwargs):
+        track_loop(ident(), arg(args, kwargs, 0, "loop"))
+        return original_set_event_loop(*args, **kwargs)
+
+    events.set_event_loop = set_event_loop
+    if getattr(asyncio, "set_event_loop", None) is original_set_event_loop:
+        asyncio.set_event_loop = set_event_loop
+
+    policy = getattr(events, "_BaseDefaultEventLoopPolicy", None)
+    if policy is None:
+        policy = getattr(events, "BaseDefaultEventLoopPolicy", None)
+    if policy is not None:
+        original_policy_set_event_loop = policy.set_event_loop
+
+        def policy_set_event_loop(*args, **kwargs):
+            track_loop(ident(), arg(args, kwargs, 1, "loop"))
+            return original_policy_set_event_loop(*args, **kwargs)
+
+        policy.set_event_loop = policy_set_event_loop
+
+    original_gathering_init = tasks._GatheringFuture.__init__
+
+    def gathering_init(*args, **kwargs):
+        try:
+            return original_gathering_init(*args, **kwargs)
+        finally:
+            children = arg(args, kwargs, 1, "children")
+            if children is not None and running_loop() is not None:
+                parent = current_task()
+                if parent is not None:
+                    for child in children:
+                        link_tasks(parent, child)
+
+    tasks._GatheringFuture.__init__ = gathering_init
+
+    original_wait = tasks._wait
+
+    def _wait(*args, **kwargs):
+        try:
+            return original_wait(*args, **kwargs)
+        finally:
+            futures = arg(args, kwargs, 0, "fs")
+            if futures is not None and running_loop() is not None:
+                parent = current_task()
+                if parent is not None:
+                    for future in futures:
+                        link_tasks(parent, future)
+
+    publish("_wait", original_wait, _wait)
+
+    original_as_completed = tasks.as_completed
+
+    def _as_completed(*args, **kwargs):
+        parent = current_task()
+        fs = arg(args, kwargs, 0, "fs")
+        if parent is not None and fs is not None:
+            futures = {asyncio.ensure_future(f, loop=kwargs.get("loop")) for f in set(fs)}
+            for future in futures:
+                link_tasks(parent, future)
+            if args:
+                args = (futures,) + args[1:]
+            else:
+                kwargs = {**kwargs, "fs": futures}
+        return original_as_completed(*args, **kwargs)
+
+    if inspect.isgeneratorfunction(original_as_completed):
+
+        def as_completed(*args, **kwargs):
+            return (yield from _as_completed(*args, **kwargs))
+
+    else:
+        as_completed = _as_completed
+
+    publish("as_completed", original_as_completed, as_completed)
+
+    original_shield = tasks.shield
+
+    def shield(*args, **kwargs):
+        awaitable = arg(args, kwargs, 0, "arg")
+        future = asyncio.ensure_future(awaitable, loop=kwargs.get("loop"))
+        parent = current_task()
+        if parent is not None:
+            link_tasks(parent, future)
+        if args:
+            args = (future,) + args[1:]
+        else:
+            kwargs = {**kwargs, "arg": future}
+        return original_shield(*args, **kwargs)
+
+    publish("shield", original_shield, shield)
+
+    taskgroups = sys.modules.get("asyncio.taskgroups")
+    taskgroup = getattr(taskgroups, "TaskGroup", None) if taskgroups is not None else None
+    if taskgroup is not None and hasattr(taskgroup, "create_task"):
+        original_taskgroup_create_task = taskgroup.create_task
+
+        def taskgroup_create_task(*args, **kwargs):
+            task = original_taskgroup_create_task(*args, **kwargs)
+            parent = current_task()
+            if parent is not None and task is not None:
+                link_tasks(parent, task)
+            return task
+
+        taskgroup.create_task = taskgroup_create_task
+
+    original_create_task = tasks.create_task
+
+    def create_task(*args, **kwargs):
+        task = original_create_task(*args, **kwargs)
+        parent = current_task()
+        if parent is not None and task is not None:
+            weak_link_tasks(parent, task)
+        return task
+
+    publish("create_task", original_create_task, create_task)
+
+    loop = running_loop()
+    if loop is not None:
+        track_loop(ident(), loop)
+    init()
+
+    if uvloop is None:
+        return
+
+    original_new_event_loop = getattr(uvloop, "new_event_loop", None)
+    if original_new_event_loop is not None:
+
+        def new_event_loop(*args, **kwargs):
+            loop = original_new_event_loop(*args, **kwargs)
+            thread_id = ident()
+            set_uvloop_mode(thread_id, True)
+            track_loop(thread_id, loop)
+            init()
+            return loop
+
+        uvloop.new_event_loop = new_event_loop
+        # uvloop.run binds new_event_loop as its loop_factory keyword default.
+        defaults = getattr(getattr(uvloop, "run", None), "__kwdefaults__", None) or {}
+        if defaults.get("loop_factory") is original_new_event_loop:
+            defaults["loop_factory"] = new_event_loop
+
+    uvloop_policy = getattr(uvloop, "EventLoopPolicy", None)
+    if uvloop_policy is not None and hasattr(uvloop_policy, "set_event_loop"):
+        original_uvloop_set_event_loop = uvloop_policy.set_event_loop
+
+        def uvloop_set_event_loop(*args, **kwargs):
+            thread_id = ident()
+            set_uvloop_mode(thread_id, True)
+            loop = arg(args, kwargs, 1, "loop")
+            if loop is not None:
+                track_loop(thread_id, loop)
+                init()
+            return original_uvloop_set_event_loop(*args, **kwargs)
+
+        uvloop_policy.set_event_loop = uvloop_set_event_loop
