@@ -17,6 +17,8 @@ pub enum PprofBuilderType {
     Cpu,
     /// The vendored dd-trace-py stack sampler.
     CpuWall,
+    /// The vendored dd-trace-py stack sampler with `oncpu`.
+    OnCpu,
 }
 
 /// What a `PProfBuilder` is building: the sample types it emits, and the value
@@ -45,6 +47,8 @@ pub struct MemoryProfile;
 pub struct PySpyProfile;
 /// The vendored dd-trace-py stack sampler.
 pub struct CpuWallProfile;
+/// The vendored dd-trace-py stack sampler with `oncpu`.
+pub struct CpuProfile;
 
 pub struct PProfBuilder<K: ProfileKind> {
     profile: Profile,
@@ -135,6 +139,29 @@ impl ProfileKind for CpuWallProfile {
 impl FfiProfileKind for CpuWallProfile {
     fn value_slots(values: &FFISampleValues) -> Self::Values {
         [values.cpu_time, values.wall_time]
+    }
+}
+
+impl ProfileKind for CpuProfile {
+    type Values = [i64; 1];
+    type PeriodConfig = i64;
+
+    fn set_profile_type(profile: &mut Profile, strings: &mut StringTable, period_ns: i64) {
+        profile.sample_type = vec![ValueType {
+            r#type: strings.add("cpu").pprof(),
+            unit: strings.add("nanoseconds").pprof(),
+        }];
+        profile.period = period_ns;
+        profile.period_type = Some(ValueType {
+            r#type: strings.add("cpu").pprof(),
+            unit: strings.add("nanoseconds").pprof(),
+        });
+    }
+}
+
+impl FfiProfileKind for CpuProfile {
+    fn value_slots(values: &FFISampleValues) -> Self::Values {
+        [values.cpu_time]
     }
 }
 
