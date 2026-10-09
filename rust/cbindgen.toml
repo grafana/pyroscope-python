@@ -35,6 +35,7 @@ exclude = [
   "memalloc_stop",
   "memalloc_heap_py",
   "pyroscope_stack_configure",
+  "pyroscope_stack_interval_us",
   "pyroscope_stack_is_safe_copy_failed",
   "pyroscope_stack_start",
   "pyroscope_stack_stop",
