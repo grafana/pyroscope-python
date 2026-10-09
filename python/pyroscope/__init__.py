@@ -78,6 +78,12 @@ def configure(
 def configure_experimental_stack_profiler(
         max_nframe=128,
         max_threads=25,
+        adaptive_sampling=True,
+        adaptive_target_overhead=0.01,
+        adaptive_max_interval_us=100000,
+        adaptive_baseline=0.0,
+        adaptive_p_stable_window_s=600,
+        adaptive_p_stable_percentile=95.0,
 ):
     """Set the options of the stack CPU profiler, for the whole process.
 
@@ -88,10 +94,23 @@ def configure_experimental_stack_profiler(
 
     max_threads caps how many threads one sampling cycle covers; past the cap
     the sampler picks a uniform random subset. 0 means no cap.
+
+    adaptive_sampling moves the sampling interval between 100us and
+    adaptive_max_interval_us to keep the sampler near adaptive_target_overhead,
+    a fraction of the process CPU time. adaptive_baseline is an overhead floor
+    in core-percent units (1 = 0.01 core, 0 disables the floor), and
+    adaptive_p_stable_percentile is a percentage between 0 and 100 of the app
+    CPU seen over the last adaptive_p_stable_window_s seconds.
     """
     return lib.configure_experimental_stack_profiler(
         max_nframe,
         max_threads,
+        adaptive_sampling,
+        adaptive_target_overhead,
+        adaptive_max_interval_us,
+        adaptive_baseline,
+        adaptive_p_stable_window_s,
+        adaptive_p_stable_percentile,
     )
 
 def shutdown():

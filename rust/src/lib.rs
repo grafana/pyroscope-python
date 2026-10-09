@@ -130,11 +130,27 @@ fn initialize_logging(logging_level: u32) -> bool {
     true
 }
 
+#[allow(clippy::too_many_arguments)]
 #[pyfunction]
-fn configure_experimental_stack_profiler(max_nframe: u32, max_threads: u32) -> bool {
+fn configure_experimental_stack_profiler(
+    max_nframe: u32,
+    max_threads: u32,
+    adaptive_sampling: bool,
+    adaptive_target_overhead: f64,
+    adaptive_max_interval_us: u64,
+    adaptive_baseline: f64,
+    adaptive_p_stable_window_s: u32,
+    adaptive_p_stable_percentile: f64,
+) -> bool {
     stack::set_options(stack::Options {
         max_nframe,
         max_threads,
+        adaptive_sampling,
+        adaptive_target_overhead,
+        adaptive_max_interval_us,
+        adaptive_baseline,
+        adaptive_p_stable_window_s,
+        adaptive_p_stable_percentile,
     })
 }
 
