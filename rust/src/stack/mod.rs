@@ -9,12 +9,13 @@ use std::ops::{Deref, DerefMut};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+mod faulthandler;
 mod sampler;
 mod threads;
 
 use sampler::{
-    configure, interval_us, is_safe_copy_failed, sampler_start, sampler_stop,
-    sampling_thread_failed,
+    configure, fast_copy_initialized, interval_us, is_safe_copy_failed, sampler_start,
+    sampler_stop, sampling_thread_failed,
 };
 static PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuWallProfile>> = LeakableMutex::new();
 static ONCPU_PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuProfile>> = LeakableMutex::new();
@@ -27,6 +28,8 @@ pub struct Config {
 
 #[derive(Debug)]
 pub struct Options {
+    pub fast_copy: bool,
+    pub fast_copy_warmup_s: f64,
     pub max_nframe: u32,
     pub max_threads: u32,
     pub adaptive_sampling: bool,
@@ -40,6 +43,8 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            fast_copy: true,
+            fast_copy_warmup_s: 15.0,
             max_nframe: 128,
             max_threads: 25,
             adaptive_sampling: true,
@@ -54,6 +59,12 @@ impl Default for Options {
 
 impl Options {
     fn validate(&self) -> Result<(), String> {
+        let w = self.fast_copy_warmup_s;
+        if !(w.is_finite() && w >= 0.0) {
+            return Err(format!(
+                "fast_copy_warmup must be a finite, non-negative number of seconds, got {w}"
+            ));
+        }
         let o = self.adaptive_target_overhead;
         if !(o.is_finite() && o > 0.0 && o <= 1.0) {
             return Err(format!(
@@ -128,9 +139,16 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
     configure(1.0 / f64::from(sample_rate.max(1)), options, config.oncpu);
 
     if is_safe_copy_failed() {
-        return Err(PyRuntimeError::new_err(
-            "no safe memory copy method available (process_vm_readv failed)",
-        ));
+        log::error!(
+            target: "pyroscope-python",
+            "no safe memory copy method available (safe_memcpy and process_vm_readv both failed); \
+             the CPU stack sampler stays off"
+        );
+        return Ok(());
+    }
+
+    if fast_copy_initialized() {
+        faulthandler::install(py)?;
     }
 
     if !sampler_start() {
