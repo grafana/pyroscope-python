@@ -76,6 +76,8 @@ def configure(
     )
 
 def configure_experimental_stack_profiler(
+        fast_copy=True,
+        fast_copy_warmup=15.0,
         max_nframe=128,
         max_threads=25,
         adaptive_sampling=True,
@@ -92,6 +94,10 @@ def configure_experimental_stack_profiler(
     configure() with cpu_implementation=ProfilerImplementation.Stack has
     started the profiler.
 
+    fast_copy reads the sampled memory with memcpy under SIGSEGV/SIGBUS
+    handlers instead of a syscall, after fast_copy_warmup seconds on the
+    syscall copy.
+
     max_threads caps how many threads one sampling cycle covers; past the cap
     the sampler picks a uniform random subset. 0 means no cap.
 
@@ -103,6 +109,8 @@ def configure_experimental_stack_profiler(
     CPU seen over the last adaptive_p_stable_window_s seconds.
     """
     return lib.configure_experimental_stack_profiler(
+        fast_copy,
+        fast_copy_warmup,
         max_nframe,
         max_threads,
         adaptive_sampling,
@@ -180,3 +188,73 @@ def _install_stack_threads(threading, register, unregister):
 
     for tid, thread in list(threading._active.items()):
         register(tid, getattr(thread, "native_id", None) or tid)
+
+def _install_stack_faulthandler(faulthandler, threading, pause_sampling, resume_sampling, uninstall_segv_handler, reinstall_segv_handler):
+    _original_enable = faulthandler.enable
+    _original_disable = faulthandler.disable
+    _enable_lock = threading.Lock()
+
+    def _patched_enable(*args, **kwargs):
+        with _enable_lock:
+            # None means the sampler is running but did not pause in time:
+            # swapping handlers now would race with safe_memcpy.
+            pause_result = pause_sampling()
+            safe_to_swap = pause_result is not None
+            try:
+                if safe_to_swap:
+                    try:
+                        uninstall_segv_handler()
+                    except Exception:
+                        pass
+
+                    # Without a fresh install, faulthandler can save itself as its
+                    # own previous handler and loop forever on a fault.
+                    try:
+                        _original_disable()
+                    except Exception:
+                        pass
+
+                try:
+                    _original_enable(*args, **kwargs)
+                except Exception:
+                    if safe_to_swap:
+                        try:
+                            reinstall_segv_handler()
+                        except Exception:
+                            pass
+                    raise
+
+                try:
+                    reinstall_segv_handler()
+                except Exception:
+                    pass
+            finally:
+                if pause_result is True:
+                    resume_sampling()
+
+    def _patched_disable():
+        with _enable_lock:
+            pause_result = pause_sampling()
+            safe_to_swap = pause_result is not None
+            try:
+                if not safe_to_swap:
+                    return False
+
+                try:
+                    disabled = _original_disable()
+                except Exception:
+                    disabled = False
+
+                # disable() restores the handler faulthandler saved, which need not be ours.
+                try:
+                    reinstall_segv_handler()
+                except Exception:
+                    pass
+
+                return disabled
+            finally:
+                if pause_result is True:
+                    resume_sampling()
+
+    faulthandler.enable = _patched_enable
+    faulthandler.disable = _patched_disable

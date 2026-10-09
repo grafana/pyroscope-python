@@ -3,6 +3,8 @@ use super::Options;
 unsafe extern "C" {
     fn pyroscope_stack_configure(
         interval_s: f64,
+        fast_copy: bool,
+        fast_copy_warmup_s: f64,
         max_nframes: u32,
         max_threads: u32,
         oncpu: bool,
@@ -13,6 +15,7 @@ unsafe extern "C" {
         p_stable_window_s: u32,
         p_stable_percentile: f64,
     );
+    fn pyroscope_stack_fast_copy_initialized() -> bool;
     fn pyroscope_stack_interval_us() -> u64;
     fn pyroscope_stack_is_safe_copy_failed() -> bool;
     fn pyroscope_stack_start() -> bool;
@@ -27,6 +30,8 @@ pub(super) fn configure(interval_s: f64, options: &Options, oncpu: bool) {
     unsafe {
         pyroscope_stack_configure(
             interval_s,
+            options.fast_copy,
+            options.fast_copy_warmup_s,
             options.max_nframe,
             options.max_threads,
             oncpu,
@@ -38,6 +43,13 @@ pub(super) fn configure(interval_s: f64, options: &Options, oncpu: bool) {
             options.adaptive_p_stable_percentile,
         )
     }
+}
+
+pub(super) fn fast_copy_initialized() -> bool {
+    if cfg!(miri) {
+        return false;
+    }
+    unsafe { pyroscope_stack_fast_copy_initialized() }
 }
 
 pub(super) fn interval_us() -> u64 {
