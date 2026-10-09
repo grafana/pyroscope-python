@@ -1,6 +1,7 @@
 mod ffi;
 mod memory;
 mod pyspy_backend;
+mod stack;
 
 // Re-exports structs
 pub use crate::pyroscope::PyroscopeAgent;
@@ -44,6 +45,7 @@ fn at_fork_after_in_parent(py: Python<'_>) -> PyResult<()> {
 #[pyfunction]
 fn at_fork_after_in_child(py: Python<'_>) -> PyResult<()> {
     memory::postfork_child();
+    stack::postfork_child();
     encode::interner::postfork_child();
     ffikit::stop_profilers(py);
     ffikit::at_fork_after_in_child(py);
@@ -128,6 +130,14 @@ fn initialize_logging(logging_level: u32) -> bool {
     true
 }
 
+#[pyfunction]
+fn configure_experimental_stack_profiler(max_nframe: u32, max_threads: u32) -> bool {
+    stack::set_options(stack::Options {
+        max_nframe,
+        max_threads,
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 #[pyfunction]
 fn initialize_agent(
@@ -154,6 +164,7 @@ fn initialize_agent(
     mem_heap_sample_size: u64,
     mem_enable_mem_domain: bool,
     cpu_enabled: bool,
+    cpu_implementation: ProfilerImplementation,
 ) -> bool {
     if !cpu_enabled && !mem_enabled {
         log::error!(
@@ -169,7 +180,8 @@ fn initialize_agent(
         report_pid,
     };
 
-    let pyspy_config = cpu_enabled.then(|| py_spy::Config {
+    let pyspy_enabled = cpu_enabled && cpu_implementation == ProfilerImplementation::PySpy;
+    let pyspy_config = pyspy_enabled.then(|| py_spy::Config {
         blocking: py_spy::config::LockingStrategy::NonBlocking,
         native: false,
         pid: Some(std::process::id().try_into().unwrap()),
@@ -197,6 +209,9 @@ fn initialize_agent(
             enable_mem_domain: mem_enable_mem_domain,
             max_nframe: mem_max_nframe,
             heap_sample_size: mem_heap_sample_size,
+        },
+        stack::Config {
+            enabled: cpu_enabled && cpu_implementation == ProfilerImplementation::Stack,
         },
     )
     .tags(tags)
@@ -248,6 +263,13 @@ fn remove_thread_tag(key: String, value: String) -> bool {
 
 #[pyclass(eq, eq_int, from_py_object)]
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ProfilerImplementation {
+    PySpy = 0,
+    Stack = 1,
+}
+
+#[pyclass(eq, eq_int, from_py_object)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LineNo {
     LastInstruction = 0,
     First = 1,
@@ -267,8 +289,10 @@ impl From<LineNo> for py_spy::config::LineNo {
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LineNo>()?;
+    m.add_class::<ProfilerImplementation>()?;
     m.add_function(wrap_pyfunction!(initialize_logging, m)?)?;
     m.add_function(wrap_pyfunction!(initialize_agent, m)?)?;
+    m.add_function(wrap_pyfunction!(configure_experimental_stack_profiler, m)?)?;
     m.add_function(wrap_pyfunction!(drop_agent, m)?)?;
     m.add_function(wrap_pyfunction!(add_thread_tag, m)?)?;
     m.add_function(wrap_pyfunction!(remove_thread_tag, m)?)?;

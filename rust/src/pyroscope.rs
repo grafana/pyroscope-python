@@ -9,6 +9,7 @@ use crate::{
     error::Result,
     memory,
     session::{Session, SessionManager, SessionSignal},
+    stack,
 };
 use std::sync::mpsc::SyncSender;
 use std::time::{Duration, SystemTime};
@@ -41,6 +42,7 @@ pub struct PyroscopeConfig {
     /// How often the agent snapshots and uploads profile data.
     pub upload_interval: Duration,
     pub mem_config: crate::memory::Config,
+    pub stack_config: crate::stack::Config,
 }
 
 #[derive(Clone, Debug)]
@@ -57,6 +59,7 @@ impl PyroscopeConfig {
         spy_name: impl AsRef<str>,
         spy_version: impl AsRef<str>,
         mem_config: crate::memory::Config,
+        stack_config: crate::stack::Config,
     ) -> Self {
         Self {
             url: url.as_ref().to_owned(),
@@ -72,6 +75,7 @@ impl PyroscopeConfig {
             http_headers: HashMap::new(),
             upload_interval: DEFAULT_UPLOAD_INTERVAL,
             mem_config,
+            stack_config,
         }
     }
 
@@ -265,13 +269,24 @@ impl PyroscopeAgent {
     ) -> Result<()> {
         let time_range = stop_watch.lap()?;
 
-        let mut batch = Vec::with_capacity(2);
+        let mut batch = Vec::with_capacity(3);
 
         if config.mem_config.enabled {
             let pprof = memory::dump_pprof(config.mem_config.heap_sample_size, &time_range);
             if let Some(pprof) = pprof {
                 batch.push(ReportBatch {
                     profile_type: "memory".to_string(),
+                    data: ReportData::RawPprof(pprof),
+                })
+            }
+        }
+
+        stack::report_sampling_thread_error();
+        if config.stack_config.enabled {
+            let pprof = stack::dump_pprof(config.sample_rate, &time_range);
+            if let Some(pprof) = pprof {
+                batch.push(ReportBatch {
+                    profile_type: "process_cpu".to_string(),
                     data: ReportData::RawPprof(pprof),
                 })
             }
