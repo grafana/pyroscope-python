@@ -1,4 +1,4 @@
 [submodule "dd-trace-py"]
 	path = dd-trace-py
 	url = git@github.com:grafana/dd-trace-py.git
-	branch = CPU-part-1
+	branch = main
