@@ -116,6 +116,7 @@ fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
     configure(
         1.0 / 50.0,
         &Options {
+            max_tasks: 0,
             adaptive_sampling: false,
             adaptive_target_overhead: 0.05,
             adaptive_max_interval_us: 500_000,

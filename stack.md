@@ -6,8 +6,10 @@
 - syscall memory copy
 - fast copy (safe_memcpy), on by default after a 15 s warmup on the syscall copy; its SIGSEGV/SIGBUS handlers and the faulthandler patch install from `stack::start`, not at import, and only when fast copy is on
 - thread registration via `threading`
-- fork child and restart handling `configure_experimental_stack_profiler(fast_copy, fast_copy_warmup, max_nframe, max_threads, adaptive_*)`.
+- fork child and restart handling `configure_experimental_stack_profiler(fast_copy, fast_copy_warmup, max_nframe, max_threads, max_tasks, adaptive_*, async_tracking)`.
 - adaptive sampling, on by default; `sample_rate` only sets the starting interval
+- asyncio/uvloop task unwinding with `async_tracking=True` (off by default); only patches `asyncio`/`uvloop` if imported before `configure()`
+- `max_tasks`, the per-cycle cap on unwound leaf tasks
 
 ## Intentionally excluded
 
@@ -20,7 +22,6 @@
 
 ## Follow-ups
 
-- asyncio/uvloop task unwinding and `max_tasks`
 - gevent/greenlets.
 
 ## Known upstream issues that we're not fixing in this port
