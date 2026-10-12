@@ -13,7 +13,8 @@ mod sampler;
 mod threads;
 
 use sampler::{
-    configure, is_safe_copy_failed, sampler_start, sampler_stop, sampling_thread_failed,
+    configure, interval_us, is_safe_copy_failed, sampler_start, sampler_stop,
+    sampling_thread_failed,
 };
 static PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuWallProfile>> = LeakableMutex::new();
 static ONCPU_PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuProfile>> = LeakableMutex::new();
@@ -28,6 +29,12 @@ pub struct Config {
 pub struct Options {
     pub max_nframe: u32,
     pub max_threads: u32,
+    pub adaptive_sampling: bool,
+    pub adaptive_target_overhead: f64,
+    pub adaptive_max_interval_us: u64,
+    pub adaptive_baseline: f64,
+    pub adaptive_p_stable_window_s: u32,
+    pub adaptive_p_stable_percentile: f64,
 }
 
 impl Default for Options {
@@ -35,7 +42,43 @@ impl Default for Options {
         Self {
             max_nframe: 128,
             max_threads: 25,
+            adaptive_sampling: true,
+            adaptive_target_overhead: 0.01,
+            adaptive_max_interval_us: 100_000,
+            adaptive_baseline: 0.0,
+            adaptive_p_stable_window_s: 600,
+            adaptive_p_stable_percentile: 95.0,
         }
+    }
+}
+
+impl Options {
+    fn validate(&self) -> Result<(), String> {
+        let o = self.adaptive_target_overhead;
+        if !(o.is_finite() && o > 0.0 && o <= 1.0) {
+            return Err(format!(
+                "adaptive_target_overhead must be a fraction in (0, 1], got {o}"
+            ));
+        }
+        if self.adaptive_max_interval_us == 0 {
+            return Err("adaptive_max_interval_us must be positive".to_string());
+        }
+        let b = self.adaptive_baseline;
+        if !(b.is_finite() && b >= 0.0) {
+            return Err(format!(
+                "adaptive_baseline must be a finite, non-negative number of core-percent units, got {b}"
+            ));
+        }
+        if self.adaptive_p_stable_window_s == 0 {
+            return Err("adaptive_p_stable_window_s must be positive".to_string());
+        }
+        let p = self.adaptive_p_stable_percentile;
+        if !(0.0..=100.0).contains(&p) {
+            return Err(format!(
+                "adaptive_p_stable_percentile must be a percentage between 0 and 100, got {p}"
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -48,6 +91,10 @@ pub fn set_options(options: Options) -> bool {
 }
 
 fn set_options_in(lock: &OnceLock<Options>, options: Options) -> bool {
+    if let Err(e) = options.validate() {
+        log::error!(target: "pyroscope-python", "ignoring configure_experimental_stack_profiler: {e}");
+        return false;
+    }
     if lock.set(options).is_err() {
         log::warn!(
             target: "pyroscope-python",
@@ -190,7 +237,10 @@ pub fn report_sampling_thread_error() {
 }
 
 fn period_ns(sample_rate: u32) -> i64 {
-    1_000_000_000 / i64::from(sample_rate.max(1))
+    match interval_us() {
+        0 => 1_000_000_000 / i64::from(sample_rate.max(1)),
+        us => i64::try_from(us).unwrap_or(i64::MAX).saturating_mul(1_000),
+    }
 }
 
 #[cfg(all(test, not(miri)))]

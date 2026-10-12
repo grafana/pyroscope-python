@@ -51,12 +51,73 @@ fn cpu_options_are_fixed_by_the_first_call() {
     assert_eq!(lock.get().expect("the first call seals").max_nframe, 7);
 }
 
+#[test]
+fn invalid_adaptive_options_are_refused_without_sealing() {
+    let invalid = [
+        Options {
+            adaptive_target_overhead: 0.0,
+            ..Options::default()
+        },
+        Options {
+            adaptive_target_overhead: 1.5,
+            ..Options::default()
+        },
+        Options {
+            adaptive_target_overhead: f64::NAN,
+            ..Options::default()
+        },
+        Options {
+            adaptive_max_interval_us: 0,
+            ..Options::default()
+        },
+        Options {
+            adaptive_baseline: -1.0,
+            ..Options::default()
+        },
+        Options {
+            adaptive_baseline: f64::INFINITY,
+            ..Options::default()
+        },
+        Options {
+            adaptive_p_stable_window_s: 0,
+            ..Options::default()
+        },
+        Options {
+            adaptive_p_stable_percentile: 101.0,
+            ..Options::default()
+        },
+        Options {
+            adaptive_p_stable_percentile: f64::NAN,
+            ..Options::default()
+        },
+    ];
+    let lock = OnceLock::new();
+    for options in invalid {
+        let debug = format!("{options:?}");
+        assert!(!set_options_in(&lock, options), "{debug}");
+    }
+    assert!(lock.get().is_none());
+    assert!(set_options_in(&lock, Options::default()));
+}
+
 /// Deliberately a single test: it drains the process-wide accumulator and
 /// moves the sampler's interval, so a second test touching either in
 /// parallel would race.
 #[test]
 fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
-    configure(1.0 / 100.0, &Options::default(), false);
+    configure(
+        1.0 / 50.0,
+        &Options {
+            adaptive_sampling: false,
+            adaptive_target_overhead: 0.05,
+            adaptive_max_interval_us: 500_000,
+            adaptive_baseline: 1.0,
+            adaptive_p_stable_window_s: 5,
+            adaptive_p_stable_percentile: 50.0,
+            ..Options::default()
+        },
+        false,
+    );
 
     let frames = [FFIFrame {
         function_name: intern("stack::tests::some_function"),
@@ -88,7 +149,11 @@ fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
         ),
         ("cpu", "nanoseconds")
     );
-    assert_eq!(profile.period, 10_000_000);
+    let expected_period = if cfg!(miri) { 10_000_000 } else { 20_000_000 };
+    assert_eq!(
+        profile.period, expected_period,
+        "the sampler's interval, not 1 / sample_rate"
+    );
     assert_eq!(profile.duration_nanos, 10_000_000_000);
 
     assert_eq!(profile.sample.len(), 1, "one row per distinct stack");
