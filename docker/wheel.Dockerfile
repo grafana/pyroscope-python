@@ -1,26 +1,40 @@
 # syntax=docker/dockerfile:1.23@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 ARG PLATFORM=x86_64
-FROM quay.io/pypa/manylinux2014_${PLATFORM}:2026.09.26-1 AS builder
-ARG OPENSSL_VERSION=3.5.9
-
-RUN yum -y install perl-core glibc-devel make
+FROM quay.io/pypa/manylinux2014_${PLATFORM}:2026.09.26-1 AS manylinux
 RUN manylinux-install-clang -v v22.1.8.1
 
+FROM debian:trixie-slim AS openssl
+ARG OPENSSL_VERSION=3.5.9
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends perl make curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH=/opt/clang/bin:$PATH
 ENV CC=clang
-ENV CXX=clang++
+ENV SOURCE_DATE_EPOCH=0
 
 # Build OpenSSL from source
-RUN curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
+RUN --mount=type=bind,from=manylinux,source=/opt/clang,target=/opt/clang \
+    --mount=type=bind,from=manylinux,source=/usr/include,target=/usr/include \
+    --mount=type=bind,from=manylinux,source=/opt/rh/devtoolset-10,target=/opt/rh/devtoolset-10 \
+    curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
     -o /tmp/openssl.tar.gz \
     && tar xzf /tmp/openssl.tar.gz -C /tmp \
     && cd /tmp/openssl-${OPENSSL_VERSION} \
     && ./config no-shared no-tests --prefix=/usr/local/openssl --openssldir=/etc/ssl \
-    && make -j$(nproc) \
-    && make install_sw \
+    && make -j$(nproc) build_libs \
+    && make install_dev \
     && ln -sf /usr/local/openssl/lib64 /usr/local/openssl/lib || true \
     && cd / \
     && rm -rf /tmp/openssl*
 
+FROM manylinux AS builder
+
+ENV CC=clang
+ENV CXX=clang++
+
+COPY --from=openssl /usr/local/openssl /usr/local/openssl
 ENV OPENSSL_DIR=/usr/local/openssl
 ENV OPENSSL_STATIC=1
 
