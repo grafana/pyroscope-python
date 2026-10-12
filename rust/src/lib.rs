@@ -212,6 +212,7 @@ fn initialize_agent(
         },
         stack::Config {
             enabled: cpu_enabled && cpu_implementation == ProfilerImplementation::Stack,
+            oncpu,
         },
     )
     .tags(tags)

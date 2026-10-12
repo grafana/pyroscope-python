@@ -1,18 +1,18 @@
 use super::Options;
 
 unsafe extern "C" {
-    fn pyroscope_stack_configure(interval_s: f64, max_nframes: u32, max_threads: u32);
+    fn pyroscope_stack_configure(interval_s: f64, max_nframes: u32, max_threads: u32, oncpu: bool);
     fn pyroscope_stack_is_safe_copy_failed() -> bool;
     fn pyroscope_stack_start() -> bool;
     fn pyroscope_stack_stop();
     fn pyroscope_stack_take_sampling_thread_error() -> bool;
 }
 
-pub(super) fn configure(interval_s: f64, options: &Options) {
+pub(super) fn configure(interval_s: f64, options: &Options, oncpu: bool) {
     if cfg!(miri) {
         return;
     }
-    unsafe { pyroscope_stack_configure(interval_s, options.max_nframe, options.max_threads) }
+    unsafe { pyroscope_stack_configure(interval_s, options.max_nframe, options.max_threads, oncpu) }
 }
 
 pub(super) fn is_safe_copy_failed() -> bool {

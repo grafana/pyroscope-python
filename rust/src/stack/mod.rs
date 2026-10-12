@@ -1,5 +1,5 @@
 use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
-use crate::encode::pprof::{CpuWallProfile, PProfBuilder};
+use crate::encode::pprof::{CpuProfile, CpuWallProfile, PProfBuilder, ProfileKind};
 use crate::forksafety::LeakableMutex;
 use crate::utils::TimeRange;
 use prost::Message;
@@ -16,10 +16,12 @@ use sampler::{
     configure, is_safe_copy_failed, sampler_start, sampler_stop, sampling_thread_failed,
 };
 static PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuWallProfile>> = LeakableMutex::new();
+static ONCPU_PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuProfile>> = LeakableMutex::new();
 
 #[derive(Clone)]
 pub struct Config {
     pub enabled: bool,
+    pub oncpu: bool,
 }
 
 #[derive(Debug)]
@@ -76,7 +78,7 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
     }
 
     let options = options();
-    configure(1.0 / f64::from(sample_rate.max(1)), options);
+    configure(1.0 / f64::from(sample_rate.max(1)), options, config.oncpu);
 
     if is_safe_copy_failed() {
         return Err(PyRuntimeError::new_err(
@@ -107,13 +109,25 @@ pub fn stop(py: Python<'_>) {
 
 pub fn postfork_child() {
     #[cfg(not(miri))]
-    PROFILE_BUILDER.leak_and_reset();
+    {
+        PROFILE_BUILDER.leak_and_reset();
+        ONCPU_PROFILE_BUILDER.leak_and_reset();
+    }
     #[cfg(miri)]
-    let _ = PROFILE_BUILDER.leak_and_reset();
+    {
+        let _ = PROFILE_BUILDER.leak_and_reset();
+        let _ = ONCPU_PROFILE_BUILDER.leak_and_reset();
+    }
 }
 
 pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
     if let Ok(mut pb) = PROFILE_BUILDER.mutex().lock() {
+        pb.add_ffi_sample(frames, values);
+    }
+}
+
+pub fn push_oncpu_sample(frames: &[FFIFrame], values: &FFISampleValues) {
+    if let Ok(mut pb) = ONCPU_PROFILE_BUILDER.mutex().lock() {
         pb.add_ffi_sample(frames, values);
     }
 }
@@ -123,11 +137,16 @@ pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
 /// See `crate::memory::implementation::clear_samples` for the reasoning,
 /// including why the shared string table is deliberately left alone.
 pub fn clear_samples() {
-    let mut pb = PROFILE_BUILDER
+    PROFILE_BUILDER
         .mutex()
         .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    pb.reset();
+        .unwrap_or_else(|e| e.into_inner())
+        .reset();
+    ONCPU_PROFILE_BUILDER
+        .mutex()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .reset();
 }
 
 /// Take the accumulated cpu/wall samples as an encoded pprof, if any.
@@ -135,9 +154,21 @@ pub fn clear_samples() {
 /// Unlike `crate::memory::dump_pprof` this needs neither the GIL nor a
 /// profiler-side flush, but it keeps the same lock order: the interner before
 /// the profile builder, never the reverse.
-pub fn dump_pprof(sample_rate: u32, time_range: &TimeRange) -> Option<Vec<u8>> {
+pub fn dump_pprof(sample_rate: u32, oncpu: bool, time_range: &TimeRange) -> Option<Vec<u8>> {
+    if oncpu {
+        dump_from(&ONCPU_PROFILE_BUILDER, sample_rate, time_range)
+    } else {
+        dump_from(&PROFILE_BUILDER, sample_rate, time_range)
+    }
+}
+
+fn dump_from<K: ProfileKind<PeriodConfig = i64>>(
+    builder: &'static LeakableMutex<PProfBuilder<K>>,
+    sample_rate: u32,
+    time_range: &TimeRange,
+) -> Option<Vec<u8>> {
     let st = crate::encode::interner::string_table().lock();
-    let pb = PROFILE_BUILDER.mutex().lock();
+    let pb = builder.mutex().lock();
     let profile = match (st, pb) {
         (Ok(mut st), Ok(mut pb)) => {
             pb.set_profile_type(st.deref_mut(), period_ns(sample_rate));

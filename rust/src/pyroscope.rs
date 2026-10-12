@@ -283,7 +283,8 @@ impl PyroscopeAgent {
 
         stack::report_sampling_thread_error();
         if config.stack_config.enabled {
-            let pprof = stack::dump_pprof(config.sample_rate, &time_range);
+            let pprof =
+                stack::dump_pprof(config.sample_rate, config.stack_config.oncpu, &time_range);
             if let Some(pprof) = pprof {
                 batch.push(ReportBatch {
                     profile_type: "process_cpu".to_string(),

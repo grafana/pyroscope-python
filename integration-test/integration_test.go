@@ -52,6 +52,10 @@ func TestPythonStackProfilerOnCPU(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, stack: true})
 }
 
+func TestPythonStackProfilerOffCPU(t *testing.T) {
+	testPythonProfilerConfiguration(t, profileConfig{onCPU: false, stack: true})
+}
+
 func TestPythonStackProfilerRestart(t *testing.T) {
 	wheelDir := ensureWheel(t)
 

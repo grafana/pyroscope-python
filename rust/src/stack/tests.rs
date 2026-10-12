@@ -22,13 +22,8 @@ fn values(cpu_time: i64, wall_time: i64) -> FFISampleValues {
     }
 }
 
-fn push(frames: &[FFIFrame], values: &FFISampleValues) {
-    crate::ffi::pyroscope_push_sample(
-        PprofBuilderType::CpuWall,
-        frames.as_ptr(),
-        frames.len(),
-        values,
-    );
+fn push(builder_type: PprofBuilderType, frames: &[FFIFrame], values: &FFISampleValues) {
+    crate::ffi::pyroscope_push_sample(builder_type, frames.as_ptr(), frames.len(), values);
 }
 
 fn resolve(profile: &Profile, index: i64) -> &str {
@@ -61,7 +56,7 @@ fn cpu_options_are_fixed_by_the_first_call() {
 /// parallel would race.
 #[test]
 fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
-    configure(1.0 / 100.0, &Options::default());
+    configure(1.0 / 100.0, &Options::default(), false);
 
     let frames = [FFIFrame {
         function_name: intern("stack::tests::some_function"),
@@ -70,10 +65,10 @@ fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
     }];
     let time_range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
 
-    push(&frames, &values(3, 5));
-    push(&frames, &values(7, 11));
+    push(PprofBuilderType::CpuWall, &frames, &values(3, 5));
+    push(PprofBuilderType::CpuWall, &frames, &values(7, 11));
 
-    let bytes = dump_pprof(100, &time_range).expect("a profile with one sample");
+    let bytes = dump_pprof(100, false, &time_range).expect("a profile with one sample");
     let profile = Profile::decode(bytes.as_slice()).expect("a decodable pprof");
 
     let sample_types: Vec<(&str, &str)> = profile
@@ -111,11 +106,23 @@ fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
     assert_eq!(profile.location[0].line[0].line, 42);
 
     assert!(
-        dump_pprof(100, &time_range).is_none(),
+        dump_pprof(100, false, &time_range).is_none(),
         "a drained accumulator must not produce a second profile"
     );
 
-    push(&frames, &values(1, 2));
+    push(PprofBuilderType::CpuWall, &frames, &values(1, 2));
     clear_samples();
-    assert!(dump_pprof(100, &time_range).is_none());
+    assert!(dump_pprof(100, false, &time_range).is_none());
+
+    push(PprofBuilderType::OnCpu, &frames, &values(3, 5));
+    let bytes = dump_pprof(100, true, &time_range).expect("an oncpu profile with one sample");
+    let profile = Profile::decode(bytes.as_slice()).expect("a decodable pprof");
+    let sample_types: Vec<(&str, &str)> = profile
+        .sample_type
+        .iter()
+        .map(|vt| (resolve(&profile, vt.r#type), resolve(&profile, vt.unit)))
+        .collect();
+    assert_eq!(sample_types, vec![("cpu", "nanoseconds")]);
+    assert_eq!(profile.sample.len(), 1);
+    assert_eq!(profile.sample[0].value, vec![3]);
 }
