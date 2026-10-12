@@ -58,6 +58,7 @@ def main():
     oncpu = env_bool("ONCPU")
     gil_only = env_bool("GIL_ONLY")
     cpu_implementation = os.environ.get("CPU_IMPLEMENTATION", "PySpy")
+    cpu_timer = env_bool("CPU_TIMER") if "CPU_TIMER" in os.environ else False
     canary = os.environ["CANARY"]
     application_name = os.environ["PYROSCOPE_APPLICATION_NAME"]
     server_address = os.environ["PYROSCOPE_SERVER_ADDRESS"]
@@ -71,6 +72,8 @@ def main():
         cpu_implementation,
         canary,
     )
+    if cpu_timer:
+        assert pyroscope.configure_experimental_stack_profiler(cpu_timer=True)
     pyroscope.configure(
         application_name=application_name,
         server_address=server_address,

@@ -15,7 +15,7 @@ mod threads;
 
 use sampler::{
     configure, fast_copy_initialized, interval_us, is_safe_copy_failed, sampler_start,
-    sampler_stop, sampling_thread_failed,
+    sampler_stop, sampling_thread_failed, set_cpu_timer,
 };
 static PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuWallProfile>> = LeakableMutex::new();
 static ONCPU_PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuProfile>> = LeakableMutex::new();
@@ -32,12 +32,15 @@ pub struct Options {
     pub fast_copy_warmup_s: f64,
     pub max_nframe: u32,
     pub max_threads: u32,
+    pub max_tasks: u32,
     pub adaptive_sampling: bool,
     pub adaptive_target_overhead: f64,
     pub adaptive_max_interval_us: u64,
     pub adaptive_baseline: f64,
     pub adaptive_p_stable_window_s: u32,
     pub adaptive_p_stable_percentile: f64,
+    pub cpu_timer: bool,
+    pub cpu_timer_interval_ms: u32,
 }
 
 impl Default for Options {
@@ -47,12 +50,15 @@ impl Default for Options {
             fast_copy_warmup_s: 15.0,
             max_nframe: 128,
             max_threads: 25,
+            max_tasks: 50,
             adaptive_sampling: true,
             adaptive_target_overhead: 0.01,
             adaptive_max_interval_us: 100_000,
             adaptive_baseline: 0.0,
             adaptive_p_stable_window_s: 600,
             adaptive_p_stable_percentile: 95.0,
+            cpu_timer: false,
+            cpu_timer_interval_ms: 10,
         }
     }
 }
@@ -137,6 +143,7 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
 
     let options = options();
     configure(1.0 / f64::from(sample_rate.max(1)), options, config.oncpu);
+    set_cpu_timer(options.cpu_timer, options.cpu_timer_interval_ms);
 
     if is_safe_copy_failed() {
         log::error!(

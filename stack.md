@@ -7,6 +7,7 @@
 - fast copy (safe_memcpy), on by default after a 15 s warmup on the syscall copy; its SIGSEGV/SIGBUS handlers and the faulthandler patch install from `stack::start`, not at import, and only when fast copy is on
 - thread registration via `threading`
 - fork child and restart handling `configure_experimental_stack_profiler(fast_copy, fast_copy_warmup, max_nframe, max_threads, adaptive_*)`.
+- opt-in `timer_create` + `SIGPROF` per-thread CPU timer sampling, Linux only, `configure_experimental_stack_profiler(cpu_timer=True, cpu_timer_interval_ms=10)`
 - adaptive sampling, on by default; `sample_rate` only sets the starting interval
 
 ## Intentionally excluded
@@ -19,6 +20,8 @@
 - free-threaded CPython.
 
 ## Follow-ups
+
+- CPU timer only arms threads that register themselves; threads already running when the profiler starts are registered from another thread and get no timer
 
 - asyncio/uvloop task unwinding and `max_tasks`
 - gevent/greenlets.

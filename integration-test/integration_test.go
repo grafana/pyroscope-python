@@ -27,9 +27,10 @@ const (
 )
 
 type profileConfig struct {
-	onCPU   bool
-	gilOnly bool
-	stack   bool
+	onCPU    bool
+	gilOnly  bool
+	stack    bool
+	cpuTimer bool
 }
 
 func TestPythonProfilerOnCPUWithGILOnly(t *testing.T) {
@@ -50,6 +51,10 @@ func TestPythonProfilerOffCPUWithoutGILOnly(t *testing.T) {
 
 func TestPythonStackProfilerOnCPU(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, stack: true})
+}
+
+func TestPythonStackProfilerCPUTimer(t *testing.T) {
+	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, stack: true, cpuTimer: true})
 }
 
 func TestPythonStackProfilerOffCPU(t *testing.T) {
@@ -311,6 +316,7 @@ func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string
 			"ONCPU":                         boolString(cfg.onCPU),
 			"GIL_ONLY":                      boolString(cfg.gilOnly),
 			"CPU_IMPLEMENTATION":            cfg.implementation(),
+			"CPU_TIMER":                     boolString(cfg.cpuTimer),
 			"CANARY":                        canary,
 			"PIP_DISABLE_PIP_VERSION_CHECK": "1",
 		},
@@ -569,5 +575,5 @@ func (c profileConfig) implementation() string {
 }
 
 func (c profileConfig) String() string {
-	return fmt.Sprintf("oncpu=%s/gil_only=%s/impl=%s", boolString(c.onCPU), boolString(c.gilOnly), c.implementation())
+	return fmt.Sprintf("oncpu=%s/gil_only=%s/impl=%s/cpu_timer=%s", boolString(c.onCPU), boolString(c.gilOnly), c.implementation(), boolString(c.cpuTimer))
 }

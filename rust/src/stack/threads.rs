@@ -12,12 +12,12 @@ unsafe extern "C" {
 static INSTALLED: OnceLock<()> = OnceLock::new();
 
 #[pyfunction]
-fn register_thread(py: Python<'_>, id: u64, native_id: u64) {
+fn register_thread(_py: Python<'_>, id: u64, native_id: u64) {
     log::debug!(
         target: "pyroscope-python",
         "registering thread id={id} native_id={native_id}"
     );
-    py.detach(|| unsafe { pyroscope_stack_register_thread(id, native_id) });
+    unsafe { pyroscope_stack_register_thread(id, native_id) };
 }
 
 #[pyfunction]

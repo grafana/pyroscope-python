@@ -86,6 +86,8 @@ def configure_experimental_stack_profiler(
         adaptive_baseline=0.0,
         adaptive_p_stable_window_s=600,
         adaptive_p_stable_percentile=95.0,
+        cpu_timer=False,
+        cpu_timer_interval_ms=10,
 ):
     """Set the options of the stack CPU profiler, for the whole process.
 
@@ -107,6 +109,9 @@ def configure_experimental_stack_profiler(
     in core-percent units (1 = 0.01 core, 0 disables the floor), and
     adaptive_p_stable_percentile is a percentage between 0 and 100 of the app
     CPU seen over the last adaptive_p_stable_window_s seconds.
+
+    cpu_timer enables timer_create based CPU sampling (Linux, standalone
+    CPython only); cpu_timer_interval_ms is its interval, 1 to 1000.
     """
     return lib.configure_experimental_stack_profiler(
         fast_copy,
@@ -119,6 +124,8 @@ def configure_experimental_stack_profiler(
         adaptive_baseline,
         adaptive_p_stable_window_s,
         adaptive_p_stable_percentile,
+        cpu_timer,
+        cpu_timer_interval_ms,
     )
 
 def shutdown():

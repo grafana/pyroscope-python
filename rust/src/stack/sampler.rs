@@ -7,6 +7,7 @@ unsafe extern "C" {
         fast_copy_warmup_s: f64,
         max_nframes: u32,
         max_threads: u32,
+        max_tasks: u32,
         oncpu: bool,
         adaptive_sampling: bool,
         target_overhead: f64,
@@ -15,6 +16,7 @@ unsafe extern "C" {
         p_stable_window_s: u32,
         p_stable_percentile: f64,
     );
+    fn pyroscope_stack_set_cpu_timer(enabled: bool, interval_ms: u64);
     fn pyroscope_stack_fast_copy_initialized() -> bool;
     fn pyroscope_stack_interval_us() -> u64;
     fn pyroscope_stack_is_safe_copy_failed() -> bool;
@@ -34,6 +36,7 @@ pub(super) fn configure(interval_s: f64, options: &Options, oncpu: bool) {
             options.fast_copy_warmup_s,
             options.max_nframe,
             options.max_threads,
+            options.max_tasks,
             oncpu,
             options.adaptive_sampling,
             options.adaptive_target_overhead,
@@ -43,6 +46,13 @@ pub(super) fn configure(interval_s: f64, options: &Options, oncpu: bool) {
             options.adaptive_p_stable_percentile,
         )
     }
+}
+
+pub(super) fn set_cpu_timer(enabled: bool, interval_ms: u32) {
+    if cfg!(miri) {
+        return;
+    }
+    unsafe { pyroscope_stack_set_cpu_timer(enabled, u64::from(interval_ms)) }
 }
 
 pub(super) fn fast_copy_initialized() -> bool {
