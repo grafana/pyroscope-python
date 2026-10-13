@@ -133,6 +133,8 @@ fn initialize_logging(logging_level: u32) -> bool {
 #[allow(clippy::too_many_arguments)]
 #[pyfunction]
 fn configure_experimental_stack_profiler(
+    fast_copy: bool,
+    fast_copy_warmup: f64,
     max_nframe: u32,
     max_threads: u32,
     adaptive_sampling: bool,
@@ -143,6 +145,8 @@ fn configure_experimental_stack_profiler(
     adaptive_p_stable_percentile: f64,
 ) -> bool {
     stack::set_options(stack::Options {
+        fast_copy,
+        fast_copy_warmup_s: fast_copy_warmup,
         max_nframe,
         max_threads,
         adaptive_sampling,
