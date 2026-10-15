@@ -5,25 +5,25 @@ use pyo3::wrap_pyfunction;
 use std::sync::OnceLock;
 
 unsafe extern "C" {
-    fn pyroscope_stack_register_thread(id: u64, native_id: u64);
-    fn pyroscope_stack_unregister_thread(id: u64);
+    fn pyroscope_stack_register_thread_gil(id: u64, native_id: u64);
+    fn pyroscope_stack_unregister_thread_gil(id: u64);
 }
 
 static INSTALLED: OnceLock<()> = OnceLock::new();
 
 #[pyfunction]
-fn register_thread(py: Python<'_>, id: u64, native_id: u64) {
+fn register_thread(_py: Python<'_>, id: u64, native_id: u64) {
     log::debug!(
         target: "pyroscope-python",
         "registering thread id={id} native_id={native_id}"
     );
-    py.detach(|| unsafe { pyroscope_stack_register_thread(id, native_id) });
+    unsafe { pyroscope_stack_register_thread_gil(id, native_id) };
 }
 
 #[pyfunction]
-fn unregister_thread(py: Python<'_>, id: u64) {
+fn unregister_thread(_py: Python<'_>, id: u64) {
     log::debug!(target: "pyroscope-python", "unregistering thread id={id}");
-    py.detach(|| unsafe { pyroscope_stack_unregister_thread(id) });
+    unsafe { pyroscope_stack_unregister_thread_gil(id) };
 }
 
 /// The wrappers must be Python-level functions: a `#[pyfunction]` is a
