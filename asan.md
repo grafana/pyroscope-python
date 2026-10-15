@@ -15,6 +15,8 @@ make asan/wheel                                 # dist/asan/*.whl
 make asan/test ASAN_PYTHON_REF=3.13             # another CPython branch or tag
 ```
 
+Tested with CPython 3.10 to 3.14. 3.10 and 3.11 still find system libraries through `setup.py`, which misses the multiarch directories, so the image passes them in `CPPFLAGS` and `LDFLAGS`.
+
 `asan/test` runs the regular integration tests with `PYTHON_IMAGE=pyroscope-python-asan:<ref>`, `PYROSCOPE_WHEEL_DIR=dist/asan` and `PYROSCOPE_WHEEL_GLOB='*.whl'`.
 
 ## Fast copy warmup

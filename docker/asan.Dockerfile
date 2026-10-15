@@ -23,7 +23,8 @@ ARG PYTHON_REF=3.14
 
 RUN git clone --depth 1 --branch ${PYTHON_REF} https://github.com/python/cpython.git /tmp/cpython \
     && cd /tmp/cpython \
-    && ./configure --prefix=/usr/local --enable-shared --with-address-sanitizer --without-pymalloc --with-ensurepip=install \
+    && MULTIARCH="$(gcc -print-multiarch)" \
+    && CPPFLAGS="-I/usr/include/$MULTIARCH" LDFLAGS="-L/usr/lib/$MULTIARCH" ./configure --prefix=/usr/local --enable-shared --with-address-sanitizer --without-pymalloc --with-ensurepip=install \
     && make -j"$(nproc)" \
     && make install \
     && ldconfig \
