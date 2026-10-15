@@ -467,6 +467,9 @@ func wheelDir() string {
 }
 
 func wheelPattern() string {
+	if glob := os.Getenv("PYROSCOPE_WHEEL_GLOB"); glob != "" {
+		return glob
+	}
 	target := wheelBuildTarget()
 	platform := "manylinux"
 	if strings.HasPrefix(target, "musllinux/") {
