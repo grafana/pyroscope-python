@@ -35,6 +35,8 @@ pub struct Options {
     pub adaptive_baseline: f64,
     pub adaptive_p_stable_window_s: u32,
     pub adaptive_p_stable_percentile: f64,
+    pub cpu_timer_enabled: bool,
+    pub cpu_timer_interval_ms: u64,
 }
 
 impl Default for Options {
@@ -48,6 +50,8 @@ impl Default for Options {
             adaptive_baseline: 0.0,
             adaptive_p_stable_window_s: 600,
             adaptive_p_stable_percentile: 95.0,
+            cpu_timer_enabled: true,
+            cpu_timer_interval_ms: 10,
         }
     }
 }

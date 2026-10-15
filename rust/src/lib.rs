@@ -141,6 +141,8 @@ fn configure_experimental_stack_profiler(
     adaptive_baseline: f64,
     adaptive_p_stable_window_s: u32,
     adaptive_p_stable_percentile: f64,
+    cpu_timer_enabled: bool,
+    cpu_timer_interval_ms: u64,
 ) -> bool {
     stack::set_options(stack::Options {
         max_nframe,
@@ -151,6 +153,8 @@ fn configure_experimental_stack_profiler(
         adaptive_baseline,
         adaptive_p_stable_window_s,
         adaptive_p_stable_percentile,
+        cpu_timer_enabled,
+        cpu_timer_interval_ms,
     })
 }
 

@@ -84,6 +84,8 @@ def configure_experimental_stack_profiler(
         adaptive_baseline=0.0,
         adaptive_p_stable_window_s=600,
         adaptive_p_stable_percentile=95.0,
+        cpu_timer_enabled = True,
+        cpu_timer_interval_ms = 10,
 ):
     """Set the options of the stack CPU profiler, for the whole process.
 
@@ -117,6 +119,8 @@ def configure_experimental_stack_profiler(
         adaptive_baseline,
         adaptive_p_stable_window_s,
         adaptive_p_stable_percentile,
+        cpu_timer_enabled,
+        cpu_timer_interval_ms,
     )
 
 def shutdown():

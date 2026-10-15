@@ -12,6 +12,8 @@ unsafe extern "C" {
         baseline_core_pct: f64,
         p_stable_window_s: u32,
         p_stable_percentile: f64,
+        cpu_timer_enabled: bool,
+        cpu_timer_interval_ms: u64,
     );
     fn pyroscope_stack_interval_us() -> u64;
     fn pyroscope_stack_is_safe_copy_failed() -> bool;
@@ -36,6 +38,8 @@ pub(super) fn configure(interval_s: f64, options: &Options, oncpu: bool) {
             options.adaptive_baseline,
             options.adaptive_p_stable_window_s,
             options.adaptive_p_stable_percentile,
+            options.cpu_timer_enabled,
+            options.cpu_timer_interval_ms,
         )
     }
 }
