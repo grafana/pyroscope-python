@@ -41,6 +41,7 @@ musllinux/arm64:
 ASAN_PYTHON_REF ?= 3.14
 ASAN_IMAGE ?= pyroscope-python-asan:$(ASAN_PYTHON_REF)
 ASAN_WHEEL_DIR := dist/asan
+ASAN_FAST_COPY_WARMUP ?= 0
 
 .PHONY: asan/image
 asan/image:
@@ -69,6 +70,7 @@ asan/test: asan/image asan/wheel
 		PYTHON_IMAGE=$(ASAN_IMAGE) \
 		PYROSCOPE_WHEEL_DIR=../$(ASAN_WHEEL_DIR) \
 		PYROSCOPE_WHEEL_GLOB='*.whl' \
+		PYROSCOPE_FAST_COPY_WARMUP=$(ASAN_FAST_COPY_WARMUP) \
 		go test -v -timeout 60m -count=1 $(if $(RUN),-run '$(RUN)') .
 
 .PHONY: mac/amd64

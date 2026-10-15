@@ -42,9 +42,9 @@ ENV PATH=/opt/cargo/bin:$PATH
 RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain ${RUST_TOOLCHAIN} --component rust-src \
     && printf '[unstable]\nbuild-std = ["std", "panic_abort"]\n' > ${CARGO_HOME}/config.toml
 
-ENV CFLAGS="-fsanitize=address -fno-omit-frame-pointer -g"
-ENV CXXFLAGS="-fsanitize=address -fno-omit-frame-pointer -g"
-ENV RUSTFLAGS="-Zsanitizer=address -Cforce-frame-pointers=yes -Cdebuginfo=2"
+ENV CFLAGS="-fsanitize=address -fsanitize-recover=address -fno-omit-frame-pointer -g"
+ENV CXXFLAGS="-fsanitize=address -fsanitize-recover=address -fno-omit-frame-pointer -g"
+ENV RUSTFLAGS="-Zsanitizer=address -Zsanitizer-recover=address -Cforce-frame-pointers=yes -Cdebuginfo=2"
 
 WORKDIR /pyroscope-python
 COPY pyproject.toml setup.py ./
