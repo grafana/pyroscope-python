@@ -72,31 +72,11 @@ jobs:
           name: "${{ matrix.name }}.whl"
           path: dist/*
 
-  python-linux-integration-test-discover:
-    name: Python Linux Integration Test Discover
-    runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
-    outputs:
-      tests: ${{ steps.tests.outputs.tests }}
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-          submodules: recursive
-      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
-        with:
-          go-version: stable
-          cache-dependency-path: integration-test/go.mod
-      - name: Generate test matrix
-        id: tests
-        run: echo "tests=$(make ci-matrix)" >> "$GITHUB_OUTPUT"
-        working-directory: integration-test
-
   python-linux-test:
     strategy:
       fail-fast: false
       max-parallel: 5
       matrix:
-        test: ${{ fromJSON(needs.python-linux-integration-test-discover.outputs.tests) }}
         PYTHON_VERSION: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         variant:
           [
@@ -129,8 +109,8 @@ jobs:
             PYTHON_VERSION: "3.10"
           - variant: musllinux-arm64
             PYTHON_VERSION: "3.11"
-    needs: ["python-linux-integration-test-discover", "python-linux-build"]
-    name: Python Linux Test - ${{ matrix.test }} - ${{ matrix.variant }} - ${{ matrix.PYTHON_VERSION }}
+    needs: ["python-linux-build"]
+    name: Python Linux Test - ${{ matrix.variant }} - ${{ matrix.PYTHON_VERSION }}
     runs-on: ${{ matrix.runs-on }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -145,7 +125,7 @@ jobs:
         with:
           go-version: stable
           cache-dependency-path: integration-test/go.mod
-      - run: go test -v -timeout 20m -count=1 -run '^${{ matrix.test }}$' .
+      - run: go test -v -timeout 60m -count=1 .
         working-directory: integration-test
         env:
           PYTHON_VERSION: ${{ matrix.PYTHON_VERSION }}
