@@ -1,3 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# Provenance-includes-location: https://github.com/DataDog/dd-trace-py/blob/main/ddtrace/profiling/collector/threading.py
+# Provenance-includes-location: https://github.com/DataDog/dd-trace-py/blob/main/ddtrace/profiling/_faulthandler.py
+# Provenance-includes-license: Apache-2.0 OR BSD-3-Clause
+# Provenance-includes-copyright: Datadog, Inc.
+
 import warnings
 import logging
 import sys

@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
+// Provenance-includes-location: https://github.com/DataDog/dd-trace-py/blob/main/ddtrace/profiling/collector/threading.py
+// Provenance-includes-license: Apache-2.0 OR BSD-3-Clause
+// Provenance-includes-copyright: Datadog, Inc.
+
 //! Ported from dd-trace-py `ddtrace/profiling/collector/threading.py::init_stack`.
 
 use pyo3::prelude::*;
