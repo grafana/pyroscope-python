@@ -53,6 +53,11 @@ void pyroscope_push_sample(PprofBuilderType builder_type,
 
 extern void memalloc_heap_postfork_child(void);
 
+extern void pyroscope_stack_register_thread_gil(uint64_t id,
+                                                uint64_t native_id);
+
+extern void pyroscope_stack_unregister_thread_gil(uint64_t id);
+
 FFIInternedString pyroscope_string_table_intern_utf8(FFIStringView s);
 
 FFIInternedString pyroscope_string_table_intern_ascii(FFIStringView s);
