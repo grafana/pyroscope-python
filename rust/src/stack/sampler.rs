@@ -7,6 +7,7 @@ unsafe extern "C" {
         fast_copy_warmup_s: f64,
         max_nframes: u32,
         max_threads: u32,
+        max_tasks: u32,
         oncpu: bool,
         adaptive_sampling: bool,
         target_overhead: f64,
@@ -14,6 +15,8 @@ unsafe extern "C" {
         baseline_core_pct: f64,
         p_stable_window_s: u32,
         p_stable_percentile: f64,
+        cpu_timer_enabled: bool,
+        cpu_timer_interval_ms: u64,
     );
     fn pyroscope_stack_fast_copy_initialized() -> bool;
     fn pyroscope_stack_interval_us() -> u64;
@@ -34,6 +37,7 @@ pub(super) fn configure(interval_s: f64, options: &Options, oncpu: bool) {
             options.fast_copy_warmup_s,
             options.max_nframe,
             options.max_threads,
+            options.max_tasks,
             oncpu,
             options.adaptive_sampling,
             options.adaptive_target_overhead,
@@ -41,6 +45,8 @@ pub(super) fn configure(interval_s: f64, options: &Options, oncpu: bool) {
             options.adaptive_baseline,
             options.adaptive_p_stable_window_s,
             options.adaptive_p_stable_percentile,
+            options.cpu_timer_enabled,
+            options.cpu_timer_interval_ms,
         )
     }
 }

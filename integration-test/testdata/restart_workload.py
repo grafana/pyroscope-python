@@ -63,6 +63,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
     signal.signal(signal.SIGINT, request_shutdown)
     signal.signal(signal.SIGTERM, request_shutdown)
+    pyroscope.configure_experimental_stack_profiler(cpu_timer_enabled=False)
 
     run_phase(os.environ["CANARY_FIRST"], burn_first)
     run_phase(os.environ["CANARY_SECOND"], burn_second)
