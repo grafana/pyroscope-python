@@ -19,28 +19,3 @@ pub extern "C" fn pyroscope_push_sample(
         PprofBuilderType::OnCpu => crate::stack::push_oncpu_sample(frames, values),
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::encode::pprof::StringID;
-
-    fn frames() -> Vec<FFIFrame> {
-        vec![FFIFrame {
-            function_name: StringID::empty_ffi_string(),
-            file_name: StringID::empty_ffi_string(),
-            line: 1,
-        }]
-    }
-
-    fn values() -> FFISampleValues {
-        FFISampleValues {
-            cpu_time: 7,
-            wall_time: 9,
-            alloc_space: 300,
-            alloc_count: 2,
-            heap_space: 100,
-            heap_count: 1,
-        }
-    }
-}
