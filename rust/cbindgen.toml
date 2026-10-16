@@ -1,4 +1,5 @@
 language = "C"
+cpp_compat = true
 documentation_style = "C"
 
 style = "type"
@@ -34,10 +35,4 @@ exclude = [
   "memalloc_start",
   "memalloc_stop",
   "memalloc_heap_py",
-  "pyroscope_stack_configure",
-  "pyroscope_stack_interval_us",
-  "pyroscope_stack_is_safe_copy_failed",
-  "pyroscope_stack_start",
-  "pyroscope_stack_stop",
-  "pyroscope_stack_take_sampling_thread_error",
 ]

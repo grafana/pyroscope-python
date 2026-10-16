@@ -29,6 +29,7 @@ pub struct Config {
 pub struct Options {
     pub max_nframe: u32,
     pub max_threads: u32,
+    pub max_tasks: u32,
     pub adaptive_sampling: bool,
     pub adaptive_target_overhead: f64,
     pub adaptive_max_interval_us: u64,
@@ -44,6 +45,7 @@ impl Default for Options {
         Self {
             max_nframe: 128,
             max_threads: 25,
+            max_tasks: 50,
             adaptive_sampling: true,
             adaptive_target_overhead: 0.01,
             adaptive_max_interval_us: 100_000,
