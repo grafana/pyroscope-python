@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
+// Provenance-includes-location: https://github.com/DataDog/dd-trace-py/blob/main/ddtrace/profiling/_faulthandler.py
+// Provenance-includes-license: Apache-2.0 OR BSD-3-Clause
+// Provenance-includes-copyright: Datadog, Inc.
+
 //! Ported from dd-trace-py `ddtrace/profiling/_faulthandler.py`, which hooks the
 //! import with `ModuleWatchdog`; importing and patching it here is equivalent.
 
