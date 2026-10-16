@@ -1,0 +1,38 @@
+name: ASAN
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  asan-test:
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        PYTHON_VERSION: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
+          - arch: arm64
+            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
+    name: ASAN Test - ${{ matrix.arch }} - ${{ matrix.PYTHON_VERSION }}
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: stable
+          cache-dependency-path: integration-test/go.mod
+      - run: make asan/test ASAN_PYTHON_REF=${{ matrix.PYTHON_VERSION }}

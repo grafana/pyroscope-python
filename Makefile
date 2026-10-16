@@ -38,6 +38,41 @@ musllinux/arm64:
 		-f docker/wheel-musllinux.Dockerfile \
 		.
 
+ASAN_PYTHON_REF ?= 3.14
+ASAN_IMAGE ?= pyroscope-python-asan:$(ASAN_PYTHON_REF)
+ASAN_WHEEL_DIR := dist/asan
+ASAN_FAST_COPY_WARMUP ?= 0
+
+.PHONY: asan/image
+asan/image:
+	docker buildx build \
+		--build-arg=PYTHON_REF=$(ASAN_PYTHON_REF) \
+		--target=runtime \
+		--load \
+		-t $(ASAN_IMAGE) \
+		-f docker/asan.Dockerfile \
+		.
+
+.PHONY: asan/wheel
+asan/wheel:
+	rm -rf $(ASAN_WHEEL_DIR)
+	docker buildx build \
+		--build-arg=PYTHON_REF=$(ASAN_PYTHON_REF) \
+		--target=wheel \
+		$(if $(ASAN_PYSPY_DIR),--build-context=pyspy=$(ASAN_PYSPY_DIR)) \
+		--output=$(ASAN_WHEEL_DIR) \
+		-f docker/asan.Dockerfile \
+		.
+
+.PHONY: asan/test
+asan/test: asan/image asan/wheel
+	cd integration-test && \
+		PYTHON_IMAGE=$(ASAN_IMAGE) \
+		PYROSCOPE_WHEEL_DIR=../$(ASAN_WHEEL_DIR) \
+		PYROSCOPE_WHEEL_GLOB='*.whl' \
+		PYROSCOPE_FAST_COPY_WARMUP=$(ASAN_FAST_COPY_WARMUP) \
+		go test -v -timeout 60m -count=1 $(if $(RUN),-run '$(RUN)') .
+
 .PHONY: mac/amd64
 mac/amd64:
 	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=x86_64-apple-darwin python3 -m build --wheel
