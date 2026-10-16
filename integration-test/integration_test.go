@@ -80,6 +80,24 @@ func TestPythonStackProfilerRestart(t *testing.T) {
 	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector(canarySecond), "burn_second", 3*time.Minute)
 }
 
+func TestPythonStackProfilerCpuTimerFork(t *testing.T) {
+	wheelDir := ensureWheel(t)
+
+	net := dockertest.CreateNetwork(t)
+	pyroscopeURL := startPyroscope(t, net)
+	appName := fmt.Sprintf("pyroscopers.python.test.cputimerfork.%d", time.Now().UnixNano())
+	canary := randomHex(t, 16)
+	workload := startPythonTestContainer(t, net, wheelDir, "sighandler_workload.py", map[string]string{
+		"PYROSCOPE_APPLICATION_NAME": appName,
+		"SCENARIO":                   "cpu_timer_worker_fork_onstack_signal",
+		"CANARY":                     canary,
+	})
+
+	selector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
+	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector, "burn_after_fork", 3*time.Minute)
+	requireContainerExit(t, workload, 0, 3*time.Minute)
+}
+
 func TestPythonNonCPUIntegrationSuites(t *testing.T) {
 	t.Run("memory profiler", testPythonMemoryProfiler)
 	t.Run("concurrent configure shutdown", testPythonConcurrentConfigureShutdown)
@@ -111,6 +129,9 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 		"takeover_falls_back_permanently",
 		"cpu_timer_restart_refused",
 		"cpu_timer_fork_child_refused",
+		"cpu_timer_shutdown_elsewhere_then_fork",
+		"cpu_timer_fork_keeps_app_altstack",
+		"cpu_timer_fork_on_altstack_keeps_mapping",
 	}
 	for _, scenario := range scenarios {
 		t.Run(scenario, func(t *testing.T) {
