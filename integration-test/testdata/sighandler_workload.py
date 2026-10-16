@@ -16,6 +16,7 @@ import pyroscope
 FAULTHANDLER_BANNER = "Fatal Python error: Segmentation fault"
 TAKEN_OVER = "SIGSEGV/SIGBUS handler was taken over by another component"
 OWNED_BY_OTHER = "another component owns the SIGSEGV/SIGBUS handler"
+CPU_TIMER_RESTART_REFUSED = "the CPU timer stack profiler cannot be restarted in this process"
 WARMUP_SECONDS = 0.5
 PAST_WARMUP_SECONDS = 1.5
 
@@ -38,18 +39,21 @@ def expect(cond, message):
         raise AssertionError(message)
 
 
-def configure(fast_copy=True, fast_copy_warmup=WARMUP_SECONDS, **kwargs):
+def configure_agent(**kwargs):
     kwargs.setdefault("cpu_implementation", pyroscope.ProfilerImplementation.Stack)
-    # Refused after the first call, which reconfigure_keeps_handlers relies on.
-    pyroscope.configure_experimental_stack_profiler(fast_copy=fast_copy, fast_copy_warmup=fast_copy_warmup)
-    expect(
-        pyroscope.configure(
-            application_name=os.environ["PYROSCOPE_APPLICATION_NAME"],
-            server_address=os.environ["PYROSCOPE_SERVER_ADDRESS"],
-            **kwargs,
-        ),
-        "configure() returned False",
+    return pyroscope.configure(
+        application_name=os.environ["PYROSCOPE_APPLICATION_NAME"],
+        server_address=os.environ["PYROSCOPE_SERVER_ADDRESS"],
+        **kwargs,
     )
+
+
+def configure(fast_copy=True, fast_copy_warmup=WARMUP_SECONDS, cpu_timer_enabled=True, **kwargs):
+    # Refused after the first call, which reconfigure_keeps_handlers relies on.
+    pyroscope.configure_experimental_stack_profiler(
+        fast_copy=fast_copy, fast_copy_warmup=fast_copy_warmup, cpu_timer_enabled=cpu_timer_enabled
+    )
+    expect(configure_agent(**kwargs), "configure() returned False")
 
 
 def shutdown():
@@ -95,7 +99,7 @@ def fast_copy_off_installs_nothing():
 
 
 def first_cpu_configure_wins():
-    configure(fast_copy=False)
+    configure(fast_copy=False, cpu_timer_enabled=False)
     shutdown()
     expect(
         not pyroscope.configure_experimental_stack_profiler(fast_copy=True),
@@ -122,7 +126,7 @@ def fast_copy_off_leaves_faulthandler_unpatched():
 
 
 def reconfigure_keeps_handlers():
-    configure()
+    configure(cpu_timer_enabled=False)
     ours = handlers()
     shutdown()
     expect(handlers() == ours, "shutdown changed the handlers")
@@ -132,7 +136,7 @@ def reconfigure_keeps_handlers():
 
 
 def foreign_after_configure_is_not_reclaimed():
-    configure()
+    configure(cpu_timer_enabled=False)
     ours = handlers()
     take_over()
     foreign = handlers()
@@ -201,7 +205,7 @@ def takeover_falls_back_permanently():
     stop = threading.Event()
     thread = threading.Thread(target=burn, args=(stop,))
     thread.start()
-    configure()
+    configure(cpu_timer_enabled=False)
     time.sleep(PAST_WARMUP_SECONDS)
     take_over()
     time.sleep(2)
@@ -211,6 +215,22 @@ def takeover_falls_back_permanently():
     shutdown()
     stop.set()
     thread.join()
+
+
+def cpu_timer_restart_refused():
+    configure()
+    shutdown()
+    expect(not configure_agent(enable_logging=True), "configure() after shutdown() was accepted with the CPU timer on")
+
+
+def cpu_timer_fork_child_refused():
+    configure()
+    pid = os.fork()
+    if pid == 0:
+        os._exit(0 if not configure_agent(enable_logging=True) else 1)
+    _, status = os.waitpid(pid, 0)
+    expect(os.waitstatus_to_exitcode(status) == 0, "configure() in a fork child was accepted with the CPU timer on")
+    shutdown()
 
 
 class Scenario(NamedTuple):
@@ -237,6 +257,8 @@ SCENARIOS = {
     "disable_after_warmup_keeps_ours": Scenario(-signal.SIGSEGV, forbidden=(FAULTHANDLER_BANNER, TAKEN_OVER)),
     "enable_during_warmup_falls_back": Scenario(required=(OWNED_BY_OTHER,)),
     "takeover_falls_back_permanently": Scenario(required=(TAKEN_OVER, OWNED_BY_OTHER)),
+    "cpu_timer_restart_refused": Scenario(required=(CPU_TIMER_RESTART_REFUSED,)),
+    "cpu_timer_fork_child_refused": Scenario(required=(CPU_TIMER_RESTART_REFUSED,)),
 }
 
 

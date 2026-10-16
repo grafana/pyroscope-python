@@ -109,6 +109,8 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 		"disable_after_warmup_keeps_ours",
 		"enable_during_warmup_falls_back",
 		"takeover_falls_back_permanently",
+		"cpu_timer_restart_refused",
+		"cpu_timer_fork_child_refused",
 	}
 	for _, scenario := range scenarios {
 		t.Run(scenario, func(t *testing.T) {
