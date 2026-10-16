@@ -13,10 +13,6 @@
 typedef enum {
   PprofBuilderType_Memory,
   /*
-   py-spy.
-   */
-  PprofBuilderType_Cpu,
-  /*
    The vendored dd-trace-py stack sampler.
    */
   PprofBuilderType_CpuWall,
