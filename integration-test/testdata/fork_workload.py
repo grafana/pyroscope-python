@@ -80,6 +80,7 @@ def fork(child):
 
 def main():
     logging.basicConfig(level=logging.INFO)
+    pyroscope.configure_experimental_stack_profiler(cpu_timer_enabled=False)
     configure()
     burner = threading.Thread(target=parent_burn)
     burner.start()

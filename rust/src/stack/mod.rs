@@ -89,6 +89,7 @@ impl Options {
 }
 
 static STARTED: AtomicBool = AtomicBool::new(false);
+static STOPPED_ONCE: AtomicBool = AtomicBool::new(false);
 
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 
@@ -140,8 +141,15 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
     }
 
     if !sampler_start() {
+        if STOPPED_ONCE.load(Ordering::Acquire) {
+            return Err(PyRuntimeError::new_err(
+                "the CPU timer stack profiler cannot be restarted in this process: it was stopped \
+                 by an earlier shutdown() or by fork(), and the CPU timer engine does not support \
+                 restarting",
+            ));
+        }
         return Err(PyRuntimeError::new_err(
-            "failed to start the CPU stack sampler's sampling thread",
+            "failed to start the CPU stack sampler's sampling thread or CPU timer",
         ));
     }
     STARTED.store(true, Ordering::Release);
@@ -156,6 +164,7 @@ pub fn stop(py: Python<'_>) {
         // interns strings, and `memory::dump_pprof` holds the interner lock
         // while attached to Python.
         py.detach(sampler_stop);
+        STOPPED_ONCE.store(true, Ordering::Release);
     }
     clear_samples();
 }

@@ -103,6 +103,8 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 		"crash_after_faulthandler_takeover",
 		"faulthandler_enable_after_configure_stops_sampling",
 		"takeover_stops_sampling",
+		"cpu_timer_restart_refused",
+		"cpu_timer_fork_child_refused",
 	}
 	for _, scenario := range scenarios {
 		t.Run(scenario, func(t *testing.T) {

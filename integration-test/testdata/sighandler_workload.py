@@ -15,6 +15,7 @@ import pyroscope
 
 FAULTHANDLER_BANNER = "Fatal Python error: Segmentation fault"
 TAKEN_OVER = "SIGSEGV/SIGBUS handler was taken over by another component"
+CPU_TIMER_RESTART_REFUSED = "the CPU timer stack profiler cannot be restarted in this process"
 
 libc = ctypes.CDLL(None)
 
@@ -35,18 +36,19 @@ def expect(cond, message):
         raise AssertionError(message)
 
 
-def configure(**kwargs):
+def configure_agent(**kwargs):
     kwargs.setdefault("cpu_implementation", pyroscope.ProfilerImplementation.Stack)
-    # Refused after the first call, which reconfigure_keeps_handlers relies on.
-    pyroscope.configure_experimental_stack_profiler()
-    expect(
-        pyroscope.configure(
-            application_name=os.environ["PYROSCOPE_APPLICATION_NAME"],
-            server_address=os.environ["PYROSCOPE_SERVER_ADDRESS"],
-            **kwargs,
-        ),
-        "configure() returned False",
+    return pyroscope.configure(
+        application_name=os.environ["PYROSCOPE_APPLICATION_NAME"],
+        server_address=os.environ["PYROSCOPE_SERVER_ADDRESS"],
+        **kwargs,
     )
+
+
+def configure(cpu_timer_enabled=True, **kwargs):
+    # Refused after the first call, which reconfigure_keeps_handlers relies on.
+    pyroscope.configure_experimental_stack_profiler(cpu_timer_enabled=cpu_timer_enabled)
+    expect(configure_agent(**kwargs), "configure() returned False")
 
 
 def shutdown():
@@ -100,12 +102,13 @@ def pyspy_and_memory_install_nothing():
 
 
 def first_cpu_configure_wins():
-    configure()
+    configure(cpu_timer_enabled=False)
     shutdown()
     expect(
-        not pyroscope.configure_experimental_stack_profiler(),
+        not pyroscope.configure_experimental_stack_profiler(cpu_timer_enabled=True),
         "configure_experimental_stack_profiler() was accepted a second time",
     )
+    # A restart is refused with the CPU timer on, so this passes only if the first call won.
     configure()
     shutdown()
 
@@ -126,7 +129,7 @@ def faulthandler_unpatched():
 
 
 def reconfigure_keeps_handlers():
-    configure()
+    configure(cpu_timer_enabled=False)
     ours = handlers()
     shutdown()
     expect(handlers() == ours, "shutdown changed the handlers")
@@ -136,7 +139,7 @@ def reconfigure_keeps_handlers():
 
 
 def foreign_after_configure_is_not_reclaimed():
-    configure()
+    configure(cpu_timer_enabled=False)
     ours = handlers()
     take_over()
     foreign = handlers()
@@ -182,7 +185,7 @@ def takeover_stops_sampling():
     stop = threading.Event()
     thread = threading.Thread(target=burn, args=(stop,))
     thread.start()
-    configure()
+    configure(cpu_timer_enabled=False)
     time.sleep(0.5)
     take_over()
     time.sleep(1)
@@ -192,6 +195,22 @@ def takeover_stops_sampling():
     shutdown()
     stop.set()
     thread.join()
+
+
+def cpu_timer_restart_refused():
+    configure()
+    shutdown()
+    expect(not configure_agent(enable_logging=True), "configure() after shutdown() was accepted with the CPU timer on")
+
+
+def cpu_timer_fork_child_refused():
+    configure()
+    pid = os.fork()
+    if pid == 0:
+        os._exit(0 if not configure_agent(enable_logging=True) else 1)
+    _, status = os.waitpid(pid, 0)
+    expect(os.waitstatus_to_exitcode(status) == 0, "configure() in a fork child was accepted with the CPU timer on")
+    shutdown()
 
 
 class Scenario(NamedTuple):
@@ -216,6 +235,8 @@ SCENARIOS = {
     "crash_after_faulthandler_takeover": Scenario(-signal.SIGSEGV, required=(FAULTHANDLER_BANNER,)),
     "faulthandler_enable_after_configure_stops_sampling": Scenario(required=(TAKEN_OVER,)),
     "takeover_stops_sampling": Scenario(required=(TAKEN_OVER,)),
+    "cpu_timer_restart_refused": Scenario(required=(CPU_TIMER_RESTART_REFUSED,)),
+    "cpu_timer_fork_child_refused": Scenario(required=(CPU_TIMER_RESTART_REFUSED,)),
 }
 
 
