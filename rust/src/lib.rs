@@ -159,6 +159,7 @@ fn configure_experimental_stack_profiler(
         adaptive_p_stable_percentile,
         cpu_timer_enabled,
         cpu_timer_interval_ms,
+        ..stack::Options::default()
     })
 }
 
