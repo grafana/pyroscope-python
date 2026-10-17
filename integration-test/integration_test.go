@@ -299,21 +299,23 @@ func startPyroscope(t *testing.T, net *dockertest.Network) string {
 
 func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string, cfg profileConfig, wheelDir string) *dockertest.Container {
 	t.Helper()
+	env := map[string]string{
+		"PYTHONUNBUFFERED":              "1",
+		"PYTHONDONTWRITEBYTECODE":       "1",
+		"PYROSCOPE_APPLICATION_NAME":    appName,
+		"PYROSCOPE_SERVER_ADDRESS":      "http://pyroscope:4040",
+		"ONCPU":                         boolString(cfg.onCPU),
+		"GIL_ONLY":                      boolString(cfg.gilOnly),
+		"CPU_IMPLEMENTATION":            cfg.implementation(),
+		"CANARY":                        canary,
+		"PIP_DISABLE_PIP_VERSION_CHECK": "1",
+	}
+	passFastCopyWarmup(env)
 	return dockertest.StartContainer(t, dockertest.ContainerRequest{
 		Image:    pythonImage(),
 		Platform: wheelDockerPlatform(),
 		Network:  net.Name,
-		Env: map[string]string{
-			"PYTHONUNBUFFERED":              "1",
-			"PYTHONDONTWRITEBYTECODE":       "1",
-			"PYROSCOPE_APPLICATION_NAME":    appName,
-			"PYROSCOPE_SERVER_ADDRESS":      "http://pyroscope:4040",
-			"ONCPU":                         boolString(cfg.onCPU),
-			"GIL_ONLY":                      boolString(cfg.gilOnly),
-			"CPU_IMPLEMENTATION":            cfg.implementation(),
-			"CANARY":                        canary,
-			"PIP_DISABLE_PIP_VERSION_CHECK": "1",
-		},
+		Env:      env,
 		Volumes: []string{
 			repoRoot() + ":/pyroscope-python:ro",
 			wheelDir + ":/pyroscope-wheels:ro",
@@ -337,6 +339,7 @@ func startPythonTestContainer(t *testing.T, net *dockertest.Network, wheelDir, s
 	for k, v := range env {
 		mergedEnv[k] = v
 	}
+	passFastCopyWarmup(mergedEnv)
 	return dockertest.StartContainer(t, dockertest.ContainerRequest{
 		Image:    pythonImage(),
 		Platform: wheelDockerPlatform(),
@@ -355,6 +358,12 @@ func startPythonTestContainer(t *testing.T, net *dockertest.Network, wheelDir, s
 			),
 		},
 	})
+}
+
+func passFastCopyWarmup(env map[string]string) {
+	if v := os.Getenv("PYROSCOPE_FAST_COPY_WARMUP"); v != "" {
+		env["PYROSCOPE_FAST_COPY_WARMUP"] = v
+	}
 }
 
 func requireContainerExit(t *testing.T, container *dockertest.Container, expected int, timeout time.Duration) {
@@ -467,6 +476,9 @@ func wheelDir() string {
 }
 
 func wheelPattern() string {
+	if glob := os.Getenv("PYROSCOPE_WHEEL_GLOB"); glob != "" {
+		return glob
+	}
 	target := wheelBuildTarget()
 	platform := "manylinux"
 	if strings.HasPrefix(target, "musllinux/") {

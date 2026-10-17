@@ -38,6 +38,40 @@ musllinux/arm64:
 		-f docker/wheel-musllinux.Dockerfile \
 		.
 
+TSAN_PYTHON_REF ?= 3.14
+TSAN_IMAGE ?= pyroscope-python-tsan:$(TSAN_PYTHON_REF)
+TSAN_WHEEL_DIR := dist/tsan
+TSAN_FAST_COPY_WARMUP ?= 0
+
+.PHONY: tsan/image
+tsan/image:
+	docker buildx build \
+		--build-arg=PYTHON_REF=$(TSAN_PYTHON_REF) \
+		--target=runtime \
+		--load \
+		-t $(TSAN_IMAGE) \
+		-f docker/tsan.Dockerfile \
+		.
+
+.PHONY: tsan/wheel
+tsan/wheel:
+	rm -rf $(TSAN_WHEEL_DIR)
+	docker buildx build \
+		--build-arg=PYTHON_REF=$(TSAN_PYTHON_REF) \
+		--target=wheel \
+		--output=$(TSAN_WHEEL_DIR) \
+		-f docker/tsan.Dockerfile \
+		.
+
+.PHONY: tsan/test
+tsan/test: tsan/image tsan/wheel
+	cd integration-test && \
+		PYTHON_IMAGE=$(TSAN_IMAGE) \
+		PYROSCOPE_WHEEL_DIR=../$(TSAN_WHEEL_DIR) \
+		PYROSCOPE_WHEEL_GLOB='*.whl' \
+		PYROSCOPE_FAST_COPY_WARMUP=$(TSAN_FAST_COPY_WARMUP) \
+		go test -v -timeout 60m -count=1 $(if $(RUN),-run '$(RUN)') .
+
 .PHONY: mac/amd64
 mac/amd64:
 	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=x86_64-apple-darwin python3 -m build --wheel
