@@ -366,27 +366,37 @@ def cpu_timer_shutdown_elsewhere_then_fork():
 
 def cpu_timer_fork_keeps_app_altstack():
     install_harmless_onstack(signal.SIGUSR1)
-    buf = mmap.mmap(-1, APP_ALTSTACK_SIZE)
-    sp = ctypes.addressof(ctypes.c_char.from_buffer(buf))
-    if libc.sigaltstack(ctypes.byref(StackT(ss_sp=sp, ss_flags=0, ss_size=APP_ALTSTACK_SIZE)), None) != 0:
-        raise OSError(ctypes.get_errno(), "sigaltstack")
+    previous = altstack()
+    with mmap.mmap(-1, APP_ALTSTACK_SIZE) as buf:
+        sp = ctypes.addressof(ctypes.c_char.from_buffer(buf))
+        if libc.sigaltstack(ctypes.byref(StackT(ss_sp=sp, ss_flags=0, ss_size=APP_ALTSTACK_SIZE)), None) != 0:
+            raise OSError(ctypes.get_errno(), "sigaltstack")
 
-    def unchanged():
-        current = altstack()
-        return not current.ss_flags & SS_DISABLE and current.ss_sp == sp and current.ss_size == APP_ALTSTACK_SIZE
+        def unchanged():
+            current = altstack()
+            return not current.ss_flags & SS_DISABLE and current.ss_sp == sp and current.ss_size == APP_ALTSTACK_SIZE
 
-    configure()
-    expect(unchanged(), "configure() replaced the application's alternate signal stack")
-    pid = os.fork()
-    if pid == 0:
-        ok = unchanged()
-        signal.raise_signal(signal.SIGUSR1)
-        os._exit(0 if ok else 1)
-    code = wait_exitcode(pid)
-    expect(code == 0, f"fork child exited with {code}")
-    expect(unchanged(), "fork changed the parent's alternate signal stack")
-    shutdown()
-    expect(unchanged(), "shutdown() changed the application's alternate signal stack")
+        try:
+            configure()
+            expect(unchanged(), "configure() replaced the application's alternate signal stack")
+            pid = os.fork()
+            if pid == 0:
+                ok = unchanged()
+                signal.raise_signal(signal.SIGUSR1)
+                os._exit(0 if ok else 1)
+            code = wait_exitcode(pid)
+            expect(code == 0, f"fork child exited with {code}")
+            expect(unchanged(), "fork changed the parent's alternate signal stack")
+            shutdown()
+            expect(unchanged(), "shutdown() changed the application's alternate signal stack")
+        finally:
+            # sigaltstack borrows the mapping. Restore the previous stack before
+            # mmap closes, or a pending SA_ONSTACK signal can use unmapped memory.
+            if libc.sigaltstack(ctypes.byref(previous), None) != 0:
+                raise OSError(ctypes.get_errno(), "sigaltstack")
+
+    # Exercise SA_ONSTACK delivery after the application's mapping is released.
+    signal.raise_signal(signal.SIGUSR1)
 
 
 def cpu_timer_fork_on_altstack_keeps_mapping():
