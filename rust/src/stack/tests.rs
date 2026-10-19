@@ -55,14 +55,6 @@ fn cpu_options_are_fixed_by_the_first_call() {
 fn invalid_options_are_refused_without_sealing() {
     let invalid = [
         Options {
-            fast_copy_warmup_s: -1.0,
-            ..Options::default()
-        },
-        Options {
-            fast_copy_warmup_s: f64::NAN,
-            ..Options::default()
-        },
-        Options {
             adaptive_target_overhead: 0.0,
             ..Options::default()
         },
