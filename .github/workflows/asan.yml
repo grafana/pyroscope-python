@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      python-version:
+        description: CPython version
+        type: choice
+        default: all
+        options: [all, "3.10", "3.11", "3.12", "3.13", "3.14"]
 
 permissions:
   contents: read
@@ -16,7 +22,7 @@ jobs:
       fail-fast: false
       max-parallel: 5
       matrix:
-        PYTHON_VERSION: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        PYTHON_VERSION: ${{ fromJSON(github.event_name == 'pull_request' && '["3.12"]' || (inputs.python-version && inputs.python-version != 'all') && format('["{0}"]', inputs.python-version) || '["3.10", "3.11", "3.12", "3.13", "3.14"]') }}
         arch: [amd64, arm64]
         include:
           - arch: amd64
