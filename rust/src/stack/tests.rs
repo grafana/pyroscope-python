@@ -55,14 +55,6 @@ fn cpu_options_are_fixed_by_the_first_call() {
 fn invalid_options_are_refused_without_sealing() {
     let invalid = [
         Options {
-            fast_copy_warmup_s: -1.0,
-            ..Options::default()
-        },
-        Options {
-            fast_copy_warmup_s: f64::NAN,
-            ..Options::default()
-        },
-        Options {
             adaptive_target_overhead: 0.0,
             ..Options::default()
         },
@@ -112,8 +104,8 @@ fn invalid_options_are_refused_without_sealing() {
 /// moves the sampler's interval, so a second test touching either in
 /// parallel would race.
 #[test]
-fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
-    configure(
+fn cpu_samples_pushed_over_the_ffi_become_one_profile() {
+    assert!(configure(
         1.0 / 50.0,
         &Options {
             adaptive_sampling: false,
@@ -124,8 +116,7 @@ fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
             adaptive_p_stable_percentile: 50.0,
             ..Options::default()
         },
-        false,
-    );
+    ));
 
     let frames = [FFIFrame {
         function_name: intern("stack::tests::some_function"),
@@ -134,10 +125,10 @@ fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
     }];
     let time_range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
 
-    push(PprofBuilderType::CpuWall, &frames, &values(3, 5));
-    push(PprofBuilderType::CpuWall, &frames, &values(7, 11));
+    push(PprofBuilderType::OnCpu, &frames, &values(3, 5));
+    push(PprofBuilderType::OnCpu, &frames, &values(7, 11));
 
-    let bytes = dump_pprof(100, false, &time_range).expect("a profile with one sample");
+    let bytes = dump_pprof(100, &time_range).expect("a profile with one sample");
     let profile = Profile::decode(bytes.as_slice()).expect("a decodable pprof");
 
     let sample_types: Vec<(&str, &str)> = profile
@@ -145,10 +136,7 @@ fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
         .iter()
         .map(|vt| (resolve(&profile, vt.r#type), resolve(&profile, vt.unit)))
         .collect();
-    assert_eq!(
-        sample_types,
-        vec![("cpu", "nanoseconds"), ("wall", "nanoseconds")]
-    );
+    assert_eq!(sample_types, vec![("cpu", "nanoseconds")]);
     let period_type = profile.period_type.as_ref().expect("a period type");
     assert_eq!(
         (
@@ -165,7 +153,7 @@ fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
     assert_eq!(profile.duration_nanos, 10_000_000_000);
 
     assert_eq!(profile.sample.len(), 1, "one row per distinct stack");
-    assert_eq!(profile.sample[0].value, vec![10, 16]);
+    assert_eq!(profile.sample[0].value, vec![10]);
     assert_eq!(profile.function.len(), 1);
     assert_eq!(
         resolve(&profile, profile.function[0].name),
@@ -179,23 +167,11 @@ fn cpu_wall_samples_pushed_over_the_ffi_become_one_profile() {
     assert_eq!(profile.location[0].line[0].line, 42);
 
     assert!(
-        dump_pprof(100, false, &time_range).is_none(),
+        dump_pprof(100, &time_range).is_none(),
         "a drained accumulator must not produce a second profile"
     );
 
-    push(PprofBuilderType::CpuWall, &frames, &values(1, 2));
+    push(PprofBuilderType::OnCpu, &frames, &values(1, 2));
     clear_samples();
-    assert!(dump_pprof(100, false, &time_range).is_none());
-
-    push(PprofBuilderType::OnCpu, &frames, &values(3, 5));
-    let bytes = dump_pprof(100, true, &time_range).expect("an oncpu profile with one sample");
-    let profile = Profile::decode(bytes.as_slice()).expect("a decodable pprof");
-    let sample_types: Vec<(&str, &str)> = profile
-        .sample_type
-        .iter()
-        .map(|vt| (resolve(&profile, vt.r#type), resolve(&profile, vt.unit)))
-        .collect();
-    assert_eq!(sample_types, vec![("cpu", "nanoseconds")]);
-    assert_eq!(profile.sample.len(), 1);
-    assert_eq!(profile.sample[0].value, vec![3]);
+    assert!(dump_pprof(100, &time_range).is_none());
 }

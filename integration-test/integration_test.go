@@ -52,10 +52,6 @@ func TestPythonStackProfilerOnCPU(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, stack: true})
 }
 
-func TestPythonStackProfilerOffCPU(t *testing.T) {
-	testPythonProfilerConfiguration(t, profileConfig{onCPU: false, stack: true})
-}
-
 func TestPythonStackProfilerRestart(t *testing.T) {
 	wheelDir := ensureWheel(t)
 
@@ -95,20 +91,16 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 	scenarios := []string{
 		"import_installs_nothing",
 		"pyspy_and_memory_install_nothing",
-		"fast_copy_off_installs_nothing",
+		"stack_refuses_offcpu",
 		"first_cpu_configure_wins",
 		"stack_installs_both",
-		"fast_copy_off_leaves_faulthandler_unpatched",
 		"reconfigure_keeps_handlers",
 		"foreign_after_configure_is_not_reclaimed",
 		"crash_with_our_handler",
 		"sigbus_with_our_handler",
 		"crash_chains_to_earlier_faulthandler",
 		"crash_after_faulthandler_takeover",
-		"enable_after_warmup_keeps_ours",
-		"disable_after_warmup_keeps_ours",
-		"enable_during_warmup_falls_back",
-		"takeover_falls_back_permanently",
+		"takeover_stops_sampling",
 	}
 	for _, scenario := range scenarios {
 		t.Run(scenario, func(t *testing.T) {

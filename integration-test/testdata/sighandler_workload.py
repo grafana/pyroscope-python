@@ -15,9 +15,6 @@ import pyroscope
 
 FAULTHANDLER_BANNER = "Fatal Python error: Segmentation fault"
 TAKEN_OVER = "SIGSEGV/SIGBUS handler was taken over by another component"
-OWNED_BY_OTHER = "another component owns the SIGSEGV/SIGBUS handler"
-WARMUP_SECONDS = 0.5
-PAST_WARMUP_SECONDS = 1.5
 
 libc = ctypes.CDLL(None)
 
@@ -38,18 +35,14 @@ def expect(cond, message):
         raise AssertionError(message)
 
 
-def configure(fast_copy=True, fast_copy_warmup=WARMUP_SECONDS, **kwargs):
+def configure(expected=True, **kwargs):
     kwargs.setdefault("cpu_implementation", pyroscope.ProfilerImplementation.Stack)
-    # Refused after the first call, which reconfigure_keeps_handlers relies on.
-    pyroscope.configure_experimental_stack_profiler(fast_copy=fast_copy, fast_copy_warmup=fast_copy_warmup)
-    expect(
-        pyroscope.configure(
-            application_name=os.environ["PYROSCOPE_APPLICATION_NAME"],
-            server_address=os.environ["PYROSCOPE_SERVER_ADDRESS"],
-            **kwargs,
-        ),
-        "configure() returned False",
+    result = pyroscope.configure(
+        application_name=os.environ["PYROSCOPE_APPLICATION_NAME"],
+        server_address=os.environ["PYROSCOPE_SERVER_ADDRESS"],
+        **kwargs,
     )
+    expect(result == expected, f"configure() returned {result}, expected {expected}")
 
 
 def shutdown():
@@ -88,36 +81,25 @@ def pyspy_and_memory_install_nothing():
     shutdown()
 
 
-def fast_copy_off_installs_nothing():
-    configure(fast_copy=False)
-    expect(handlers() == (0, 0), f"fast copy off installed handlers: {handlers()}")
-    shutdown()
+def stack_refuses_offcpu():
+    configure(expected=False, oncpu=False)
+    expect(handlers() == (0, 0), f"a refused configure() installed handlers: {handlers()}")
 
 
 def first_cpu_configure_wins():
-    configure(fast_copy=False)
+    expect(pyroscope.configure_experimental_stack_profiler(), "the first configure_experimental_stack_profiler() was refused")
+    configure()
     shutdown()
     expect(
-        not pyroscope.configure_experimental_stack_profiler(fast_copy=True),
+        not pyroscope.configure_experimental_stack_profiler(),
         "configure_experimental_stack_profiler() was accepted a second time",
     )
-    configure(fast_copy=True)
-    expect(handlers() == (0, 0), f"a later configure_experimental_stack_profiler() changed fast copy: {handlers()}")
-    shutdown()
 
 
 def stack_installs_both():
     configure()
     segv, bus = handlers()
     expect(segv != 0 and segv == bus, f"expected one handler on both signals, got {segv:#x} {bus:#x}")
-    shutdown()
-
-
-def fast_copy_off_leaves_faulthandler_unpatched():
-    enable, disable = faulthandler.enable, faulthandler.disable
-    configure(fast_copy=False)
-    expect(faulthandler.enable is enable, "fast copy off patched faulthandler.enable")
-    expect(faulthandler.disable is disable, "fast copy off patched faulthandler.disable")
     shutdown()
 
 
@@ -138,9 +120,8 @@ def foreign_after_configure_is_not_reclaimed():
     foreign = handlers()
     expect(foreign != ours, "take_over() did not replace the handlers")
     shutdown()
-    configure()
+    configure(expected=False)
     expect(handlers() == foreign, f"reconfigure reinstalled over a foreign handler: {foreign} -> {handlers()}")
-    shutdown()
 
 
 def crash_with_our_handler():
@@ -163,52 +144,21 @@ def crash_chains_to_earlier_faulthandler():
 
 def crash_after_faulthandler_takeover():
     configure()
-    time.sleep(PAST_WARMUP_SECONDS)
     faulthandler.enable()
-    segfault()
-
-
-def enable_after_warmup_keeps_ours():
-    configure()
-    ours = handlers()
-    time.sleep(PAST_WARMUP_SECONDS)
-    faulthandler.enable()
-    expect(handlers() == ours, f"faulthandler.enable() displaced our handlers: {ours} -> {handlers()}")
-    time.sleep(1)
-    shutdown()
-
-
-def disable_after_warmup_keeps_ours():
-    faulthandler.enable()
-    configure()
-    ours = handlers()
-    time.sleep(PAST_WARMUP_SECONDS)
-    faulthandler.disable()
-    expect(handlers() == ours, f"faulthandler.disable() displaced our handlers: {ours} -> {handlers()}")
     time.sleep(1)
     segfault()
 
 
-def enable_during_warmup_falls_back():
-    configure(fast_copy_warmup=3)
-    time.sleep(0.5)
-    faulthandler.enable()
-    time.sleep(4)
-    shutdown()
-
-
-def takeover_falls_back_permanently():
+def takeover_stops_sampling():
     stop = threading.Event()
     thread = threading.Thread(target=burn, args=(stop,))
     thread.start()
     configure()
-    time.sleep(PAST_WARMUP_SECONDS)
+    time.sleep(1)
     take_over()
-    time.sleep(2)
+    time.sleep(1)
     shutdown()
-    configure()
-    time.sleep(PAST_WARMUP_SECONDS)
-    shutdown()
+    configure(expected=False)
     stop.set()
     thread.join()
 
@@ -223,20 +173,16 @@ class Scenario(NamedTuple):
 SCENARIOS = {
     "import_installs_nothing": Scenario(),
     "pyspy_and_memory_install_nothing": Scenario(),
-    "fast_copy_off_installs_nothing": Scenario(),
+    "stack_refuses_offcpu": Scenario(),
     "first_cpu_configure_wins": Scenario(),
     "stack_installs_both": Scenario(),
-    "fast_copy_off_leaves_faulthandler_unpatched": Scenario(),
     "reconfigure_keeps_handlers": Scenario(),
     "foreign_after_configure_is_not_reclaimed": Scenario(),
     "crash_with_our_handler": Scenario(-signal.SIGSEGV, forbidden=(FAULTHANDLER_BANNER,)),
     "sigbus_with_our_handler": Scenario(-signal.SIGBUS),
     "crash_chains_to_earlier_faulthandler": Scenario(-signal.SIGSEGV, required=(FAULTHANDLER_BANNER,)),
-    "crash_after_faulthandler_takeover": Scenario(-signal.SIGSEGV, required=(FAULTHANDLER_BANNER,)),
-    "enable_after_warmup_keeps_ours": Scenario(forbidden=(TAKEN_OVER, OWNED_BY_OTHER)),
-    "disable_after_warmup_keeps_ours": Scenario(-signal.SIGSEGV, forbidden=(FAULTHANDLER_BANNER, TAKEN_OVER)),
-    "enable_during_warmup_falls_back": Scenario(required=(OWNED_BY_OTHER,)),
-    "takeover_falls_back_permanently": Scenario(required=(TAKEN_OVER, OWNED_BY_OTHER)),
+    "crash_after_faulthandler_takeover": Scenario(-signal.SIGSEGV, required=(FAULTHANDLER_BANNER, TAKEN_OVER)),
+    "takeover_stops_sampling": Scenario(required=(TAKEN_OVER,)),
 }
 
 

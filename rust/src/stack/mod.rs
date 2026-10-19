@@ -1,5 +1,5 @@
 use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
-use crate::encode::pprof::{CpuProfile, CpuWallProfile, PProfBuilder, ProfileKind};
+use crate::encode::pprof::{CpuProfile, PProfBuilder};
 use crate::forksafety::LeakableMutex;
 use crate::utils::TimeRange;
 use prost::Message;
@@ -9,27 +9,19 @@ use std::ops::{Deref, DerefMut};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-mod faulthandler;
 mod sampler;
 mod threads;
 
-use sampler::{
-    configure, fast_copy_initialized, interval_us, is_safe_copy_failed, sampler_start,
-    sampler_stop, sampling_thread_failed,
-};
-static PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuWallProfile>> = LeakableMutex::new();
+use sampler::{configure, interval_us, sampler_start, sampler_stop, sampling_thread_failed};
 static ONCPU_PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuProfile>> = LeakableMutex::new();
 
 #[derive(Clone)]
 pub struct Config {
     pub enabled: bool,
-    pub oncpu: bool,
 }
 
 #[derive(Debug)]
 pub struct Options {
-    pub fast_copy: bool,
-    pub fast_copy_warmup_s: f64,
     pub max_nframe: u32,
     pub max_threads: u32,
     pub adaptive_sampling: bool,
@@ -43,8 +35,6 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
-            fast_copy: true,
-            fast_copy_warmup_s: 15.0,
             max_nframe: 128,
             max_threads: 25,
             adaptive_sampling: true,
@@ -59,12 +49,6 @@ impl Default for Options {
 
 impl Options {
     fn validate(&self) -> Result<(), String> {
-        let w = self.fast_copy_warmup_s;
-        if !(w.is_finite() && w >= 0.0) {
-            return Err(format!(
-                "fast_copy_warmup must be a finite, non-negative number of seconds, got {w}"
-            ));
-        }
         let o = self.adaptive_target_overhead;
         if !(o.is_finite() && o > 0.0 && o <= 1.0) {
             return Err(format!(
@@ -135,20 +119,10 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
         return Ok(());
     }
 
-    let options = options();
-    configure(1.0 / f64::from(sample_rate.max(1)), options, config.oncpu);
-
-    if is_safe_copy_failed() {
-        log::error!(
-            target: "pyroscope-python",
-            "no safe memory copy method available (safe_memcpy and process_vm_readv both failed); \
-             the CPU stack sampler stays off"
-        );
-        return Ok(());
-    }
-
-    if fast_copy_initialized() {
-        faulthandler::install(py)?;
+    if !configure(1.0 / f64::from(sample_rate.max(1)), options()) {
+        return Err(PyRuntimeError::new_err(
+            "failed to install the CPU stack sampler's SIGSEGV/SIGBUS handlers",
+        ));
     }
 
     if !sampler_start() {
@@ -175,19 +149,11 @@ pub fn stop(py: Python<'_>) {
 pub fn postfork_child() {
     #[cfg(not(miri))]
     {
-        PROFILE_BUILDER.leak_and_reset();
         ONCPU_PROFILE_BUILDER.leak_and_reset();
     }
     #[cfg(miri)]
     {
-        let _ = PROFILE_BUILDER.leak_and_reset();
         let _ = ONCPU_PROFILE_BUILDER.leak_and_reset();
-    }
-}
-
-pub fn push_sample(frames: &[FFIFrame], values: &FFISampleValues) {
-    if let Ok(mut pb) = PROFILE_BUILDER.mutex().lock() {
-        pb.add_ffi_sample(frames, values);
     }
 }
 
@@ -197,16 +163,11 @@ pub fn push_oncpu_sample(frames: &[FFIFrame], values: &FFISampleValues) {
     }
 }
 
-/// Discard the samples buffered for the next cpu/wall profile.
+/// Discard the samples buffered for the next cpu profile.
 ///
 /// See `crate::memory::implementation::clear_samples` for the reasoning,
 /// including why the shared string table is deliberately left alone.
 pub fn clear_samples() {
-    PROFILE_BUILDER
-        .mutex()
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .reset();
     ONCPU_PROFILE_BUILDER
         .mutex()
         .lock()
@@ -214,26 +175,14 @@ pub fn clear_samples() {
         .reset();
 }
 
-/// Take the accumulated cpu/wall samples as an encoded pprof, if any.
+/// Take the accumulated cpu samples as an encoded pprof, if any.
 ///
 /// Unlike `crate::memory::dump_pprof` this needs neither the GIL nor a
 /// profiler-side flush, but it keeps the same lock order: the interner before
 /// the profile builder, never the reverse.
-pub fn dump_pprof(sample_rate: u32, oncpu: bool, time_range: &TimeRange) -> Option<Vec<u8>> {
-    if oncpu {
-        dump_from(&ONCPU_PROFILE_BUILDER, sample_rate, time_range)
-    } else {
-        dump_from(&PROFILE_BUILDER, sample_rate, time_range)
-    }
-}
-
-fn dump_from<K: ProfileKind<PeriodConfig = i64>>(
-    builder: &'static LeakableMutex<PProfBuilder<K>>,
-    sample_rate: u32,
-    time_range: &TimeRange,
-) -> Option<Vec<u8>> {
+pub fn dump_pprof(sample_rate: u32, time_range: &TimeRange) -> Option<Vec<u8>> {
     let st = crate::encode::interner::string_table().lock();
-    let pb = builder.mutex().lock();
+    let pb = ONCPU_PROFILE_BUILDER.mutex().lock();
     let profile = match (st, pb) {
         (Ok(mut st), Ok(mut pb)) => {
             pb.set_profile_type(st.deref_mut(), period_ns(sample_rate));
@@ -249,7 +198,7 @@ pub fn report_sampling_thread_error() {
         log::error!(
             target: "pyroscope-python",
             "the CPU stack sampler's sampling thread died and stopped sampling; \
-             its cpu/wall profiles are empty from here on"
+             its cpu profiles are empty from here on"
         );
     }
 }

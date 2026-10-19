@@ -253,10 +253,7 @@ mod tests {
     }
 
     fn disabled_stack_config() -> crate::stack::Config {
-        crate::stack::Config {
-            enabled: false,
-            oncpu: false,
-        }
+        crate::stack::Config { enabled: false }
     }
 
     fn disabled_memory_config() -> memory::Config {

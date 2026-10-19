@@ -16,8 +16,6 @@ pub enum PprofBuilderType {
     /// py-spy.
     Cpu,
     /// The vendored dd-trace-py stack sampler.
-    CpuWall,
-    /// The vendored dd-trace-py stack sampler with `oncpu`.
     OnCpu,
 }
 
@@ -46,8 +44,6 @@ pub trait FfiProfileKind: ProfileKind {
 pub struct MemoryProfile;
 pub struct PySpyProfile;
 /// The vendored dd-trace-py stack sampler.
-pub struct CpuWallProfile;
-/// The vendored dd-trace-py stack sampler with `oncpu`.
 pub struct CpuProfile;
 
 pub struct PProfBuilder<K: ProfileKind> {
@@ -111,39 +107,10 @@ impl FfiProfileKind for MemoryProfile {
     }
 }
 
-impl ProfileKind for CpuWallProfile {
-    type Values = [i64; 2];
-    /// Nanoseconds, not Hz: the sampler owns its interval and adaptive
-    /// sampling moves it, so the dump path reports what it read.
-    type PeriodConfig = i64;
-
-    fn set_profile_type(profile: &mut Profile, strings: &mut StringTable, period_ns: i64) {
-        profile.sample_type = vec![
-            ValueType {
-                r#type: strings.add("cpu").pprof(),
-                unit: strings.add("nanoseconds").pprof(),
-            },
-            ValueType {
-                r#type: strings.add("wall").pprof(),
-                unit: strings.add("nanoseconds").pprof(),
-            },
-        ];
-        profile.period = period_ns;
-        profile.period_type = Some(ValueType {
-            r#type: strings.add("cpu").pprof(),
-            unit: strings.add("nanoseconds").pprof(),
-        });
-    }
-}
-
-impl FfiProfileKind for CpuWallProfile {
-    fn value_slots(values: &FFISampleValues) -> Self::Values {
-        [values.cpu_time, values.wall_time]
-    }
-}
-
 impl ProfileKind for CpuProfile {
     type Values = [i64; 1];
+    /// Nanoseconds, not Hz: the sampler owns its interval and adaptive
+    /// sampling moves it, so the dump path reports what it read.
     type PeriodConfig = i64;
 
     fn set_profile_type(profile: &mut Profile, strings: &mut StringTable, period_ns: i64) {
@@ -558,7 +525,7 @@ pub mod ffi {
 mod tests {
     use super::ffi::{FFIFrame, FFIInternedString, FFISampleValues};
     use super::{
-        CpuWallProfile, FunctionMirror, LocationMirror, MemoryProfile, PProfBuilder, StringID,
+        CpuProfile, FunctionMirror, LocationMirror, MemoryProfile, PProfBuilder, StringID,
         StringTable,
     };
     use crate::utils::TimeRange;
@@ -590,10 +557,10 @@ mod tests {
         }
     }
 
-    fn cpu_wall_values(cpu_time: i64, wall_time: i64) -> FFISampleValues {
+    fn cpu_values(cpu_time: i64) -> FFISampleValues {
         FFISampleValues {
             cpu_time,
-            wall_time,
+            wall_time: 0,
             heap_space: 0,
             heap_count: 0,
             alloc_space: 0,
@@ -647,8 +614,8 @@ mod tests {
     /// The memory values are larger than every time value here, so a leak
     /// into a time slot cannot pass for a correct number.
     #[test]
-    fn cpu_wall_projection_reads_only_the_time_slots() {
-        let mut builder = PProfBuilder::<CpuWallProfile>::new();
+    fn cpu_projection_reads_only_the_cpu_slot() {
+        let mut builder = PProfBuilder::<CpuProfile>::new();
         let frames = [frame(1, 2, 10)];
 
         builder.add_ffi_sample(
@@ -666,18 +633,17 @@ mod tests {
         builder.flush_ffi_samples();
 
         assert_eq!(builder.profile.sample.len(), 1);
-        // [cpu, wall]
-        assert_eq!(builder.profile.sample[0].value, vec![7, 9]);
+        assert_eq!(builder.profile.sample[0].value, vec![7]);
     }
 
     #[test]
-    fn equal_cpu_wall_stacks_are_accumulated_element_wise() {
-        let mut builder = PProfBuilder::<CpuWallProfile>::new();
+    fn equal_cpu_stacks_are_accumulated() {
+        let mut builder = PProfBuilder::<CpuProfile>::new();
         let frames = [frame(1, 2, 10), frame(3, 4, 20)];
 
-        builder.add_ffi_sample(&frames, &cpu_wall_values(3, 5));
-        builder.add_ffi_sample(&frames, &cpu_wall_values(7, 11));
-        builder.add_ffi_sample(&[frame(1, 2, 10)], &cpu_wall_values(1, 2));
+        builder.add_ffi_sample(&frames, &cpu_values(3));
+        builder.add_ffi_sample(&frames, &cpu_values(7));
+        builder.add_ffi_sample(&[frame(1, 2, 10)], &cpu_values(1));
 
         builder.flush_ffi_samples();
 
@@ -688,21 +654,21 @@ mod tests {
             .map(|sample| sample.value.clone())
             .collect();
         sample_values.sort();
-        assert_eq!(sample_values, vec![vec![1, 2], vec![10, 16]]);
+        assert_eq!(sample_values, vec![vec![1], vec![10]]);
     }
 
     /// take_profile_and_reset mem::takes the profile, so the dump path re-sets
     /// the sample types every window. Assigning rather than pushing them is
     /// what keeps that idempotent.
     #[test]
-    fn cpu_wall_profile_type_is_idempotent() {
-        let mut builder = PProfBuilder::<CpuWallProfile>::new();
+    fn cpu_profile_type_is_idempotent() {
+        let mut builder = PProfBuilder::<CpuProfile>::new();
         let mut strings = StringTable::new();
 
         builder.set_profile_type(&mut strings, 10_000_000);
         builder.set_profile_type(&mut strings, 10_000_000);
 
-        assert_eq!(builder.profile.sample_type.len(), 2);
+        assert_eq!(builder.profile.sample_type.len(), 1);
         assert_eq!(builder.profile.period, 10_000_000);
     }
 
