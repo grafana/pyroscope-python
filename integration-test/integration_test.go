@@ -76,6 +76,27 @@ func TestPythonStackProfilerRestart(t *testing.T) {
 	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector(canarySecond), "burn_second", 3*time.Minute)
 }
 
+func TestPythonStackProfilerCpuTimerFork(t *testing.T) {
+	if !pythonSupportsCPUTimer(t) {
+		t.Skip("CPU timers require CPython 3.12+; older versions use the wall sampler")
+	}
+	wheelDir := ensureWheel(t)
+
+	net := dockertest.CreateNetwork(t)
+	pyroscopeURL := startPyroscope(t, net)
+	appName := fmt.Sprintf("pyroscopers.python.test.cputimerfork.%d", time.Now().UnixNano())
+	canary := randomHex(t, 16)
+	workload := startPythonTestContainer(t, net, wheelDir, "sighandler_workload.py", map[string]string{
+		"PYROSCOPE_APPLICATION_NAME": appName,
+		"SCENARIO":                   "cpu_timer_worker_fork_onstack_signal",
+		"CANARY":                     canary,
+	})
+
+	selector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
+	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector, "burn_after_fork", 3*time.Minute)
+	requireContainerExit(t, workload, 0, 3*time.Minute)
+}
+
 func TestPythonNonCPUIntegrationSuites(t *testing.T) {
 	t.Run("memory profiler", testPythonMemoryProfiler)
 	t.Run("concurrent configure shutdown", testPythonConcurrentConfigureShutdown)
@@ -103,9 +124,22 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 		"crash_after_faulthandler_takeover",
 		"faulthandler_enable_after_configure_stops_sampling",
 		"takeover_stops_sampling",
+		"cpu_timer_unsupported_fallback",
+		"cpu_timer_restart_refused",
+		"cpu_timer_fork_child_refused",
+		"cpu_timer_shutdown_elsewhere_then_fork",
+		"cpu_timer_fork_keeps_app_altstack",
+		"cpu_timer_fork_on_altstack_keeps_mapping",
 	}
 	for _, scenario := range scenarios {
 		t.Run(scenario, func(t *testing.T) {
+			if scenario == "cpu_timer_unsupported_fallback" {
+				if pythonSupportsCPUTimer(t) {
+					t.Skip("fallback applies to CPython older than 3.12")
+				}
+			} else if strings.HasPrefix(scenario, "cpu_timer_") && !pythonSupportsCPUTimer(t) {
+				t.Skip("CPU timers require CPython 3.12+; older versions use the wall sampler")
+			}
 			appName := fmt.Sprintf("pyroscopers.python.test.sighandler.%d", time.Now().UnixNano())
 			workload := startPythonTestContainer(t, net, wheelDir, "sighandler_workload.py", map[string]string{
 				"PYROSCOPE_APPLICATION_NAME": appName,
@@ -114,6 +148,16 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 			requireContainerExit(t, workload, 0, 3*time.Minute)
 		})
 	}
+}
+
+func pythonSupportsCPUTimer(t *testing.T) bool {
+	t.Helper()
+	var major, minor int
+	version := envOrDefault("PYTHON_VERSION", "3.11")
+	if _, err := fmt.Sscanf(version, "%d.%d", &major, &minor); err != nil {
+		t.Fatalf("invalid PYTHON_VERSION %q: %v", version, err)
+	}
+	return major > 3 || major == 3 && minor >= 12
 }
 
 func testPythonMemoryProfiler(t *testing.T) {

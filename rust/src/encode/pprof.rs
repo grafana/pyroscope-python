@@ -13,8 +13,6 @@ use std::hash::{Hash, Hasher};
 #[repr(C)]
 pub enum PprofBuilderType {
     Memory,
-    /// py-spy.
-    Cpu,
     /// The vendored dd-trace-py stack sampler.
     CpuWall,
     /// The vendored dd-trace-py stack sampler with `oncpu`.

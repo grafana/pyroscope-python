@@ -1,0 +1,15 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "linux",
+      "displayName": "Linux (cross, OrbStack sysroot)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/cmake-build-linux",
+      "toolchainFile": "${sourceDir}/cmake/linux-cross.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ]
+}
