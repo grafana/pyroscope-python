@@ -213,6 +213,23 @@ def cpu_timer_fork_child_refused():
     shutdown()
 
 
+def cpu_timer_unsupported_fallback():
+    # On CPython 3.10/3.11, enabling the timer option still selects the wall
+    # sampler. It allocates no alternate stack and can restart after shutdown.
+    configure()
+    run_worker(lambda _: expect(not altstack_enabled(), "fallback installed a timer alternate stack"))
+    shutdown()
+    expect(configure_agent(), "fallback could not restart after shutdown()")
+    shutdown()
+
+    # Fork only after shutdown: forking with a running profiler is unsupported.
+    pid = os.fork()
+    if pid == 0:
+        ok = configure_agent() and pyroscope.shutdown()
+        os._exit(0 if ok else 1)
+    expect(wait_exitcode(pid) == 0, "fallback could not configure in a fork child")
+
+
 SA_ONSTACK = 0x08000000
 SS_ONSTACK = 1
 SS_DISABLE = 2
@@ -419,6 +436,7 @@ SCENARIOS = {
     "takeover_stops_sampling": Scenario(required=(TAKEN_OVER,)),
     "cpu_timer_restart_refused": Scenario(required=(CPU_TIMER_RESTART_REFUSED,)),
     "cpu_timer_fork_child_refused": Scenario(required=(CPU_TIMER_RESTART_REFUSED,)),
+    "cpu_timer_unsupported_fallback": Scenario(forbidden=(CPU_TIMER_RESTART_REFUSED,)),
     "cpu_timer_worker_fork_onstack_signal": Scenario(),
     "cpu_timer_shutdown_elsewhere_then_fork": Scenario(),
     "cpu_timer_fork_keeps_app_altstack": Scenario(),

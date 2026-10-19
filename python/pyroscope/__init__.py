@@ -103,6 +103,11 @@ def configure_experimental_stack_profiler(
     max_threads caps how many threads one sampling cycle covers; past the cap
     the sampler picks a uniform random subset. 0 means no cap.
 
+    cpu_timer_enabled uses per-thread CPU timers on Linux CPython 3.12+.
+    Older Python versions and macOS use the wall sampler even when this
+    option is enabled. With CPU timers active, the profiler cannot restart
+    after shutdown() or in a fork child, and configure() returns False.
+
     adaptive_sampling moves the sampling interval between 100us and
     adaptive_max_interval_us to keep the sampler near adaptive_target_overhead,
     a fraction of the process CPU time. adaptive_baseline is an overhead floor
