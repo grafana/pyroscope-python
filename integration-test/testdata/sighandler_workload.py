@@ -82,6 +82,20 @@ def import_installs_nothing():
     expect(handlers() == (0, 0), f"import installed handlers: {handlers()}")
 
 
+def stack_offcpu_refused():
+    pyroscope.configure_experimental_stack_profiler()
+    expect(
+        not pyroscope.configure(
+            application_name=os.environ["PYROSCOPE_APPLICATION_NAME"],
+            server_address=os.environ["PYROSCOPE_SERVER_ADDRESS"],
+            cpu_implementation=pyroscope.ProfilerImplementation.Stack,
+            oncpu=False,
+        ),
+        "configure() with Stack and oncpu=False returned True",
+    )
+    expect(handlers() == (0, 0), f"refused configure installed handlers: {handlers()}")
+
+
 def pyspy_and_memory_install_nothing():
     configure(cpu_implementation=pyroscope.ProfilerImplementation.PySpy, mem_enabled=True)
     expect(handlers() == (0, 0), f"py-spy + memory installed handlers: {handlers()}")
@@ -222,6 +236,7 @@ class Scenario(NamedTuple):
 
 SCENARIOS = {
     "import_installs_nothing": Scenario(),
+    "stack_offcpu_refused": Scenario(),
     "pyspy_and_memory_install_nothing": Scenario(),
     "fast_copy_off_installs_nothing": Scenario(),
     "first_cpu_configure_wins": Scenario(),

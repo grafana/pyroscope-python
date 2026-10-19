@@ -193,6 +193,13 @@ fn initialize_agent(
         );
         return false;
     }
+    if cpu_enabled && cpu_implementation == ProfilerImplementation::Stack && !oncpu {
+        log::error!(
+            target: "pyroscope-python",
+            "the Stack CPU profiler supports only oncpu=True"
+        );
+        return false;
+    }
 
     let backend_config = BackendConfig {
         report_thread_id,
