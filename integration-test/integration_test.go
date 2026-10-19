@@ -52,10 +52,6 @@ func TestPythonStackProfilerOnCPU(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, stack: true})
 }
 
-func TestPythonStackProfilerOffCPU(t *testing.T) {
-	testPythonProfilerConfiguration(t, profileConfig{onCPU: false, stack: true})
-}
-
 func TestPythonStackProfilerRestart(t *testing.T) {
 	wheelDir := ensureWheel(t)
 
@@ -94,6 +90,7 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 	startPyroscope(t, net)
 	scenarios := []string{
 		"import_installs_nothing",
+		"stack_offcpu_refused",
 		"pyspy_and_memory_install_nothing",
 		"fast_copy_off_installs_nothing",
 		"first_cpu_configure_wins",
