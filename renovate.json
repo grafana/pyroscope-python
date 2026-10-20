@@ -42,6 +42,14 @@
       "depNameTemplate": "openssl/openssl",
       "datasourceTemplate": "github-releases",
       "extractVersionTemplate": "^openssl-(?<version>.*)$"
+    },
+    {
+      "description": "Track the Rust toolchain pinned via ENV RUST_VERSION in the Dockerfiles, so it is bumped together with the dtolnay/rust-toolchain pins in workflows.",
+      "customType": "regex",
+      "managerFilePatterns": ["/Dockerfile/"],
+      "matchStrings": ["ENV RUST_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "rust",
+      "datasourceTemplate": "rust-version"
     }
   ]
 }
