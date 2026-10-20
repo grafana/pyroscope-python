@@ -4,7 +4,7 @@ FROM quay.io/pypa/manylinux2014_${PLATFORM}:2026.09.26-1 AS manylinux
 RUN manylinux-install-clang -v v22.1.8.1
 
 FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS openssl
-ARG OPENSSL_VERSION=4.0.3
+ARG OPENSSL_VERSION=3.5.9
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends perl make curl ca-certificates \
