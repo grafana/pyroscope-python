@@ -66,7 +66,7 @@ func TestPythonStackProfilerRestart(t *testing.T) {
 		"CANARY_SECOND":              canarySecond,
 	})
 	t.Cleanup(func() {
-		workload.Stop(t, 30*time.Second)
+		requireCleanStop(t, workload)
 	})
 
 	selector := func(canary string) string {
@@ -172,7 +172,7 @@ func testPythonMemoryProfiler(t *testing.T) {
 		"CANARY":                     canary,
 	})
 	t.Cleanup(func() {
-		workload.Stop(t, 30*time.Second)
+		requireCleanStop(t, workload)
 	})
 
 	labelSelector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
@@ -272,7 +272,7 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 	canary := randomHex(t, 16)
 	workload := startWorkload(t, net, appName, canary, cfg, wheelDir)
 	t.Cleanup(func() {
-		workload.Stop(t, 30*time.Second)
+		requireCleanStop(t, workload)
 	})
 
 	labelSelector := fmt.Sprintf(
@@ -361,7 +361,7 @@ func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string
 		Cmd: []string{
 			"sh",
 			"-c",
-			"python -m pip install --no-cache-dir --no-index --find-links /pyroscope-wheels pyroscope-io && python /pyroscope-python/integration-test/testdata/workload.py",
+			"python -m pip install --no-cache-dir --no-index --find-links /pyroscope-wheels pyroscope-io && exec python /pyroscope-python/integration-test/testdata/workload.py",
 		},
 	})
 }
@@ -391,7 +391,7 @@ func startPythonTestContainer(t *testing.T, net *dockertest.Network, wheelDir, s
 			"sh",
 			"-c",
 			fmt.Sprintf(
-				"python -m pip install --no-cache-dir --no-index --find-links /pyroscope-wheels pyroscope-io && python /pyroscope-python/integration-test/testdata/%s",
+				"python -m pip install --no-cache-dir --no-index --find-links /pyroscope-wheels pyroscope-io && exec python /pyroscope-python/integration-test/testdata/%s",
 				script,
 			),
 		},
@@ -409,6 +409,30 @@ func requireContainerExit(t *testing.T, container *dockertest.Container, expecte
 	code := container.Wait(t, timeout)
 	if code != expected {
 		t.Fatalf("container exited with %d, expected %d\nlogs:\n%s", code, expected, container.Logs(t))
+	}
+	requireNoSanitizerReport(t, container)
+}
+
+func requireCleanStop(t *testing.T, workload *dockertest.Container) {
+	t.Helper()
+	workload.Stop(t, 30*time.Second)
+	state, err := workload.State()
+	if err != nil {
+		t.Errorf("failed to inspect workload container after stop: %v", err)
+		return
+	}
+	if state.Running || state.ExitCode != 0 {
+		t.Errorf("workload container did not exit cleanly after stop (running=%t, exit code %d)\nlogs:\n%s",
+			state.Running, state.ExitCode, workload.Logs(t))
+		return
+	}
+	requireNoSanitizerReport(t, workload)
+}
+
+func requireNoSanitizerReport(t *testing.T, container *dockertest.Container) {
+	t.Helper()
+	if logs := container.Logs(t); strings.Contains(logs, "ERROR: AddressSanitizer") {
+		t.Errorf("container logged an AddressSanitizer report\nlogs:\n%s", logs)
 	}
 }
 
