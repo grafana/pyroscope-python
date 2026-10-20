@@ -348,7 +348,6 @@ func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string
 		"CANARY":                        canary,
 		"PIP_DISABLE_PIP_VERSION_CHECK": "1",
 	}
-	passFastCopyWarmup(env)
 	return dockertest.StartContainer(t, dockertest.ContainerRequest{
 		Image:    pythonImage(),
 		Platform: wheelDockerPlatform(),
@@ -377,7 +376,6 @@ func startPythonTestContainer(t *testing.T, net *dockertest.Network, wheelDir, s
 	for k, v := range env {
 		mergedEnv[k] = v
 	}
-	passFastCopyWarmup(mergedEnv)
 	return dockertest.StartContainer(t, dockertest.ContainerRequest{
 		Image:    pythonImage(),
 		Platform: wheelDockerPlatform(),
@@ -396,12 +394,6 @@ func startPythonTestContainer(t *testing.T, net *dockertest.Network, wheelDir, s
 			),
 		},
 	})
-}
-
-func passFastCopyWarmup(env map[string]string) {
-	if v := os.Getenv("PYROSCOPE_FAST_COPY_WARMUP"); v != "" {
-		env["PYROSCOPE_FAST_COPY_WARMUP"] = v
-	}
 }
 
 func requireContainerExit(t *testing.T, container *dockertest.Container, expected int, timeout time.Duration) {

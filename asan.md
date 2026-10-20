@@ -19,16 +19,6 @@ Tested with CPython 3.10 to 3.14. 3.10 and 3.11 still find system libraries thro
 
 `asan/test` runs the regular integration tests with `PYTHON_IMAGE=pyroscope-python-asan:<ref>`, `PYROSCOPE_WHEEL_DIR=dist/asan` and `PYROSCOPE_WHEEL_GLOB='*.whl'`.
 
-## Fast copy warmup
-
-The stack profiler reads with `process_vm_readv` for the first `fast_copy_warmup` seconds (default 15) and switches to `safe_memcpy` after. ASAN only sees `safe_memcpy` reads, so the warmup hides everything that happens early in a run, and most integration tests finish before it ends.
-
-`make asan/test` disables it: `ASAN_FAST_COPY_WARMUP` (default `0`) is passed to the stack workloads as `PYROSCOPE_FAST_COPY_WARMUP`, which they apply with `pyroscope.configure_experimental_stack_profiler(fast_copy_warmup=...)`. The signal handler scenarios keep their own warmups because they test warmup behavior. In your own scripts, call this before `configure()`:
-
-```python
-pyroscope.configure_experimental_stack_profiler(fast_copy_warmup=0.0)
-```
-
 ## ASAN_OPTIONS
 
 The image sets `detect_leaks=0:handle_segv=0:handle_sigbus=0`.
