@@ -76,23 +76,8 @@ jobs:
       contents: write
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        target:
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
-        include:
-          - target: x86_64-apple-darwin
-            mk-arch: amd64
-            macos-version: "14"
-          - target: aarch64-apple-darwin
-            mk-arch: arm64
-            macos-version: "14"
-
-    name: macOS - ${{ matrix.target }} - ${{ matrix.python-version }}
-    runs-on: macos-${{ matrix.macos-version }}
+    name: macOS
+    runs-on: macos-14
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -104,14 +89,47 @@ jobs:
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
           toolchain: 1.99.1
-          targets: ${{ matrix.target }}
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: |
+            3.10
+            3.11
+            3.12
+            3.13
+            3.14
 
-      - run: pip install build wheel
-      - run: make mac/${{ matrix.mk-arch }}
+      - name: Build Python 3.10
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.10
+        run: |
+          python3.10 -m pip install build wheel
+          make mac/amd64 mac/arm64 PYTHON=python3.10
+      - name: Build Python 3.11
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.11
+        run: |
+          python3.11 -m pip install build wheel
+          make mac/amd64 mac/arm64 PYTHON=python3.11
+      - name: Build Python 3.12
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.12
+        run: |
+          python3.12 -m pip install build wheel
+          make mac/amd64 mac/arm64 PYTHON=python3.12
+      - name: Build Python 3.13
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.13
+        run: |
+          python3.13 -m pip install build wheel
+          make mac/amd64 mac/arm64 PYTHON=python3.13
+      - name: Build Python 3.14
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.14
+        run: |
+          python3.14 -m pip install build wheel
+          make mac/amd64 mac/arm64 PYTHON=python3.14
 
       - name: Upload release artifact
         env:
@@ -119,7 +137,7 @@ jobs:
         run: gh release upload "${{ needs.release-please.outputs.tag_name }}" dist/pyroscope*.whl --clobber
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ${{ needs.release-please.outputs.sha }}-python-macos-${{ matrix.target }}-${{ matrix.python-version }}
+          name: ${{ needs.release-please.outputs.sha }}-python-macos
           path: dist/*
 
   python-release-sdist:
