@@ -73,15 +73,23 @@ asan/test: asan/image asan/wheel
 		PYROSCOPE_FAST_COPY_WARMUP=$(ASAN_FAST_COPY_WARMUP) \
 		go test -v -timeout 60m -count=1 $(if $(RUN),-run '$(RUN)') .
 
+PYTHON ?= python3
+
 .PHONY: mac/amd64
 mac/amd64:
-	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=x86_64-apple-darwin python3 -m build --wheel
-	wheel tags --platform-tag macosx_11_0_x86_64 --remove dist/*.whl
+	rm -rf build dist/mac
+	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=x86_64-apple-darwin $(PYTHON) -m build --wheel --outdir dist/mac
+	$(PYTHON) -m wheel tags --platform-tag macosx_11_0_x86_64 --remove dist/mac/*.whl
+	mv dist/mac/*.whl dist/
+	rm -rf dist/mac
 
 .PHONY: mac/arm64
 mac/arm64:
-	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=aarch64-apple-darwin python3 -m build --wheel
-	wheel tags --platform-tag macosx_11_0_arm64 --remove dist/*.whl
+	rm -rf build dist/mac
+	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=aarch64-apple-darwin $(PYTHON) -m build --wheel --outdir dist/mac
+	$(PYTHON) -m wheel tags --platform-tag macosx_11_0_arm64 --remove dist/mac/*.whl
+	mv dist/mac/*.whl dist/
+	rm -rf dist/mac
 
 .PHONY: check/tag-version
 check/tag-version:
