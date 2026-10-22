@@ -1267,7 +1267,7 @@ dependencies = [
 
 [[package]]
 name = "pyroscope_python_extension"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "cmake",
  "hashbrown 0.17.1",
