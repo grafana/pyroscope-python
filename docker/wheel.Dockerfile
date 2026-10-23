@@ -4,7 +4,9 @@ FROM quay.io/pypa/manylinux2014_${PLATFORM}:2026.09.26-1 AS manylinux
 RUN manylinux-install-clang -v v22.1.8.1
 
 FROM debian:trixie-slim AS openssl
+# Update OPENSSL_VERSION and OPENSSL_SHA256 together.
 ARG OPENSSL_VERSION=3.5.9
+ARG OPENSSL_SHA256=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends perl make curl ca-certificates \
@@ -20,12 +22,13 @@ RUN --mount=type=bind,from=manylinux,source=/opt/clang,target=/opt/clang \
     --mount=type=bind,from=manylinux,source=/opt/rh/devtoolset-10,target=/opt/rh/devtoolset-10 \
     curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
     -o /tmp/openssl.tar.gz \
+    && echo "${OPENSSL_SHA256}  /tmp/openssl.tar.gz" | sha256sum -c - \
     && tar xzf /tmp/openssl.tar.gz -C /tmp \
     && cd /tmp/openssl-${OPENSSL_VERSION} \
     && ./config no-shared no-tests --prefix=/usr/local/openssl --openssldir=/etc/ssl \
     && make -j$(nproc) build_libs \
     && make install_dev \
-    && ln -sf /usr/local/openssl/lib64 /usr/local/openssl/lib || true \
+    && { ln -sf /usr/local/openssl/lib64 /usr/local/openssl/lib || true; } \
     && cd / \
     && rm -rf /tmp/openssl*
 

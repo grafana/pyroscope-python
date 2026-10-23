@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1.23@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 ARG PLATFORM=x86_64
 FROM quay.io/pypa/musllinux_1_2_${PLATFORM}:2026.09.26-1 AS builder
+# Update OPENSSL_VERSION and OPENSSL_SHA256 together.
 ARG OPENSSL_VERSION=3.5.9
+ARG OPENSSL_SHA256=603f5602e2eef00d77fbd429d34dcd5822bb301757a1bc9cdb24c670f1eb859a
 
 RUN apk add --no-cache gcc musl-dev make perl linux-headers
 RUN manylinux-install-clang -v v22.1.8.1
@@ -12,12 +14,13 @@ ENV CXX=clang++
 # Build OpenSSL from source
 RUN curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
     -o /tmp/openssl.tar.gz \
+    && echo "${OPENSSL_SHA256}  /tmp/openssl.tar.gz" | sha256sum -c - \
     && tar xzf /tmp/openssl.tar.gz -C /tmp \
     && cd /tmp/openssl-${OPENSSL_VERSION} \
     && ./config no-shared no-tests --prefix=/usr/local/openssl --openssldir=/etc/ssl \
     && make -j$(nproc) \
     && make install_sw \
-    && ln -sf /usr/local/openssl/lib64 /usr/local/openssl/lib || true \
+    && { ln -sf /usr/local/openssl/lib64 /usr/local/openssl/lib || true; } \
     && cd / \
     && rm -rf /tmp/openssl*
 
