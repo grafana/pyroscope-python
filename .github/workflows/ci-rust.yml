@@ -93,7 +93,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
-          toolchain: nightly-2026-10-17
+          toolchain: nightly-2026-10-21
           components: miri, rust-src
 
       - name: Run library tests under Miri
