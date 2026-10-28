@@ -7,11 +7,6 @@ import time
 
 import pyroscope
 
-if "PYROSCOPE_FAST_COPY_WARMUP" in os.environ:
-    pyroscope.configure_experimental_stack_profiler(
-        fast_copy_warmup=float(os.environ["PYROSCOPE_FAST_COPY_WARMUP"]),
-    )
-
 
 logger = logging.getLogger(__name__)
 shutdown_requested = threading.Event()
