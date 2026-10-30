@@ -180,3 +180,6 @@ pub fn thread_removed(timer: &SharedTimer, tid: timer::pid_t) {
         timer.thread_removed(tid);
     }
 }
+
+#[cfg(test)]
+mod tests;
