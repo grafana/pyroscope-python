@@ -7,6 +7,7 @@ pub trait Layout: Sync + 'static {
     const EXECUTABLE: usize;
     const EXECUTABLE_TAG_BITS: usize;
     const PREVIOUS: usize;
+    const INSTR: usize;
     const OWNER: Option<usize>;
     /// Bit `1 << owner` is set for owners that are not Python frames.
     const SKIP_OWNERS: u8;
@@ -24,6 +25,7 @@ impl Layout for V3_11 {
     const EXECUTABLE: usize = 32;
     const EXECUTABLE_TAG_BITS: usize = 0;
     const PREVIOUS: usize = 48;
+    const INSTR: usize = 56;
     const OWNER: Option<usize> = None;
     const SKIP_OWNERS: u8 = 0;
 }
@@ -36,6 +38,7 @@ impl Layout for V3_12 {
     const EXECUTABLE: usize = 0;
     const EXECUTABLE_TAG_BITS: usize = 0;
     const PREVIOUS: usize = 8;
+    const INSTR: usize = 56;
     const OWNER: Option<usize> = Some(70);
     const SKIP_OWNERS: u8 = 1 << FRAME_OWNED_BY_CSTACK_3_12;
 }
@@ -48,6 +51,7 @@ impl Layout for V3_13 {
     const EXECUTABLE: usize = 0;
     const EXECUTABLE_TAG_BITS: usize = 0;
     const PREVIOUS: usize = 8;
+    const INSTR: usize = 56;
     const OWNER: Option<usize> = Some(70);
     const SKIP_OWNERS: u8 = 1 << FRAME_OWNED_BY_CSTACK_3_12;
 }
@@ -60,6 +64,7 @@ impl Layout for V3_14 {
     const EXECUTABLE: usize = 0;
     const EXECUTABLE_TAG_BITS: usize = 3;
     const PREVIOUS: usize = 8;
+    const INSTR: usize = 56;
     const OWNER: Option<usize> = Some(74);
     const SKIP_OWNERS: u8 = (1 << FRAME_OWNED_BY_INTERPRETER) | (1 << FRAME_OWNED_BY_CSTACK);
 }

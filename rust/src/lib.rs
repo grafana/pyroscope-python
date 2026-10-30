@@ -227,8 +227,8 @@ fn initialize_agent(
                     python_version: (version.major, version.minor),
                     sampling_rate: sample_rate,
                     signal_timer: signal_timer.into(),
+                    lines: line_no.into(),
                 },
-                first_line: line_no == LineNo::First,
             })
         });
     if signal_timer == SignalTimer::CTimer
@@ -366,6 +366,16 @@ impl From<LineNo> for py_spy::config::LineNo {
             LineNo::LastInstruction => py_spy::config::LineNo::LastInstruction,
             LineNo::First => py_spy::config::LineNo::First,
             LineNo::NoLine => py_spy::config::LineNo::NoLine,
+        }
+    }
+}
+
+impl From<LineNo> for signal_sampler::Lines {
+    fn from(val: LineNo) -> Self {
+        match val {
+            LineNo::LastInstruction => signal_sampler::Lines::LastInstruction,
+            LineNo::First => signal_sampler::Lines::First,
+            LineNo::NoLine => signal_sampler::Lines::None,
         }
     }
 }

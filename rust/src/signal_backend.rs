@@ -21,7 +21,6 @@ const LOG_TAG: &str = "Pyroscope::Signal";
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub sampler: signal_sampler::Config,
-    pub first_line: bool,
 }
 
 pub struct Signal {
@@ -62,7 +61,7 @@ impl Signal {
                         break;
                     };
                     for frames in traces {
-                        let trace = to_stack_trace(frames, &config, &backend_config);
+                        let trace = to_stack_trace(frames, &backend_config);
                         let _ = buffer.record(trace.add_tag_rules(&ruleset));
                     }
                 }
@@ -101,23 +100,14 @@ impl Drop for Signal {
     }
 }
 
-/// The handler records neither the thread nor the line, so there is no thread id or name, and the
-/// line is the first line of the function or 0.
-fn to_stack_trace(
-    frames: Vec<ResolvedFrame>,
-    config: &Config,
-    backend_config: &BackendConfig,
-) -> StackTrace {
+/// The handler does not record the thread, so there is no thread id or name.
+fn to_stack_trace(frames: Vec<ResolvedFrame>, backend_config: &BackendConfig) -> StackTrace {
     let frames = frames
         .into_iter()
         .map(|frame| StackFrame {
             name: frame.name,
             filename: frame.filename,
-            line: if config.first_line {
-                frame.first_line
-            } else {
-                0
-            },
+            line: frame.line,
         })
         .collect();
     StackTrace::new(backend_config, Some(std::process::id()), None, None, frames)

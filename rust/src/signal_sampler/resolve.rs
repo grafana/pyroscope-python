@@ -10,6 +10,8 @@ pub struct Layout {
     co_filename: usize,
     co_qualname: usize,
     co_firstlineno: usize,
+    co_linetable: usize,
+    co_code_adaptive: usize,
     ascii_size: usize,
     compact_size: usize,
 }
@@ -21,44 +23,81 @@ const STATE_KIND_SHIFT: u64 = 2;
 const STATE_COMPACT: u64 = 0x20;
 const STATE_ASCII: u64 = 0x40;
 const MAX_STRING_LENGTH: usize = 4096;
+const BYTES_SIZE: usize = 16;
+const BYTES_DATA: usize = 32;
+const MAX_LINETABLE_SIZE: usize = 1 << 20;
 
 pub static V3_11: Layout = Layout {
     co_filename: 112,
     co_qualname: 128,
     co_firstlineno: 72,
+    co_linetable: 136,
+    co_code_adaptive: 184,
     ascii_size: 48,
     compact_size: 72,
 };
 
-/// Also the layout of 3.13 and 3.14.
 pub static V3_12: Layout = Layout {
+    co_code_adaptive: 192,
+    ..V3_12_TO_3_14
+};
+
+pub static V3_13: Layout = Layout {
+    co_code_adaptive: 200,
+    ..V3_12_TO_3_14
+};
+
+pub static V3_14: Layout = Layout {
+    co_code_adaptive: 208,
+    ..V3_12_TO_3_14
+};
+
+const V3_12_TO_3_14: Layout = Layout {
     co_filename: 112,
     co_qualname: 128,
     co_firstlineno: 68,
+    co_linetable: 136,
+    co_code_adaptive: 0,
     ascii_size: 40,
     compact_size: 56,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lines {
+    /// Every line is 0.
+    None,
+    /// The first line of the function.
+    First,
+    /// The line of the instruction the frame executes.
+    LastInstruction,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedFrame {
     pub name: String,
     pub filename: String,
-    pub first_line: u32,
+    pub line: u32,
+}
+
+pub struct Types {
+    pub code: usize,
+    pub unicode: usize,
+    pub bytes: usize,
 }
 
 pub struct Resolver {
     layout: &'static Layout,
-    code_type: usize,
-    unicode_type: usize,
+    types: Types,
+    lines: Lines,
     scratch: Vec<u8>,
 }
 
 impl Resolver {
-    pub fn new(layout: &'static Layout, code_type: usize, unicode_type: usize) -> Self {
+    pub fn new(layout: &'static Layout, types: Types, lines: Lines) -> Self {
         Resolver {
             layout,
-            code_type,
-            unicode_type,
+            types,
+            lines,
             scratch: Vec::new(),
         }
     }
@@ -66,7 +105,7 @@ impl Resolver {
     pub fn resolve_stack(&mut self, frames: &[Frame]) -> Result<Vec<ResolvedFrame>, String> {
         let mut resolved = Vec::with_capacity(frames.len());
         for frame in frames {
-            if let Some(frame) = self.resolve_frame(frame.code)? {
+            if let Some(frame) = self.resolve_frame(frame)? {
                 resolved.push(frame);
             }
         }
@@ -74,8 +113,9 @@ impl Resolver {
     }
 
     /// `None` for shim frames, which have no file name.
-    fn resolve_frame(&mut self, code: usize) -> Result<Option<ResolvedFrame>, String> {
-        if read_word(code + OB_TYPE)? != self.code_type {
+    fn resolve_frame(&mut self, frame: &Frame) -> Result<Option<ResolvedFrame>, String> {
+        let code = frame.code;
+        if read_word(code + OB_TYPE)? != self.types.code {
             return Err(format!("{code:#x} is no longer a code object"));
         }
         let layout = self.layout;
@@ -84,19 +124,41 @@ impl Resolver {
             return Ok(None);
         }
         let name = self.read_string(read_word(code + layout.co_qualname)?)?;
-        let first_line = read_word(code + layout.co_firstlineno)? as u32;
+        let line = match self.lines {
+            Lines::None => 0,
+            Lines::First => first_line(code, layout)?,
+            Lines::LastInstruction => self.line(frame, layout).unwrap_or(0),
+        };
         Ok(Some(ResolvedFrame {
             name,
             filename,
-            first_line,
+            line,
         }))
+    }
+
+    /// A line number that cannot be read is not worth dropping the stack for.
+    fn line(&mut self, frame: &Frame, layout: &Layout) -> Result<u32, String> {
+        let first_line = first_line(frame.code, layout)?;
+        let table = read_word(frame.code + layout.co_linetable)?;
+        if table == 0 || read_word(table + OB_TYPE)? != self.types.bytes {
+            return Err(format!("{table:#x} is not an exact bytes"));
+        }
+        let size = read_word(table + BYTES_SIZE)?;
+        if size > MAX_LINETABLE_SIZE {
+            return Err(format!("line table at {table:#x} is too long: {size}"));
+        }
+        self.read_bytes(table + BYTES_DATA, size)?;
+        let lasti = frame
+            .instr
+            .wrapping_sub(frame.code + layout.co_code_adaptive) as isize;
+        Ok(line_number(first_line as i32, lasti, &self.scratch).max(0) as u32)
     }
 
     fn read_string(&mut self, addr: usize) -> Result<String, String> {
         if addr == 0 {
             return Err("null string".to_string());
         }
-        if read_word(addr + OB_TYPE)? != self.unicode_type {
+        if read_word(addr + OB_TYPE)? != self.types.unicode {
             return Err(format!("{addr:#x} is not an exact str"));
         }
         let length = read_word(addr + UNICODE_LENGTH)?;
@@ -135,9 +197,109 @@ impl Resolver {
     }
 }
 
-/// `co_firstlineno` is an `int`, so callers truncate.
+fn first_line(code: usize, layout: &Layout) -> Result<u32, String> {
+    // `co_firstlineno` is an `int`.
+    Ok(read_word(code + layout.co_firstlineno)? as u32)
+}
+
+/// Unpacks the location table of python 3.11+, see
+/// <https://github.com/python/cpython/blob/3.11/Objects/locations.md>. `lasti` is the byte offset
+/// of the instruction from `co_code_adaptive`. Ported from py-spy.
+fn line_number(first_line: i32, lasti: isize, table: &[u8]) -> i32 {
+    let mut line_number = first_line;
+    let mut bytecode_address: isize = 0;
+    let mut index: usize = 0;
+    while index < table.len() {
+        let byte = table[index];
+        index += 1;
+
+        let delta = ((byte & 7) as isize) + 1;
+        bytecode_address += delta * 2;
+        let code = (byte >> 3) & 15;
+        let line_delta = match code {
+            15 => 0,
+            14 => {
+                let delta = read_signed_varint(&mut index, table).unwrap_or(0);
+                read_varint(&mut index, table); // end line
+                read_varint(&mut index, table); // start column
+                read_varint(&mut index, table); // end column
+                delta
+            }
+            13 => read_signed_varint(&mut index, table).unwrap_or(0),
+            10..=12 => {
+                index += 2; // start column / end column
+                (code - 10).into()
+            }
+            _ => {
+                index += 1; // column
+                0
+            }
+        };
+        line_number += line_delta as i32;
+        if bytecode_address > lasti {
+            break;
+        }
+    }
+    line_number
+}
+
+fn read_varint(index: &mut usize, table: &[u8]) -> Option<usize> {
+    let mut byte = *table.get(*index)?;
+    *index += 1;
+    let mut ret = (byte & 63) as usize;
+    let mut shift = 0;
+    while byte & 64 != 0 {
+        byte = *table.get(*index)?;
+        *index += 1;
+        shift += 6;
+        ret += ((byte & 63) as usize).checked_shl(shift)?;
+    }
+    Some(ret)
+}
+
+fn read_signed_varint(index: &mut usize, table: &[u8]) -> Option<isize> {
+    let unsigned_val = read_varint(index, table)?;
+    if unsigned_val & 1 != 0 {
+        Some(-((unsigned_val >> 1) as isize))
+    } else {
+        Some((unsigned_val >> 1) as isize)
+    }
+}
+
 fn read_word(addr: usize) -> Result<usize, String> {
     kindasafe::u64(addr as u64)
         .map(|word| word as usize)
         .map_err(|e| format!("failed to read {addr:#x}: {e:?}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_py3_11_line_numbers() {
+        let table = [
+            128_u8, 0, 221, 4, 8, 132, 74, 136, 118, 209, 4, 22, 212, 4, 22, 208, 4, 22, 208, 4,
+            22, 208, 4, 22,
+        ];
+        let lasti = 214 - V3_11.co_code_adaptive as isize;
+        assert_eq!(line_number(4, lasti, &table), 5);
+    }
+
+    #[test]
+    fn test_compact_line_number_boundaries() {
+        let table = [
+            240, 3, 1, 1, 1, 242, 2, 3, 1, 17, 240, 12, 0, 7, 11, 217, 4, 11, 136, 66, 134, 75,
+        ];
+        for (start, end, line) in [(0, 2, 0), (2, 8, 1), (8, 10, 7), (10, 30, 8)] {
+            for offset in (start..end).step_by(2) {
+                assert_eq!(
+                    line_number(1, offset, &table),
+                    line,
+                    "incorrect line for bytecode offset {}",
+                    offset
+                );
+            }
+        }
+    }
 }

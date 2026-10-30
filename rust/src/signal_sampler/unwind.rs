@@ -2,7 +2,7 @@
 //! [`ringbuffer`](super::ringbuffer) record. No allocation, no locks, no recursion, no buffers.
 //!
 //! The handler records only code object addresses. Names are resolved later on a normal thread,
-//! which must check the code object is still alive. Line numbers are not recorded.
+//! which must check the code object is still alive, and line numbers from the instruction pointer.
 //!
 //! [`handler`] has a ready-made `SIGPROF` handler.
 //!
@@ -41,6 +41,8 @@ pub enum Error {
 pub struct Frame {
     /// Address of the `PyCodeObject`.
     pub code: usize,
+    /// `prev_instr` on 3.11 and 3.12, `instr_ptr` from 3.13.
+    pub instr: usize,
 }
 
 /// `PyGILState_GetThisThreadState`: the thread state of the calling thread, or 0.
@@ -135,8 +137,12 @@ impl<L: Layout> Unwinder<L> {
             if is_python {
                 let executable = self.read_at(frame, L::EXECUTABLE)? & !L::EXECUTABLE_TAG_BITS;
                 if executable != 0 && self.read_at(executable, OB_TYPE)? == self.code_type {
+                    let instr = self.read_at(frame, L::INSTR)?;
                     record
-                        .push(Frame { code: executable })
+                        .push(Frame {
+                            code: executable,
+                            instr,
+                        })
                         .map_err(|_| Error::Full)?;
                     pushed += 1;
                 }

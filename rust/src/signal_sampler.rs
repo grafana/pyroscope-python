@@ -22,7 +22,7 @@ pub mod timer;
 #[allow(dead_code)]
 pub mod unwind;
 
-pub use resolve::ResolvedFrame;
+pub use resolve::{Lines, ResolvedFrame};
 
 const MAX_FRAMES: usize = 4096; //todo wtf
 
@@ -42,6 +42,7 @@ pub struct Config {
     pub python_version: (u8, u8),
     pub sampling_rate: u32,
     pub signal_timer: SignalTimer,
+    pub lines: Lines,
 }
 
 pub type Error = String;
@@ -67,8 +68,8 @@ fn configure_for(version: (u8, u8)) -> Result<(Configure, &'static resolve::Layo
     Ok(match version {
         (3, 11) => (handler::configure::<V3_11>, &resolve::V3_11),
         (3, 12) => (handler::configure::<V3_12>, &resolve::V3_12),
-        (3, 13) => (handler::configure::<V3_13>, &resolve::V3_12),
-        (3, 14) => (handler::configure::<V3_14>, &resolve::V3_12),
+        (3, 13) => (handler::configure::<V3_13>, &resolve::V3_13),
+        (3, 14) => (handler::configure::<V3_14>, &resolve::V3_14),
         (major, minor) => {
             return Err(format!(
                 "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
@@ -95,7 +96,11 @@ impl SignalHandlerSession {
         let (configure, layout) = configure_for(config.python_version)?;
         unwind::init().map_err(|e| format!("failed to install memory fault handlers: {:?}", e))?;
         let code_type = lookup(c"PyCode_Type")?;
-        let unicode_type = lookup(c"PyUnicode_Type")?;
+        let types = resolve::Types {
+            code: code_type,
+            unicode: lookup(c"PyUnicode_Type")?,
+            bytes: lookup(c"PyBytes_Type")?,
+        };
         configure(code_type, lookup_thread_state_getter()?, MAX_FRAMES);
 
         // Discard what a previous session left behind.
@@ -120,7 +125,7 @@ impl SignalHandlerSession {
             timer: Arc::new(Mutex::new(Some(timer))),
             _handler: signal_handler,
             buf,
-            resolver: resolve::Resolver::new(layout, code_type, unicode_type),
+            resolver: resolve::Resolver::new(layout, types, config.lines),
         })
     }
 
