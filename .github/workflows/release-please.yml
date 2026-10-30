@@ -99,6 +99,7 @@ jobs:
             3.12
             3.13
             3.14
+            3.15
 
       - name: Build Python 3.10
         env:
@@ -130,6 +131,12 @@ jobs:
         run: |
           python3.14 -m pip install build wheel
           make mac/amd64 mac/arm64 PYTHON=python3.14
+      - name: Build Python 3.15
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.15
+        run: |
+          python3.15 -m pip install build wheel
+          make mac/amd64 mac/arm64 PYTHON=python3.15
 
       - name: Upload release artifact
         env:

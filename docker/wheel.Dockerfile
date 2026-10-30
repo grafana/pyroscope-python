@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.28@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
 ARG PLATFORM=x86_64
-FROM quay.io/pypa/manylinux2014_${PLATFORM}:2026.09.26-1 AS manylinux
+FROM quay.io/pypa/manylinux2014_${PLATFORM}:2026.10.26-1 AS manylinux
 RUN manylinux-install-clang -v v22.1.8.1
 
 FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f AS openssl
