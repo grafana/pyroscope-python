@@ -27,9 +27,10 @@ const (
 )
 
 type profileConfig struct {
-	onCPU   bool
-	gilOnly bool
-	stack   bool
+	onCPU       bool
+	gilOnly     bool
+	stack       bool
+	signalTimer string
 }
 
 func TestPythonProfilerOnCPUWithGILOnly(t *testing.T) {
@@ -50,6 +51,16 @@ func TestPythonProfilerOffCPUWithoutGILOnly(t *testing.T) {
 
 func TestPythonStackProfilerOnCPU(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, stack: true})
+}
+
+func TestPythonSignalProfilerITimer(t *testing.T) {
+	skipUnlessPythonSupportsSignal(t)
+	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, signalTimer: "ITimer"})
+}
+
+func TestPythonSignalProfilerCTimer(t *testing.T) {
+	skipUnlessPythonSupportsSignal(t)
+	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, signalTimer: "CTimer"})
 }
 
 func TestPythonStackProfilerRestart(t *testing.T) {
@@ -148,6 +159,24 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 			requireContainerExit(t, workload, 0, 3*time.Minute)
 		})
 	}
+}
+
+func skipUnlessPythonSupportsSignal(t *testing.T) {
+	t.Helper()
+	major, minor := pythonVersion(t)
+	if major != 3 || minor < 11 || minor > 14 {
+		t.Skip("the Signal profiler supports only CPython 3.11 to 3.14")
+	}
+}
+
+func pythonVersion(t *testing.T) (int, int) {
+	t.Helper()
+	var major, minor int
+	version := envOrDefault("PYTHON_VERSION", "3.11")
+	if _, err := fmt.Sscanf(version, "%d.%d", &major, &minor); err != nil {
+		t.Fatalf("invalid PYTHON_VERSION %q: %v", version, err)
+	}
+	return major, minor
 }
 
 func pythonSupportsCPUTimer(t *testing.T) bool {
@@ -345,6 +374,7 @@ func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string
 		"ONCPU":                         boolString(cfg.onCPU),
 		"GIL_ONLY":                      boolString(cfg.gilOnly),
 		"CPU_IMPLEMENTATION":            cfg.implementation(),
+		"SIGNAL_TIMER":                  cfg.signalTimer,
 		"CANARY":                        canary,
 		"PIP_DISABLE_PIP_VERSION_CHECK": "1",
 	}
@@ -615,9 +645,16 @@ func (c profileConfig) implementation() string {
 	if c.stack {
 		return "Stack"
 	}
+	if c.signalTimer != "" {
+		return "Signal"
+	}
 	return "PySpy"
 }
 
 func (c profileConfig) String() string {
-	return fmt.Sprintf("oncpu=%s/gil_only=%s/impl=%s", boolString(c.onCPU), boolString(c.gilOnly), c.implementation())
+	s := fmt.Sprintf("oncpu=%s/gil_only=%s/impl=%s", boolString(c.onCPU), boolString(c.gilOnly), c.implementation())
+	if c.signalTimer != "" {
+		s += "/timer=" + c.signalTimer
+	}
+	return s
 }
