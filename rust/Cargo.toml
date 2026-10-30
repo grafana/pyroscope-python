@@ -25,6 +25,8 @@ prost = "0.14"
 hashbrown = "0.17.1"
 lazy_static = "1.5.0"
 pyo3 = { version = "0.30.1", features = ["extension-module"] }
+kindasafe = "0.1.1"
+kindasafe_init = "0.1.1"
 
 [build-dependencies]
 cmake = "0.1"
