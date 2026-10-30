@@ -11,9 +11,14 @@ use std::time::Duration;
 use ringbuffer::PopError;
 use timer::{Mode, SignalHandler, Timer};
 use unwind::handler;
-use unwind::{Frame, ThreadStateGetter, V3_11, V3_12, V3_13, V3_14};
+use unwind::{Frame, ThreadStateGetter, V3_11, V3_12, V3_13, V3_14, V3_15};
 
 mod resolve;
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+mod tstate;
 // Copied as is from pyroscope-py-spy, where its tests use the rest.
 #[allow(dead_code)]
 pub mod ringbuffer;
@@ -55,11 +60,29 @@ fn lookup(name: &std::ffi::CStr) -> Result<usize, Error> {
     Ok(addr)
 }
 
-fn lookup_thread_state_getter() -> Result<ThreadStateGetter, Error> {
-    // TODO: PyGILState_GetThisThreadState is not safe on 3.15; find another way to get the tstate.
+/// Must be called on a thread that holds the GIL.
+fn lookup_thread_state_getter(version: (u8, u8)) -> Result<ThreadStateGetter, Error> {
     let addr = lookup(c"PyGILState_GetThisThreadState")?;
     // SAFETY: the symbol has this signature.
-    Ok(unsafe { std::mem::transmute::<usize, ThreadStateGetter>(addr) })
+    let getter = unsafe { std::mem::transmute::<usize, ThreadStateGetter>(addr) };
+    if version < (3, 15) {
+        return Ok(getter);
+    }
+    #[cfg(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    {
+        use pyo3::Python;
+        Python::attach(|py| py.detach(|| tstate::locate(getter)))
+            .map_err(|e| format!("failed to locate the thread state of python 3.15+: {e}"))?;
+        Ok(tstate::gilstate)
+    }
+    #[cfg(not(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    )))]
+    Err("python 3.15+ is supported only on Linux x86_64 and aarch64".to_string())
 }
 
 type Configure = fn(usize, ThreadStateGetter, usize);
@@ -70,9 +93,10 @@ fn configure_for(version: (u8, u8)) -> Result<(Configure, &'static resolve::Layo
         (3, 12) => (handler::configure::<V3_12>, &resolve::V3_12),
         (3, 13) => (handler::configure::<V3_13>, &resolve::V3_13),
         (3, 14) => (handler::configure::<V3_14>, &resolve::V3_14),
+        (3, 15) => (handler::configure::<V3_15>, &resolve::V3_15),
         (major, minor) => {
             return Err(format!(
-                "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
+                "unwinding in the signal handler supports only Python 3.11 to 3.15, found {major}.{minor}"
             ));
         }
     })
@@ -101,7 +125,11 @@ impl SignalHandlerSession {
             unicode: lookup(c"PyUnicode_Type")?,
             bytes: lookup(c"PyBytes_Type")?,
         };
-        configure(code_type, lookup_thread_state_getter()?, MAX_FRAMES);
+        configure(
+            code_type,
+            lookup_thread_state_getter(config.python_version)?,
+            MAX_FRAMES,
+        );
 
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];

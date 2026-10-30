@@ -68,3 +68,17 @@ impl Layout for V3_14 {
     const OWNER: Option<usize> = Some(74);
     const SKIP_OWNERS: u8 = (1 << FRAME_OWNED_BY_INTERPRETER) | (1 << FRAME_OWNED_BY_CSTACK);
 }
+
+/// 3.15 has no `FRAME_OWNED_BY_CSTACK`.
+pub struct V3_15;
+
+impl Layout for V3_15 {
+    const THREAD_FRAME: usize = 72;
+    const CFRAME_FRAME: Option<usize> = None;
+    const EXECUTABLE: usize = 0;
+    const EXECUTABLE_TAG_BITS: usize = 3;
+    const PREVIOUS: usize = 8;
+    const INSTR: usize = 56;
+    const OWNER: Option<usize> = Some(74);
+    const SKIP_OWNERS: u8 = 1 << FRAME_OWNED_BY_INTERPRETER;
+}

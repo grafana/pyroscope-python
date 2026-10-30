@@ -39,20 +39,25 @@ pub static V3_11: Layout = Layout {
 
 pub static V3_12: Layout = Layout {
     co_code_adaptive: 192,
-    ..V3_12_TO_3_14
+    ..V3_12_TO_3_15
 };
 
 pub static V3_13: Layout = Layout {
     co_code_adaptive: 200,
-    ..V3_12_TO_3_14
+    ..V3_12_TO_3_15
 };
 
 pub static V3_14: Layout = Layout {
     co_code_adaptive: 208,
-    ..V3_12_TO_3_14
+    ..V3_12_TO_3_15
 };
 
-const V3_12_TO_3_14: Layout = Layout {
+pub static V3_15: Layout = Layout {
+    co_code_adaptive: 208,
+    ..V3_12_TO_3_15
+};
+
+const V3_12_TO_3_15: Layout = Layout {
     co_filename: 112,
     co_qualname: 128,
     co_firstlineno: 68,

@@ -6,13 +6,13 @@
 //!
 //! [`handler`] has a ready-made `SIGPROF` handler.
 //!
-//! Supports CPython 3.11 to 3.14, default (GIL) build, 64-bit targets.
+//! Supports CPython 3.11 to 3.15, default (GIL) build, 64-bit targets.
 
 pub mod handler;
 mod layout;
 
 pub use kindasafe_init::init;
-pub use layout::{Layout, V3_11, V3_12, V3_13, V3_14};
+pub use layout::{Layout, V3_11, V3_12, V3_13, V3_14, V3_15};
 
 use super::ringbuffer::{Record, RingBuffer};
 use core::marker::PhantomData;
@@ -45,7 +45,7 @@ pub struct Frame {
     pub instr: usize,
 }
 
-/// `PyGILState_GetThisThreadState`: the thread state of the calling thread, or 0.
+/// The thread state of the calling thread, or 0. Called from the signal handler.
 pub type ThreadStateGetter = extern "C" fn() -> usize;
 
 pub struct Unwinder<L> {
