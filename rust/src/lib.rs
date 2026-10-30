@@ -212,11 +212,12 @@ fn initialize_agent(
     let pyspy_config = pyspy_enabled.then(|| py_spy::Config {
         blocking: py_spy::config::LockingStrategy::NonBlocking,
         native: false,
+        type_checks: py_spy::config::TypesConfig::Strict,
         pid: Some(std::process::id().try_into().unwrap()),
         sampling_rate: sample_rate.into(),
         include_idle: !oncpu,
         include_thread_ids: true,
-        include_thread_names: report_thread_name,
+        collect_thread_names: report_thread_name,
         subprocesses: false,
         gil_only,
         lineno: line_no.into(),
