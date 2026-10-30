@@ -367,7 +367,7 @@ def cpu_timer_shutdown_elsewhere_then_fork():
 def cpu_timer_fork_keeps_app_altstack():
     install_harmless_onstack(signal.SIGUSR1)
     previous = altstack()
-    with mmap.mmap(-1, APP_ALTSTACK_SIZE) as buf:
+    with mmap.mmap(-1, APP_ALTSTACK_SIZE, flags=mmap.MAP_PRIVATE) as buf:
         sp = ctypes.addressof(ctypes.c_char.from_buffer(buf))
         if libc.sigaltstack(ctypes.byref(StackT(ss_sp=sp, ss_flags=0, ss_size=APP_ALTSTACK_SIZE)), None) != 0:
             raise OSError(ctypes.get_errno(), "sigaltstack")
