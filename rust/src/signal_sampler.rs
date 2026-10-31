@@ -68,13 +68,6 @@ pub struct Config {
 pub type Error = String;
 
 #[cfg(Py_3_11)]
-extern "C" fn current_thread_state() -> usize {
-    // TODO: PyGILState_GetThisThreadState is not safe on 3.15; find another way to get the tstate.
-    // SAFETY: this queries the calling thread's state without requiring the GIL.
-    unsafe { pyo3::ffi::PyGILState_GetThisThreadState() as usize }
-}
-
-#[cfg(Py_3_11)]
 fn check_version(version: (u8, u8)) -> Result<(), Error> {
     let (major, minor) = version;
     if !matches!(version, (3, 11..=14)) {
@@ -110,12 +103,11 @@ impl SignalHandlerSession {
     pub fn start(config: &Config) -> Result<SignalHandlerSession, Error> {
         check_version(config.python_version)?;
         unwind::init().map_err(|e| format!("failed to install memory fault handlers: {:?}", e))?;
-        let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
         let types = resolve::Types {
             unicode: (&raw mut pyo3::ffi::PyUnicode_Type) as usize,
             bytes: (&raw mut pyo3::ffi::PyBytes_Type) as usize,
         };
-        handler::configure(code_type, current_thread_state);
+        handler::configure();
 
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];

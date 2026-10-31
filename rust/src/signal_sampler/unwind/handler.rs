@@ -3,7 +3,7 @@
 //! [`configure`] once, install [`handler`], and drain with [`consumer`]. Each record is the
 //! frames of the interrupted thread, innermost first.
 
-use super::{Frame, ThreadStateGetter, Unwinder};
+use super::{Frame, Unwinder};
 use crate::signal_sampler::ringbuffer::{Consumer, RingBuffer};
 use core::ffi::c_void;
 use core::ptr;
@@ -18,10 +18,10 @@ static UNWINDER: AtomicPtr<Unwinder> = AtomicPtr::new(ptr::null_mut());
 
 /// Sets what the handler needs. Until it is called the handler does nothing.
 ///
-/// `code_type` is the address of `PyCode_Type`. [`super::MAX_FRAMES`] bounds each walk. Configurations
+/// [`super::MAX_FRAMES`] bounds each walk. Configurations
 /// are leaked and never freed, since a handler may still be using a replaced one.
-pub fn configure(code_type: usize, thread_state: ThreadStateGetter) {
-    let unwinder = Box::leak(Box::new(Unwinder::new(code_type, thread_state)));
+pub fn configure() {
+    let unwinder = Box::leak(Box::new(Unwinder::new()));
     UNWINDER.store(unwinder, Ordering::Release);
 }
 
