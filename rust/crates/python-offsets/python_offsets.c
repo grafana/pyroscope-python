@@ -9,13 +9,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#if PY_VERSION_HEX < 0x030a0000 || PY_VERSION_HEX >= 0x030f0000
-#error "only Python 3.10 to 3.14 are supported"
+#if PY_VERSION_HEX < 0x030b0000 || PY_VERSION_HEX >= 0x030f0000
+#error "only Python 3.11 to 3.14 are supported"
 #endif
 
-#if PY_VERSION_HEX < 0x030b0000
-#include <frameobject.h>
-#elif PY_VERSION_HEX >= 0x030e0000
+#if PY_VERSION_HEX >= 0x030e0000
 #include <internal/pycore_interpframe_structs.h>
 #include <internal/pycore_stackref.h>
 #else
@@ -55,35 +53,25 @@ static uint64_t state_word(const PyASCIIObject *object) {
 static void write_unwind(void) {
     fprintf(out, "pub const PY_VERSION: (u8, u8) = (%d, %d);\n", PY_MAJOR_VERSION, PY_MINOR_VERSION);
     print_usize("OB_TYPE", offsetof(PyObject, ob_type));
-#if PY_VERSION_HEX < 0x030b0000
-    print_usize("THREAD_FRAME", offsetof(PyThreadState, frame));
-#elif PY_VERSION_HEX < 0x030d0000
+#if PY_VERSION_HEX < 0x030d0000
     print_usize("THREAD_FRAME", offsetof(PyThreadState, cframe));
     print_usize("CFRAME_FRAME", offsetof(_PyCFrame, current_frame));
 #else
     print_usize("THREAD_FRAME", offsetof(PyThreadState, current_frame));
 #endif
-#if PY_VERSION_HEX < 0x030b0000
-    print_usize("EXECUTABLE", offsetof(PyFrameObject, f_code));
-#elif PY_VERSION_HEX < 0x030d0000
+#if PY_VERSION_HEX < 0x030d0000
     print_usize("EXECUTABLE", offsetof(_PyInterpreterFrame, f_code));
 #else
     print_usize("EXECUTABLE", offsetof(_PyInterpreterFrame, f_executable));
 #endif
 #if PY_VERSION_HEX >= 0x030e0000
     print_usize("EXECUTABLE_TAG_BITS", Py_TAG_BITS);
-
 #endif
-#if PY_VERSION_HEX < 0x030b0000
-    print_usize("PREVIOUS", offsetof(PyFrameObject, f_back));
-    print_usize("INSTR", offsetof(PyFrameObject, f_lasti));
-#else
     print_usize("PREVIOUS", offsetof(_PyInterpreterFrame, previous));
 #if PY_VERSION_HEX < 0x030d0000
     print_usize("INSTR", offsetof(_PyInterpreterFrame, prev_instr));
 #else
     print_usize("INSTR", offsetof(_PyInterpreterFrame, instr_ptr));
-#endif
 #endif
     // 3.11 has no frames owned by the C stack: its entry frames are Python frames.
 #if PY_VERSION_HEX >= 0x030c0000
@@ -97,17 +85,10 @@ static void write_unwind(void) {
 
 static void write_resolve(void) {
     print_usize("CO_FILENAME", offsetof(PyCodeObject, co_filename));
-#if PY_VERSION_HEX < 0x030b0000
-    // Qualified names were added in 3.11; 3.10 resolves the plain function name.
-    print_usize("CO_QUALNAME", offsetof(PyCodeObject, co_name));
-#else
     print_usize("CO_QUALNAME", offsetof(PyCodeObject, co_qualname));
-#endif
     print_usize("CO_FIRSTLINENO", offsetof(PyCodeObject, co_firstlineno));
     print_usize("CO_LINETABLE", offsetof(PyCodeObject, co_linetable));
-#if PY_VERSION_HEX >= 0x030b0000
     print_usize("CO_CODE_ADAPTIVE", offsetof(PyCodeObject, co_code_adaptive));
-#endif
     print_usize("UNICODE_LENGTH", offsetof(PyASCIIObject, length));
     print_usize("UNICODE_STATE", offsetof(PyASCIIObject, state));
     print_usize("ASCII_SIZE", sizeof(PyASCIIObject));
@@ -127,11 +108,6 @@ static void write_resolve(void) {
     memset(&object, 0, sizeof(object));
     object.state.ascii = 1;
     print_u64("STATE_ASCII", state_word(&object));
-#if PY_VERSION_HEX < 0x030b0000
-    memset(&object, 0, sizeof(object));
-    object.state.ready = 1;
-    print_u64("STATE_READY", state_word(&object));
-#endif
 }
 
 int main(int argc, char **argv) {

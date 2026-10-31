@@ -6,7 +6,7 @@
 //!
 //! [`handler`] has a ready-made `SIGPROF` handler.
 //!
-//! Supports CPython 3.10 to 3.14, default (GIL) build, 64-bit targets. The offsets come from the
+//! Supports CPython 3.11 to 3.14, default (GIL) build, 64-bit targets. The offsets come from the
 //! checked-in layouts verified against the target CPython headers by `pyroscope-python-offsets`.
 
 pub mod handler;
@@ -54,7 +54,6 @@ pub enum Error {
 pub struct Frame {
     /// Address of the `PyCodeObject`.
     pub code: usize,
-    /// `f_lasti` (signed instruction index, stored as `usize`) on 3.10,
     /// `prev_instr` on 3.11 and 3.12, `instr_ptr` from 3.13.
     pub instr: usize,
 }
@@ -126,7 +125,7 @@ impl Unwinder {
 
     fn current_frame(&self, tstate: usize) -> Result<usize, Error> {
         let frame = self.read_usize(tstate, layout::THREAD_FRAME)?;
-        #[cfg(all(Py_3_11, not(Py_3_13)))]
+        #[cfg(not(Py_3_13))]
         let frame = self.read_usize(frame, layout::CFRAME_FRAME)?;
         Ok(frame)
     }
@@ -165,11 +164,7 @@ impl Unwinder {
             }
         }
         let executable = self.read_usize(frame, layout::EXECUTABLE)? & EXECUTABLE_MASK;
-        #[cfg(Py_3_11)]
         let instr = self.read_usize(frame, layout::INSTR)?;
-        #[cfg(not(Py_3_11))]
-        // 3.10 stores an int instruction index instead of a pointer.
-        let instr = self.read_i32(frame, layout::INSTR)? as isize as usize;
 
         if executable == 0 || self.read_usize(executable, OB_TYPE)? != self.code_type {
             return Err(Error::InvalidCodeType);
@@ -187,13 +182,6 @@ impl Unwinder {
         let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
         kindasafe::u64(addr as u64)
             .map(|word| word as u8)
-            .map_err(|_| Error::Read)
-    }
-
-    fn read_i32(&self, base: usize, offset: usize) -> Result<i32, Error> {
-        let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
-        kindasafe::u64(addr as u64)
-            .map(|word| word as i32)
             .map_err(|_| Error::Read)
     }
 

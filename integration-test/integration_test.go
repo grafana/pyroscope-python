@@ -164,8 +164,8 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 func skipUnlessPythonSupportsSignal(t *testing.T) {
 	t.Helper()
 	major, minor := pythonVersion(t)
-	if major != 3 || minor < 10 || minor > 14 {
-		t.Skip("the Signal profiler supports only CPython 3.10 to 3.14")
+	if major != 3 || minor < 11 || minor > 14 {
+		t.Skip("the Signal profiler supports only CPython 3.11 to 3.14")
 	}
 }
 

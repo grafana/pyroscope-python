@@ -6,11 +6,6 @@
 //!   non-ascii string start.
 //! - `STATE_*`: masks of the `state` bit fields in the word at `UNICODE_STATE`.
 
-#[cfg(all(Py_3_10, not(Py_3_11)))]
-mod v3_10;
-#[cfg(all(Py_3_10, not(Py_3_11)))]
-pub use v3_10::*;
-
 #[cfg(all(Py_3_11, not(Py_3_12)))]
 mod v3_11;
 #[cfg(all(Py_3_11, not(Py_3_12)))]

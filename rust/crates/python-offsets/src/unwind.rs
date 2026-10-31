@@ -7,11 +7,6 @@
 //! - `OWNER` and `FRAME_OWNED_BY_CSTACK` are emitted from 3.12.
 //! - `FRAME_OWNED_BY_INTERPRETER` and `EXECUTABLE_TAG_BITS` are emitted from 3.14.
 
-#[cfg(all(Py_3_10, not(Py_3_11)))]
-mod v3_10;
-#[cfg(all(Py_3_10, not(Py_3_11)))]
-pub use v3_10::*;
-
 #[cfg(all(Py_3_11, not(Py_3_12)))]
 mod v3_11;
 #[cfg(all(Py_3_11, not(Py_3_12)))]

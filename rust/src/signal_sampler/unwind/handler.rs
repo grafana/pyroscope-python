@@ -37,11 +37,7 @@ fn unwinder() -> Option<&'static Unwinder> {
 
 pub extern "C" fn handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut c_void) {
     if let Some(unwinder) = unwinder() {
-        on_signal(unwinder);
+        // Errors are counted by the unwinder.
+        let _ = unwinder.unwind(&RECORDS);
     }
-}
-
-fn on_signal(unwinder: &Unwinder) {
-    // Errors are counted by the unwinder.
-    let _ = unwinder.unwind(&RECORDS);
 }
