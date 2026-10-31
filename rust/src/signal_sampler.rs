@@ -17,7 +17,7 @@ use timer::{Mode, SignalHandler};
 #[cfg(Py_3_11)]
 use unwind::handler;
 #[cfg(Py_3_11)]
-use unwind::{Frame, ThreadStateGetter};
+use unwind::{Frame, MAX_FRAMES};
 
 #[cfg(Py_3_11)]
 mod resolve;
@@ -45,9 +45,6 @@ pub struct ResolvedFrame {
     pub line: u32,
 }
 
-#[cfg(Py_3_11)]
-const MAX_FRAMES: usize = 4096; //todo wtf
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SignalTimer {
     /// One `setitimer(ITIMER_PROF)` timer for the process: each tick interrupts an arbitrary
@@ -71,20 +68,10 @@ pub struct Config {
 pub type Error = String;
 
 #[cfg(Py_3_11)]
-fn lookup(name: &std::ffi::CStr) -> Result<usize, Error> {
-    let addr = unsafe { libc::dlsym(libc::RTLD_DEFAULT, name.as_ptr()) } as usize;
-    if addr == 0 {
-        return Err(format!("symbol {:?} not found", name));
-    }
-    Ok(addr)
-}
-
-#[cfg(Py_3_11)]
-fn lookup_thread_state_getter() -> Result<ThreadStateGetter, Error> {
+extern "C" fn current_thread_state() -> usize {
     // TODO: PyGILState_GetThisThreadState is not safe on 3.15; find another way to get the tstate.
-    let addr = lookup(c"PyGILState_GetThisThreadState")?;
-    // SAFETY: the symbol has this signature.
-    Ok(unsafe { std::mem::transmute::<usize, ThreadStateGetter>(addr) })
+    // SAFETY: this queries the calling thread's state without requiring the GIL.
+    unsafe { pyo3::ffi::PyGILState_GetThisThreadState() as usize }
 }
 
 #[cfg(Py_3_11)]
@@ -123,12 +110,12 @@ impl SignalHandlerSession {
     pub fn start(config: &Config) -> Result<SignalHandlerSession, Error> {
         check_version(config.python_version)?;
         unwind::init().map_err(|e| format!("failed to install memory fault handlers: {:?}", e))?;
-        let code_type = lookup(c"PyCode_Type")?;
+        let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
         let types = resolve::Types {
-            unicode: lookup(c"PyUnicode_Type")?,
-            bytes: lookup(c"PyBytes_Type")?,
+            unicode: (&raw mut pyo3::ffi::PyUnicode_Type) as usize,
+            bytes: (&raw mut pyo3::ffi::PyBytes_Type) as usize,
         };
-        handler::configure(code_type, lookup_thread_state_getter()?, MAX_FRAMES);
+        handler::configure(code_type, current_thread_state);
 
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];

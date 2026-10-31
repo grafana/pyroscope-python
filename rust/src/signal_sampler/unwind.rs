@@ -18,6 +18,9 @@ pub use layout::{OB_TYPE, PY_VERSION};
 use super::ringbuffer::{Record, RingBuffer};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
+/// Maximum number of frames visited in one stack, including skipped frames.
+pub const MAX_FRAMES: usize = 256;
+
 const EXECUTABLE_MASK: usize = {
     #[cfg(Py_3_14)]
     let tag_bits = layout::EXECUTABLE_TAG_BITS;
@@ -44,7 +47,7 @@ pub enum Error {
     InvalidCodeType,
     /// The ring buffer has no room for the stack.
     Full,
-    /// The chain is longer than `max_frames`, or loops.
+    /// The chain is longer than [`MAX_FRAMES`], or loops.
     TooDeep,
     /// A pointer on the chain overflows the address space.
     Invalid,
@@ -64,7 +67,6 @@ pub type ThreadStateGetter = extern "C" fn() -> usize;
 pub struct Unwinder {
     code_type: usize,
     thread_state: ThreadStateGetter,
-    max_frames: usize,
     metrics: Metrics,
 }
 
@@ -80,12 +82,11 @@ impl Unwinder {
     ///
     /// `code_type` is the address of `PyCode_Type`; an executable of another type fails the
     /// entire stack. `thread_state` returns the thread state to walk.
-    /// `max_frames` bounds the walk, skipped frames included.
-    pub const fn new(code_type: usize, thread_state: ThreadStateGetter, max_frames: usize) -> Self {
+    /// [`MAX_FRAMES`] bounds the walk, skipped frames included.
+    pub const fn new(code_type: usize, thread_state: ThreadStateGetter) -> Self {
         Unwinder {
             code_type,
             thread_state,
-            max_frames,
             metrics: Metrics {
                 dropped: AtomicUsize::new(0),
                 contentions: AtomicUsize::new(0),
@@ -139,7 +140,7 @@ impl Unwinder {
         let mut visited = 0;
         let mut pushed = 0;
         while frame != 0 {
-            if visited == self.max_frames {
+            if visited == MAX_FRAMES {
                 return Err(Error::TooDeep);
             }
             visited += 1;
