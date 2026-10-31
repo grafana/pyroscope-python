@@ -10,6 +10,7 @@ LOGGER = logging.getLogger(__name__)
 
 LineNo = lib.LineNo
 ProfilerImplementation = lib.ProfilerImplementation
+SignalTimer = lib.SignalTimer
 
 def configure(
         app_name=None,
@@ -36,6 +37,7 @@ def configure(
         mem_enable_mem_domain=True,
         cpu_enabled=True,
         cpu_implementation=ProfilerImplementation.PySpy,
+        signal_timer=SignalTimer.ITimer,
 ):
     if app_name is not None:
         warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
@@ -73,6 +75,7 @@ def configure(
         mem_enable_mem_domain,
         cpu_enabled,
         cpu_implementation,
+        signal_timer,
     )
 
 def configure_experimental_stack_profiler(
