@@ -1,6 +1,6 @@
 //! Resolves the code objects a signal handler recorded into names, from a normal thread of the
 //! same process. A recorded code object may have been freed since, so every read goes through
-//! `kindasafe` and every object's type is checked before it is used.
+//! `kindasafe` and the type of every string and line table is checked before it is used.
 
 mod layout;
 
@@ -28,7 +28,6 @@ pub struct ResolvedFrame {
 }
 
 pub struct Types {
-    pub code: usize,
     pub unicode: usize,
     pub bytes: usize,
 }
@@ -61,9 +60,6 @@ impl Resolver {
     /// `None` for shim frames, which have no file name.
     fn resolve_frame(&mut self, frame: &Frame) -> Result<Option<ResolvedFrame>, String> {
         let code = frame.code;
-        if read_word(code + OB_TYPE)? != self.types.code {
-            return Err(format!("{code:#x} is no longer a code object"));
-        }
         let filename = self.read_string(read_word(code + CO_FILENAME)?)?;
         if filename.is_empty() || filename == "<shim>" {
             return Ok(None);

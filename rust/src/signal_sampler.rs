@@ -97,7 +97,6 @@ impl SignalHandlerSession {
         unwind::init().map_err(|e| format!("failed to install memory fault handlers: {:?}", e))?;
         let code_type = lookup(c"PyCode_Type")?;
         let types = resolve::Types {
-            code: code_type,
             unicode: lookup(c"PyUnicode_Type")?,
             bytes: lookup(c"PyBytes_Type")?,
         };
