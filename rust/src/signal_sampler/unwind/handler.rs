@@ -6,6 +6,7 @@
 use super::{Frame, MAX_FRAMES, unwind};
 use crate::signal_sampler::ringbuffer::{Consumer, RingBuffer};
 use core::ffi::c_void;
+use core::mem::MaybeUninit;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 const SLOTS: usize = 1 << 16;
@@ -22,7 +23,7 @@ pub fn consumer() -> Option<Consumer<'static, Frame, SLOTS>> {
 }
 
 pub extern "C" fn handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut c_void) {
-    let mut frames = [Frame::default(); MAX_FRAMES];
+    let mut frames = [MaybeUninit::uninit(); MAX_FRAMES];
     // Unwind errors are counted by the unwinder. Never publish a partial stack.
     let Ok(count) = unwind(&mut frames) else {
         return;
@@ -33,7 +34,9 @@ pub extern "C" fn handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut c_voi
     };
     let mut record = producer.record();
     for frame in &frames[..count] {
-        if record.push(*frame).is_err() {
+        // SAFETY: a successful unwind initialized exactly the first `count` frames.
+        let frame = unsafe { frame.assume_init() };
+        if record.push(frame).is_err() {
             DROPPED.fetch_add(1, Ordering::Relaxed);
             return;
         }
