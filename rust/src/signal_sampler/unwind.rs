@@ -144,39 +144,31 @@ impl Unwinder {
                 return Err(Error::TooDeep);
             }
             visited += 1;
-            let (previous, python_frame) = self.read_frame(frame)?;
-            if let Some(python_frame) = python_frame {
-                record.push(python_frame).map_err(|_| Error::Full)?;
-                pushed += 1;
+            let previous = self.read_usize(frame, layout::PREVIOUS)?;
+            #[cfg(Py_3_12)]
+            {
+                let owner = self.read_u8(frame, layout::OWNER)?;
+                if SKIP_OWNERS & (1 << owner) != 0 {
+                    frame = previous;
+                    continue;
+                }
             }
+            let executable = self.read_usize(frame, layout::EXECUTABLE)? & EXECUTABLE_MASK;
+            let instr = self.read_usize(frame, layout::INSTR)?;
+
+            if executable == 0 || self.read_usize(executable, OB_TYPE)? != self.code_type {
+                return Err(Error::InvalidCodeType);
+            }
+            record
+                .push(Frame {
+                    code: executable,
+                    instr,
+                })
+                .map_err(|_| Error::Full)?;
+            pushed += 1;
             frame = previous;
         }
         Ok(pushed)
-    }
-
-    /// Returns the previous frame and, for Python-owned frames, the sampled code and instruction.
-    fn read_frame(&self, frame: usize) -> Result<(usize, Option<Frame>), Error> {
-        let previous = self.read_usize(frame, layout::PREVIOUS)?;
-        #[cfg(Py_3_12)]
-        {
-            let owner = self.read_u8(frame, layout::OWNER)?;
-            if SKIP_OWNERS & (1 << owner) != 0 {
-                return Ok((previous, None));
-            }
-        }
-        let executable = self.read_usize(frame, layout::EXECUTABLE)? & EXECUTABLE_MASK;
-        let instr = self.read_usize(frame, layout::INSTR)?;
-
-        if executable == 0 || self.read_usize(executable, OB_TYPE)? != self.code_type {
-            return Err(Error::InvalidCodeType);
-        }
-        Ok((
-            previous,
-            Some(Frame {
-                code: executable,
-                instr,
-            }),
-        ))
     }
 
     fn read_u8(&self, base: usize, offset: usize) -> Result<u8, Error> {
