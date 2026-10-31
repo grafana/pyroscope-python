@@ -14,7 +14,8 @@ use crate::{
 use std::sync::mpsc::SyncSender;
 use std::time::{Duration, SystemTime};
 
-use crate::pyspy_backend::Pyspy;
+use crate::pyspy_backend::{Pyspy, Reporter};
+use crate::signal_backend::Signal;
 use crate::utils::TimeRange;
 const LOG_TAG: &str = "Pyroscope::Agent";
 const DEFAULT_UPLOAD_INTERVAL: Duration = Duration::from_secs(10);
@@ -128,9 +129,35 @@ impl PyroscopeConfig {
     }
 }
 
+pub enum CpuConfig {
+    PySpy(py_spy::config::Config),
+    Signal(crate::signal_backend::Config),
+}
+
+pub enum Backend {
+    PySpy(Pyspy),
+    Signal(Signal),
+}
+
+impl Backend {
+    fn reporter(&self) -> Reporter {
+        match self {
+            Backend::PySpy(backend) => backend.reporter(),
+            Backend::Signal(backend) => backend.reporter(),
+        }
+    }
+
+    fn shutdown_thread(&mut self) -> Result<()> {
+        match self {
+            Backend::PySpy(backend) => backend.shutdown_thread(),
+            Backend::Signal(backend) => backend.shutdown_thread(),
+        }
+    }
+}
+
 pub struct PyroscopeAgentBuilder {
     pub config: PyroscopeConfig,
-    pyspy_config: Option<py_spy::config::Config>,
+    cpu_config: Option<CpuConfig>,
     backend_config: BackendConfig,
     ruleset: ThreadTagsSet,
 }
@@ -138,13 +165,13 @@ pub struct PyroscopeAgentBuilder {
 impl PyroscopeAgentBuilder {
     pub fn new(
         config: PyroscopeConfig,
-        pyspy_config: Option<py_spy::config::Config>,
+        cpu_config: Option<CpuConfig>,
         backend_config: BackendConfig,
         ruleset: ThreadTagsSet,
     ) -> Self {
         Self {
             config,
-            pyspy_config,
+            cpu_config,
             backend_config,
             ruleset,
         }
@@ -159,8 +186,17 @@ impl PyroscopeAgentBuilder {
         // }
 
         let backend = self
-            .pyspy_config
-            .map(|config| Pyspy::new(config, self.backend_config, self.ruleset.clone()))
+            .cpu_config
+            .map(|config| match config {
+                CpuConfig::PySpy(config) => {
+                    Pyspy::new(config, self.backend_config, self.ruleset.clone())
+                        .map(Backend::PySpy)
+                }
+                CpuConfig::Signal(config) => {
+                    Signal::new(config, self.backend_config, self.ruleset.clone())
+                        .map(Backend::Signal)
+                }
+            })
             .transpose()?;
         if backend.is_some() {
             log::trace!(target: LOG_TAG, "Backend initialized");
@@ -187,7 +223,7 @@ pub struct PyroscopeAgent {
     /// Handle to the thread that runs the Pyroscope Agent
     handle: Option<JoinHandle<Result<()>>>,
     /// Profiler backend
-    pub backend: Option<Pyspy>,
+    pub backend: Option<Backend>,
     /// Configuration Object
     pub config: PyroscopeConfig,
 
@@ -228,7 +264,7 @@ impl PyroscopeAgent {
     pub fn start(mut self) -> Result<PyroscopeAgent> {
         log::debug!(target: LOG_TAG, "Starting");
 
-        let reporter = self.backend.as_ref().map(Pyspy::reporter);
+        let reporter = self.backend.as_ref().map(Backend::reporter);
 
         let (tx, rx) = mpsc::channel();
         self.terminate_channel = Some(tx);
@@ -262,7 +298,7 @@ impl PyroscopeAgent {
     }
 
     fn snapshot(
-        reporter: &Option<crate::pyspy_backend::Reporter>,
+        reporter: &Option<Reporter>,
         config: PyroscopeConfig,
         stx: &SyncSender<SessionSignal>,
         stop_watch: &mut StopWatch,
