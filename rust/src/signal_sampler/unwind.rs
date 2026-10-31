@@ -1,5 +1,5 @@
-//! Walks the CPython frame chain of a thread from a signal handler and writes it into a
-//! [`ringbuffer`](super::ringbuffer) record. No allocation, no locks, no recursion, no buffers.
+//! Walks the CPython frame chain of a thread from a signal handler into a caller-provided slice.
+//! No allocation, no locks, no recursion.
 //!
 //! The handler records only code object addresses. Names are resolved later on a normal thread,
 //! which must check the code object is still alive, and line numbers from the instruction pointer.
@@ -15,7 +15,6 @@ use pyroscope_python_offsets::unwind as layout;
 pub use kindasafe_init::init;
 pub use layout::{OB_TYPE, PY_VERSION};
 
-use super::ringbuffer::{Record, RingBuffer};
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Maximum number of frames visited in one stack, including skipped frames.
@@ -42,13 +41,11 @@ const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_INTERPRETER;
 pub enum Error {
     /// The calling thread has no Python thread state.
     NoThreadState,
-    /// Another producer holds the ring buffer.
-    Contended,
     /// Memory on the chain was unreadable.
     Read,
     /// A Python frame's executable was null or was not a code object.
     InvalidCodeType,
-    /// The ring buffer has no room for the stack.
+    /// The output slice has no room for the stack.
     Full,
     /// The chain is longer than [`MAX_FRAMES`], or loops.
     TooDeep,
@@ -99,7 +96,6 @@ pub struct Unwinder {
 
 struct Metrics {
     dropped: AtomicUsize,
-    contentions: AtomicUsize,
     no_thread_state: AtomicUsize,
     invalid_code_type: AtomicUsize,
     read_errors: AtomicUsize,
@@ -114,7 +110,6 @@ impl Unwinder {
         Unwinder {
             metrics: Metrics {
                 dropped: AtomicUsize::new(0),
-                contentions: AtomicUsize::new(0),
                 no_thread_state: AtomicUsize::new(0),
                 invalid_code_type: AtomicUsize::new(0),
                 read_errors: AtomicUsize::new(0),
@@ -122,29 +117,20 @@ impl Unwinder {
         }
     }
 
-    /// Commits a record to `records` with a [`Frame`] for each Python frame of the calling
-    /// thread, innermost first, and returns the number of frames. On error nothing is committed
-    /// and the error is counted.
-    pub fn unwind<const N: usize>(&self, records: &RingBuffer<Frame, N>) -> Result<usize, Error> {
-        self.unwind_thread(current_thread_state(), records)
+    /// Writes the calling thread's frames into `frames`, innermost first, and returns their count.
+    /// On error the slice may contain a partial stack, which the caller must discard.
+    /// Unwind errors are counted here; publishing the stack is the caller's responsibility.
+    pub fn unwind(&self, frames: &mut [Frame]) -> Result<usize, Error> {
+        self.unwind_thread(current_thread_state(), frames)
     }
 
-    fn unwind_thread<const N: usize>(
-        &self,
-        tstate: usize,
-        records: &RingBuffer<Frame, N>,
-    ) -> Result<usize, Error> {
+    fn unwind_thread(&self, tstate: usize, frames: &mut [Frame]) -> Result<usize, Error> {
         let metrics = &self.metrics;
         if tstate == 0 {
             metrics.no_thread_state.fetch_add(1, Ordering::Relaxed);
             return Err(Error::NoThreadState);
         }
-        let Some(mut producer) = records.producer() else {
-            metrics.contentions.fetch_add(1, Ordering::Relaxed);
-            return Err(Error::Contended);
-        };
-        let mut record = producer.record();
-        let pushed = self.walk(tstate, &mut record).inspect_err(|error| {
+        self.walk(tstate, frames).inspect_err(|error| {
             metrics.dropped.fetch_add(1, Ordering::Relaxed);
             match error {
                 Error::InvalidCodeType => {
@@ -155,12 +141,7 @@ impl Unwinder {
                 }
                 _ => {}
             }
-        })?;
-        if record.commit().is_err() {
-            metrics.dropped.fetch_add(1, Ordering::Relaxed);
-            return Err(Error::Full);
-        }
-        Ok(pushed)
+        })
     }
 
     fn current_frame(&self, tstate: usize) -> Result<usize, Error> {
@@ -170,11 +151,7 @@ impl Unwinder {
         Ok(frame)
     }
 
-    fn walk<const N: usize>(
-        &self,
-        tstate: usize,
-        record: &mut Record<'_, '_, Frame, N>,
-    ) -> Result<usize, Error> {
+    fn walk(&self, tstate: usize, frames: &mut [Frame]) -> Result<usize, Error> {
         let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
         let mut frame = self.current_frame(tstate)?;
         let mut visited = 0;
@@ -199,12 +176,10 @@ impl Unwinder {
             if executable == 0 || self.read_usize(executable, OB_TYPE)? != code_type {
                 return Err(Error::InvalidCodeType);
             }
-            record
-                .push(Frame {
-                    code: executable,
-                    instr,
-                })
-                .map_err(|_| Error::Full)?;
+            *frames.get_mut(pushed).ok_or(Error::Full)? = Frame {
+                code: executable,
+                instr,
+            };
             pushed += 1;
             frame = previous;
         }

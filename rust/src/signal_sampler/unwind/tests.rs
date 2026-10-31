@@ -1,5 +1,4 @@
 use super::*;
-use crate::signal_sampler::ringbuffer::PopError;
 
 // Unit tests do not link libpython. Only this symbol's address is used, never its contents.
 #[unsafe(export_name = "PyCode_Type")]
@@ -11,7 +10,7 @@ fn set(memory: &mut [usize], offset: usize, value: usize) {
 }
 
 #[test]
-fn invalid_code_and_read_errors_discard_stack_and_count_failures() {
+fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
     init().unwrap();
     let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
     let mut code = [0usize; 4];
@@ -36,7 +35,6 @@ fn invalid_code_and_read_errors_discard_stack_and_count_failures() {
     let tstate = tstate.as_ptr() as usize;
 
     let unwinder = Unwinder::new();
-    let records = RingBuffer::<Frame, 8>::new();
     let mut output = [Frame::default(); 8];
     for (executable, error) in [
         (wrong_code.as_ptr() as usize, Error::InvalidCodeType),
@@ -45,12 +43,9 @@ fn invalid_code_and_read_errors_discard_stack_and_count_failures() {
         (8, Error::Read),
     ] {
         set(&mut outer, layout::EXECUTABLE, executable);
-        assert_eq!(unwinder.unwind_thread(tstate, &records), Err(error));
-        // The valid inner frame must not be published as a truncated stack.
-        assert_eq!(
-            records.consumer().unwrap().pop_slice(&mut output),
-            Err(PopError::Empty)
-        );
+        assert_eq!(unwinder.unwind_thread(tstate, &mut output), Err(error));
+        // The caller must discard the partial stack on error.
+        assert_eq!(output[0].code, code_addr);
     }
     assert_eq!(
         unwinder.metrics.invalid_code_type.load(Ordering::Relaxed),
@@ -59,10 +54,9 @@ fn invalid_code_and_read_errors_discard_stack_and_count_failures() {
     assert_eq!(unwinder.metrics.read_errors.load(Ordering::Relaxed), 1);
     assert_eq!(unwinder.metrics.dropped.load(Ordering::Relaxed), 3);
 
-    // A failed walk releases the producer and leaves the buffer usable.
+    // The output slice can be reused after a failed walk.
     set(&mut outer, layout::EXECUTABLE, code_addr);
-    assert_eq!(unwinder.unwind_thread(tstate, &records), Ok(2));
-    assert_eq!(records.consumer().unwrap().pop_slice(&mut output), Ok(2));
+    assert_eq!(unwinder.unwind_thread(tstate, &mut output), Ok(2));
     assert!(output[..2].iter().all(|frame| frame.code == code_addr));
     assert_eq!(
         unwinder.metrics.invalid_code_type.load(Ordering::Relaxed),
@@ -73,7 +67,7 @@ fn invalid_code_and_read_errors_discard_stack_and_count_failures() {
 }
 
 #[test]
-fn frame_limit_accepts_256_and_discards_257() {
+fn frame_limit_accepts_256_and_rejects_257() {
     init().unwrap();
     let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
     let mut code = [0usize; 4];
@@ -105,19 +99,19 @@ fn frame_limit_accepts_256_and_discards_257() {
     let tstate = tstate.as_ptr() as usize;
 
     let unwinder = Unwinder::new();
-    let records = RingBuffer::<Frame, 512>::new();
     let mut output = [Frame::default(); 256];
-    assert_eq!(unwinder.unwind_thread(tstate, &records), Ok(256));
-    assert_eq!(records.consumer().unwrap().pop_slice(&mut output), Ok(256));
+    assert_eq!(unwinder.unwind_thread(tstate, &mut []), Err(Error::Full));
+    assert_eq!(
+        unwinder.unwind_thread(tstate, &mut output[..255]),
+        Err(Error::Full)
+    );
+    assert_eq!(unwinder.metrics.dropped.load(Ordering::Relaxed), 2);
+    assert_eq!(unwinder.unwind_thread(tstate, &mut output), Ok(256));
 
     set(&mut frames[MAX_FRAMES - 1], layout::PREVIOUS, extra_frame);
     assert_eq!(
-        unwinder.unwind_thread(tstate, &records),
+        unwinder.unwind_thread(tstate, &mut output),
         Err(Error::TooDeep)
     );
-    assert_eq!(
-        records.consumer().unwrap().pop_slice(&mut output),
-        Err(PopError::Empty)
-    );
-    assert_eq!(unwinder.metrics.dropped.load(Ordering::Relaxed), 1);
+    assert_eq!(unwinder.metrics.dropped.load(Ordering::Relaxed), 3);
 }
