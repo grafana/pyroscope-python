@@ -1,7 +1,6 @@
 use cmake::Config;
 use std::env;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -22,7 +21,7 @@ fn main() {
     cfg.define("Python3_EXECUTABLE", &python_executable);
     cfg.define("Python3_FIND_STRATEGY", "LOCATION");
 
-    generate_python_layout(&manifest_dir, Path::new(&python_executable));
+    pyo3_build_config::use_pyo3_cfgs();
 
     let dst = cfg.build();
 
@@ -36,49 +35,6 @@ fn main() {
     } else {
         println!("cargo:rustc-link-lib=static=stdc++");
     }
-}
-
-/// Compiles and runs `python_offsets.c` against the target Python's headers. The program runs on
-/// the build machine, so the target must be able to run there.
-fn generate_python_layout(manifest_dir: &Path, python_executable: &Path) {
-    let source = manifest_dir.join("python_offsets.c");
-    println!("cargo:rerun-if-changed={}", source.display());
-
-    let output = Command::new(python_executable)
-        .args([
-            "-c",
-            "import sysconfig; print(sysconfig.get_paths()['include'])",
-        ])
-        .output()
-        .expect("failed to run Python3_EXECUTABLE");
-    assert!(
-        output.status.success(),
-        "failed to query the include dir of {}: {}",
-        python_executable.display(),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let include_dir = String::from_utf8(output.stdout).unwrap();
-    let include_dir = include_dir.trim();
-
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let program = out_dir.join("python_offsets");
-    let status = cc::Build::new()
-        .get_compiler()
-        .to_command()
-        .arg("-I")
-        .arg(include_dir)
-        .arg("-o")
-        .arg(&program)
-        .arg(&source)
-        .status()
-        .expect("failed to run the C compiler");
-    assert!(status.success(), "failed to compile {}", source.display());
-
-    let status = Command::new(&program)
-        .arg(&out_dir)
-        .status()
-        .unwrap_or_else(|e| panic!("failed to run {}: {e}", program.display()));
-    assert!(status.success(), "{} failed", program.display());
 }
 
 fn rerun_if_native_sources_changed(manifest_dir: &Path, cpp_dir: &Path) {

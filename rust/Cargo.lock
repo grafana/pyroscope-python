@@ -1292,10 +1292,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyroscope-python-offsets"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "pyo3-build-config",
+ "pyo3-ffi",
+]
+
+[[package]]
+name = "pyroscope-ringbuffer"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "pyroscope-signal-timer"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "pyroscope_python_extension"
 version = "1.4.0"
 dependencies = [
- "cc",
  "cmake",
  "hashbrown 0.17.1",
  "kindasafe",
@@ -1308,6 +1330,10 @@ dependencies = [
  "prost",
  "py-spy",
  "pyo3",
+ "pyo3-build-config",
+ "pyroscope-python-offsets",
+ "pyroscope-ringbuffer",
+ "pyroscope-signal-timer",
  "reqwest",
  "thiserror",
  "url",

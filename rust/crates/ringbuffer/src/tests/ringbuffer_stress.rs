@@ -1,6 +1,6 @@
 //! Stress tests: many threads writing and reading, and many threads writing from signal handlers.
 
-use crate::signal_sampler::ringbuffer::{Consumer, PopError, Producer, RingBuffer};
+use crate::{Consumer, PopError, Producer, RingBuffer};
 use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
@@ -80,7 +80,6 @@ fn produce_all(rb: &'static RingBuffer<Frame, 64>) -> Vec<std::thread::JoinHandl
 
 #[test]
 fn many_producers_one_consumer_keep_per_producer_order() {
-    let _serial = super::common::serial();
     static RB: RingBuffer<Frame, 64> = RingBuffer::new();
 
     let producers = produce_all(&RB);
@@ -110,7 +109,6 @@ fn many_producers_one_consumer_keep_per_producer_order() {
 
 #[test]
 fn many_producers_many_consumers_deliver_each_record_once() {
-    let _serial = super::common::serial();
     const CONSUMERS: usize = 3;
     static RB: RingBuffer<Frame, 64> = RingBuffer::new();
     static SEEN: [AtomicU8; TOTAL] = [const { AtomicU8::new(0) }; TOTAL];
@@ -142,10 +140,9 @@ fn many_producers_many_consumers_deliver_each_record_once() {
     assert!(SEEN.iter().all(|s| s.load(Ordering::Relaxed) == 1));
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(miri)))]
 #[test]
 fn many_threads_writing_from_signal_handlers() {
-    let _serial = super::common::serial();
     const THREADS: usize = 4;
     const SIGNALS: usize = 20_000;
     static RB: RingBuffer<Frame, 64> = RingBuffer::new();

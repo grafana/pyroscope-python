@@ -14,11 +14,8 @@ use unwind::handler;
 use unwind::{Frame, ThreadStateGetter};
 
 mod resolve;
-// Copied as is from pyroscope-py-spy, where its tests use the rest.
-#[allow(dead_code)]
-pub mod ringbuffer;
-#[allow(dead_code)]
-pub mod timer;
+use pyroscope_ringbuffer as ringbuffer;
+use pyroscope_signal_timer as timer;
 #[allow(dead_code)]
 pub mod unwind;
 
@@ -63,19 +60,19 @@ fn lookup_thread_state_getter() -> Result<ThreadStateGetter, Error> {
 }
 
 fn check_version(version: (u8, u8)) -> Result<(), Error> {
+    let (major, minor) = version;
+    if !matches!(version, (3, 10..=14)) {
+        return Err(format!(
+            "unwinding in the signal handler supports only Python 3.10 to 3.14, found {major}.{minor}"
+        ));
+    }
     if version != unwind::PY_VERSION {
-        let (major, minor) = version;
         let (built_major, built_minor) = unwind::PY_VERSION;
         return Err(format!(
             "running on Python {major}.{minor}, but built against Python {built_major}.{built_minor}"
         ));
     }
-    match version {
-        (3, 11..=14) => Ok(()),
-        (major, minor) => Err(format!(
-            "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
-        )),
-    }
+    Ok(())
 }
 
 /// The timer of a running [`SignalHandlerSession`], shared with the callers of
@@ -179,6 +176,3 @@ pub fn thread_removed(timer: &SharedTimer, tid: timer::pid_t) {
         timer.thread_removed(tid);
     }
 }
-
-#[cfg(test)]
-mod tests;

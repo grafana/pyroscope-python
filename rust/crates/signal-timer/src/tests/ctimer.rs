@@ -1,7 +1,7 @@
 #![cfg(target_os = "linux")]
 
 use super::common::{burn_cpu, serial};
-use crate::signal_sampler::timer::{Mode, SignalHandler, Timer, c_int, gettid, siginfo_t};
+use crate::{Mode, SignalHandler, Timer, c_int, gettid, siginfo_t};
 use std::ffi::c_void;
 use std::io;
 use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};

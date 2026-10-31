@@ -204,3 +204,6 @@ impl<T: Copy, const N: usize> Drop for Consumer<'_, T, N> {
         self.rb.consumer_locked.store(false, Ordering::Release);
     }
 }
+
+#[cfg(test)]
+mod tests;

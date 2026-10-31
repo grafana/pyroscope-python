@@ -2,7 +2,7 @@
 //! same process. A recorded code object may have been freed since, so every read goes through
 //! `kindasafe` and the type of every string and line table is checked before it is used.
 
-mod layout;
+use pyroscope_python_offsets::resolve as layout;
 
 use super::unwind::{Frame, OB_TYPE};
 use layout::*;
@@ -89,8 +89,14 @@ impl Resolver {
             return Err(format!("line table at {table:#x} is too long: {size}"));
         }
         self.read_bytes(table + BYTES_DATA, size)?;
-        let lasti = frame.instr.wrapping_sub(frame.code + CO_CODE_ADAPTIVE) as isize;
-        Ok(line_number(first_line as i32, lasti, &self.scratch).max(0) as u32)
+        #[cfg(Py_3_11)]
+        let line = {
+            let lasti = frame.instr.wrapping_sub(frame.code + CO_CODE_ADAPTIVE) as isize;
+            line_number(first_line as i32, lasti, &self.scratch)
+        };
+        #[cfg(not(Py_3_11))]
+        let line = line_number_310(first_line as i32, frame.instr as isize, &self.scratch);
+        Ok(line.max(0) as u32)
     }
 
     fn read_string(&mut self, addr: usize) -> Result<String, String> {
@@ -105,6 +111,10 @@ impl Resolver {
             return Err(format!("string at {addr:#x} is too long: {length}"));
         }
         let state = read_word(addr + UNICODE_STATE)? as u64;
+        #[cfg(not(Py_3_11))]
+        if state & STATE_READY == 0 {
+            return Err(format!("string at {addr:#x} is not ready"));
+        }
         if state & STATE_COMPACT == 0 {
             return Err(format!("string at {addr:#x} is not compact"));
         }
@@ -144,6 +154,7 @@ fn first_line(code: usize) -> Result<u32, String> {
 /// Unpacks the location table of python 3.11+, see
 /// <https://github.com/python/cpython/blob/3.11/Objects/locations.md>. `lasti` is the byte offset
 /// of the instruction from `co_code_adaptive`. Ported from py-spy.
+#[cfg(any(test, Py_3_11))]
 fn line_number(first_line: i32, lasti: isize, table: &[u8]) -> i32 {
     let mut line_number = first_line;
     let mut bytecode_address: isize = 0;
@@ -182,6 +193,29 @@ fn line_number(first_line: i32, lasti: isize, table: &[u8]) -> i32 {
     line_number
 }
 
+/// Unpacks 3.10's (byte range length, signed line delta) pairs. `lasti` counts code units.
+/// <https://github.com/python/cpython/blob/3.10/Objects/lnotab_notes.txt>
+#[cfg(any(test, not(Py_3_11)))]
+fn line_number_310(first_line: i32, lasti: isize, table: &[u8]) -> i32 {
+    if lasti < 0 {
+        return first_line;
+    }
+    let mut line = first_line;
+    let mut end = 0;
+    for entry in table.as_chunks::<2>().0 {
+        end += isize::from(entry[0]);
+        let delta = entry[1] as i8;
+        if delta != -128 {
+            line += i32::from(delta);
+        }
+        if end > lasti * 2 {
+            return if delta == -128 { 0 } else { line };
+        }
+    }
+    0
+}
+
+#[cfg(any(test, Py_3_11))]
 fn read_varint(index: &mut usize, table: &[u8]) -> Option<usize> {
     let mut byte = *table.get(*index)?;
     *index += 1;
@@ -196,6 +230,7 @@ fn read_varint(index: &mut usize, table: &[u8]) -> Option<usize> {
     Some(ret)
 }
 
+#[cfg(any(test, Py_3_11))]
 fn read_signed_varint(index: &mut usize, table: &[u8]) -> Option<isize> {
     let unsigned_val = read_varint(index, table)?;
     if unsigned_val & 1 != 0 {
@@ -214,6 +249,31 @@ fn read_word(addr: usize) -> Result<usize, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn python_310_line_number_ranges() {
+        // CPython's documented example: long ranges, no line, and an empty range
+        // used to encode a large positive delta, followed by a backwards line jump.
+        let table = [
+            6, 1, 44, 1, 254, 5, 46, 0, 10, 128, 16, 1, 0, 127, 4, 73, 2, 255,
+        ];
+        for (start, end, line) in [
+            (0, 6, 1),
+            (6, 50, 2),
+            (50, 350, 7),
+            (350, 360, 0),
+            (360, 376, 8),
+            (376, 380, 208),
+            (380, 382, 207),
+        ] {
+            for byte in (start..end).step_by(2) {
+                assert_eq!(line_number_310(0, byte / 2, &table), line, "byte {byte}");
+            }
+        }
+        assert_eq!(line_number_310(12, -1, &table), 12);
+        assert_eq!(line_number_310(12, 0, &[]), 0);
+        assert_eq!(line_number_310(12, 0, &[2]), 0);
+    }
 
     #[test]
     fn test_py3_11_line_numbers() {

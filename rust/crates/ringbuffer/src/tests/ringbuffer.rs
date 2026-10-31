@@ -1,10 +1,11 @@
-use crate::signal_sampler::ringbuffer::{Consumer, Full, PopError, Producer, RingBuffer};
+use crate::{Consumer, Full, PopError, Producer, RingBuffer};
+#[cfg(all(unix, not(miri)))]
 use std::sync::atomic::{AtomicUsize, Ordering};
+#[cfg(all(unix, not(miri)))]
 use std::time::{Duration, Instant};
 
 #[test]
 fn pop_returns_one_record() {
-    let _serial = super::common::serial();
     let rb = RingBuffer::<usize, 8>::new();
     let mut p = rb.producer().unwrap();
     push(&mut p, &[1, 2, 3, 4, 5]).unwrap();
@@ -21,7 +22,6 @@ fn pop_returns_one_record() {
 
 #[test]
 fn empty_record() {
-    let _serial = super::common::serial();
     let rb = RingBuffer::<usize, 4>::new();
     let mut p = rb.producer().unwrap();
     push(&mut p, &[]).unwrap();
@@ -32,7 +32,6 @@ fn empty_record() {
 
 #[test]
 fn too_small_output_keeps_record() {
-    let _serial = super::common::serial();
     let rb = RingBuffer::<usize, 4>::new();
     let mut p = rb.producer().unwrap();
     push(&mut p, &[1, 2, 3]).unwrap();
@@ -46,7 +45,6 @@ fn too_small_output_keeps_record() {
 
 #[test]
 fn full_is_all_or_nothing() {
-    let _serial = super::common::serial();
     let rb = RingBuffer::<usize, 8>::new();
     let mut p = rb.producer().unwrap();
     push(&mut p, &[1, 2, 3]).unwrap();
@@ -62,7 +60,6 @@ fn full_is_all_or_nothing() {
 
 #[test]
 fn empty_record_takes_a_slot() {
-    let _serial = super::common::serial();
     let rb = RingBuffer::<usize, 2>::new();
     let mut p = rb.producer().unwrap();
     push(&mut p, &[]).unwrap();
@@ -72,7 +69,6 @@ fn empty_record_takes_a_slot() {
 
 #[test]
 fn second_producer_or_consumer_is_refused() {
-    let _serial = super::common::serial();
     let rb = RingBuffer::<usize, 4>::new();
     let p = rb.producer().unwrap();
     assert!(rb.producer().is_none());
@@ -88,7 +84,6 @@ fn second_producer_or_consumer_is_refused() {
 
 #[test]
 fn streamed_record_is_visible_only_after_commit() {
-    let _serial = super::common::serial();
     let rb = RingBuffer::<usize, 8>::new();
     let mut p = rb.producer().unwrap();
     let mut c = rb.consumer().unwrap();
@@ -105,7 +100,6 @@ fn streamed_record_is_visible_only_after_commit() {
 
 #[test]
 fn dropped_record_is_discarded() {
-    let _serial = super::common::serial();
     let rb = RingBuffer::<usize, 8>::new();
     let mut p = rb.producer().unwrap();
     p.record().push(1).unwrap();
@@ -116,7 +110,6 @@ fn dropped_record_is_discarded() {
 
 #[test]
 fn streamed_record_full() {
-    let _serial = super::common::serial();
     let rb = RingBuffer::<usize, 4>::new();
     let mut p = rb.producer().unwrap();
     let mut r = p.record();
@@ -137,7 +130,6 @@ fn streamed_record_full() {
 
 #[test]
 fn wraps_around() {
-    let _serial = super::common::serial();
     let rb = RingBuffer::<u64, 8>::new();
     let mut c = rb.consumer().unwrap();
     for i in 0..1000u64 {
@@ -165,8 +157,7 @@ fn record(n: usize) -> Vec<Frame> {
 
 #[test]
 fn concurrent_records_stay_intact() {
-    let _serial = super::common::serial();
-    const RECORDS: usize = 200_000;
+    const RECORDS: usize = if cfg!(miri) { 64 } else { 200_000 };
     static RB: RingBuffer<Frame, 64> = RingBuffer::new();
 
     let writer = std::thread::spawn(|| {
@@ -194,10 +185,9 @@ fn concurrent_records_stay_intact() {
     assert_eq!(c.pop_slice(&mut buf), Err(PopError::Empty));
 }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(miri)))]
 #[test]
 fn written_from_signal_handler() {
-    let _serial = super::common::serial();
     static RB: RingBuffer<usize, 1024> = RingBuffer::new();
     static SIGNALS: AtomicUsize = AtomicUsize::new(0);
     static DROPPED: AtomicUsize = AtomicUsize::new(0);
