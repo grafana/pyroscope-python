@@ -11,7 +11,22 @@ compile_error!("the signal sampler requires a 64-bit target");
 #[cfg(any(PyPy, GraalPy, Py_GIL_DISABLED, Py_LIMITED_API))]
 compile_error!("the signal sampler requires a default GIL CPython build with the full C API");
 
-#[cfg(all(Py_3_11, not(Py_3_15)))]
-pub mod resolve;
-#[cfg(all(Py_3_11, not(Py_3_15)))]
-pub mod unwind;
+#[cfg(all(Py_3_11, not(Py_3_12)))]
+mod v3_11;
+#[cfg(all(Py_3_11, not(Py_3_12)))]
+pub use v3_11::*;
+
+#[cfg(all(Py_3_12, not(Py_3_13)))]
+mod v3_12;
+#[cfg(all(Py_3_12, not(Py_3_13)))]
+pub use v3_12::*;
+
+#[cfg(all(Py_3_13, not(Py_3_14)))]
+mod v3_13;
+#[cfg(all(Py_3_13, not(Py_3_14)))]
+pub use v3_13::*;
+
+#[cfg(all(Py_3_14, not(Py_3_15)))]
+mod v3_14;
+#[cfg(all(Py_3_14, not(Py_3_15)))]
+pub use v3_14::*;

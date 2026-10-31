@@ -1,5 +1,5 @@
 // Run by build.rs against the target Python's headers. Writes the Rust constants of
-// src/{unwind,resolve}/v3_<minor>.rs into the directory given as the only
+// src/v3_<minor>.rs into the directory given as the only
 // argument, so build.rs can check the checked-in ones.
 
 #define Py_BUILD_CORE
@@ -50,7 +50,7 @@ static uint64_t state_word(const PyASCIIObject *object) {
     return word;
 }
 
-static void write_unwind(void) {
+static void write_layouts(void) {
     fprintf(out, "pub const PY_VERSION: (u8, u8) = (%d, %d);\n", PY_MAJOR_VERSION, PY_MINOR_VERSION);
     print_usize("OB_TYPE", offsetof(PyObject, ob_type));
 #if PY_VERSION_HEX < 0x030d0000
@@ -81,9 +81,6 @@ static void write_unwind(void) {
     fprintf(out, "pub const FRAME_OWNED_BY_INTERPRETER: u8 = %d;\n", FRAME_OWNED_BY_INTERPRETER);
 #endif
 #endif
-}
-
-static void write_resolve(void) {
     print_usize("CO_FILENAME", offsetof(PyCodeObject, co_filename));
     print_usize("CO_QUALNAME", offsetof(PyCodeObject, co_qualname));
     print_usize("CO_FIRSTLINENO", offsetof(PyCodeObject, co_firstlineno));
@@ -115,16 +112,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "usage: %s <out dir>\n", argv[0]);
         return 1;
     }
-    if ((out = open_output(argv[1], "unwind.rs")) == NULL) {
+    if ((out = open_output(argv[1], "layout.rs")) == NULL) {
         return 1;
     }
-    write_unwind();
-    if (fclose(out) != 0) {
-        return 1;
-    }
-    if ((out = open_output(argv[1], "resolve.rs")) == NULL) {
-        return 1;
-    }
-    write_resolve();
+    write_layouts();
     return fclose(out) == 0 ? 0 : 1;
 }
