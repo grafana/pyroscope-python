@@ -107,7 +107,6 @@ impl SignalHandlerSession {
             unicode: (&raw mut pyo3::ffi::PyUnicode_Type) as usize,
             bytes: (&raw mut pyo3::ffi::PyBytes_Type) as usize,
         };
-        handler::configure();
 
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];

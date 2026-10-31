@@ -1,5 +1,8 @@
 use super::*;
 
+// Serialize tests that inspect the process-wide counters.
+static METRICS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 // Unit tests do not link libpython. Only this symbol's address is used, never its contents.
 #[unsafe(export_name = "PyCode_Type")]
 static CODE_TYPE: usize = 0;
@@ -11,10 +14,14 @@ fn set(memory: &mut [usize], offset: usize, value: usize) {
 
 #[test]
 fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
+    let _guard = METRICS_LOCK.lock().unwrap();
+    let dropped_before = METRICS.dropped.load(Ordering::Relaxed);
     init().unwrap();
     let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
     let mut code = [0usize; 4];
     set(&mut code, OB_TYPE, code_type);
+    let invalid_code_type_before = METRICS.invalid_code_type.load(Ordering::Relaxed);
+    let read_errors_before = METRICS.read_errors.load(Ordering::Relaxed);
     let wrong_code = [0usize; 4];
     let code_addr = code.as_ptr() as usize;
 
@@ -34,7 +41,6 @@ fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
     set(&mut tstate, layout::THREAD_FRAME, frame);
     let tstate = tstate.as_ptr() as usize;
 
-    let unwinder = Unwinder::new();
     let mut output = [Frame::default(); 8];
     for (executable, error) in [
         (wrong_code.as_ptr() as usize, Error::InvalidCodeType),
@@ -43,31 +49,39 @@ fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
         (8, Error::Read),
     ] {
         set(&mut outer, layout::EXECUTABLE, executable);
-        assert_eq!(unwinder.unwind_thread(tstate, &mut output), Err(error));
+        assert_eq!(unwind_thread(tstate, &mut output), Err(error));
         // The caller must discard the partial stack on error.
         assert_eq!(output[0].code, code_addr);
     }
     assert_eq!(
-        unwinder.metrics.invalid_code_type.load(Ordering::Relaxed),
-        2
+        METRICS.invalid_code_type.load(Ordering::Relaxed),
+        invalid_code_type_before + 2
     );
-    assert_eq!(unwinder.metrics.read_errors.load(Ordering::Relaxed), 1);
-    assert_eq!(unwinder.metrics.dropped.load(Ordering::Relaxed), 3);
+    assert_eq!(
+        METRICS.read_errors.load(Ordering::Relaxed),
+        read_errors_before + 1
+    );
+    assert_eq!(METRICS.dropped.load(Ordering::Relaxed), dropped_before + 3);
 
     // The output slice can be reused after a failed walk.
     set(&mut outer, layout::EXECUTABLE, code_addr);
-    assert_eq!(unwinder.unwind_thread(tstate, &mut output), Ok(2));
+    assert_eq!(unwind_thread(tstate, &mut output), Ok(2));
     assert!(output[..2].iter().all(|frame| frame.code == code_addr));
     assert_eq!(
-        unwinder.metrics.invalid_code_type.load(Ordering::Relaxed),
-        2
+        METRICS.invalid_code_type.load(Ordering::Relaxed),
+        invalid_code_type_before + 2
     );
-    assert_eq!(unwinder.metrics.read_errors.load(Ordering::Relaxed), 1);
-    assert_eq!(unwinder.metrics.dropped.load(Ordering::Relaxed), 3);
+    assert_eq!(
+        METRICS.read_errors.load(Ordering::Relaxed),
+        read_errors_before + 1
+    );
+    assert_eq!(METRICS.dropped.load(Ordering::Relaxed), dropped_before + 3);
 }
 
 #[test]
 fn frame_limit_accepts_256_and_rejects_257() {
+    let _guard = METRICS_LOCK.lock().unwrap();
+    let dropped_before = METRICS.dropped.load(Ordering::Relaxed);
     init().unwrap();
     let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
     let mut code = [0usize; 4];
@@ -98,20 +112,13 @@ fn frame_limit_accepts_256_and_rejects_257() {
     set(&mut tstate, layout::THREAD_FRAME, frame);
     let tstate = tstate.as_ptr() as usize;
 
-    let unwinder = Unwinder::new();
     let mut output = [Frame::default(); 256];
-    assert_eq!(unwinder.unwind_thread(tstate, &mut []), Err(Error::Full));
-    assert_eq!(
-        unwinder.unwind_thread(tstate, &mut output[..255]),
-        Err(Error::Full)
-    );
-    assert_eq!(unwinder.metrics.dropped.load(Ordering::Relaxed), 2);
-    assert_eq!(unwinder.unwind_thread(tstate, &mut output), Ok(256));
+    assert_eq!(unwind_thread(tstate, &mut []), Err(Error::Full));
+    assert_eq!(unwind_thread(tstate, &mut output[..255]), Err(Error::Full));
+    assert_eq!(METRICS.dropped.load(Ordering::Relaxed), dropped_before + 2);
+    assert_eq!(unwind_thread(tstate, &mut output), Ok(256));
 
     set(&mut frames[MAX_FRAMES - 1], layout::PREVIOUS, extra_frame);
-    assert_eq!(
-        unwinder.unwind_thread(tstate, &mut output),
-        Err(Error::TooDeep)
-    );
-    assert_eq!(unwinder.metrics.dropped.load(Ordering::Relaxed), 3);
+    assert_eq!(unwind_thread(tstate, &mut output), Err(Error::TooDeep));
+    assert_eq!(METRICS.dropped.load(Ordering::Relaxed), dropped_before + 3);
 }
