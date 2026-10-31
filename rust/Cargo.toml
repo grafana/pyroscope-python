@@ -29,4 +29,5 @@ kindasafe = "0.1.1"
 kindasafe_init = "0.1.1"
 
 [build-dependencies]
+cc = "1"
 cmake = "0.1"

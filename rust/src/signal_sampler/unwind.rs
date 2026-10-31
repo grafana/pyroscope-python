@@ -6,19 +6,18 @@
 //!
 //! [`handler`] has a ready-made `SIGPROF` handler.
 //!
-//! Supports CPython 3.11 to 3.14, default (GIL) build, 64-bit targets.
+//! Supports CPython 3.11 to 3.14, default (GIL) build, 64-bit targets. The offsets come from the
+//! headers of the CPython this crate is compiled against, see [`layout`].
 
 pub mod handler;
 mod layout;
 
 pub use kindasafe_init::init;
-pub use layout::{Layout, V3_11, V3_12, V3_13, V3_14};
+pub use layout::{OB_TYPE, PY_VERSION};
 
 use super::ringbuffer::{Record, RingBuffer};
-use core::marker::PhantomData;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-pub const OB_TYPE: usize = 8;
 const WORD: usize = size_of::<usize>();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,12 +47,11 @@ pub struct Frame {
 /// `PyGILState_GetThisThreadState`: the thread state of the calling thread, or 0.
 pub type ThreadStateGetter = extern "C" fn() -> usize;
 
-pub struct Unwinder<L> {
+pub struct Unwinder {
     code_type: usize,
     thread_state: ThreadStateGetter,
     max_frames: usize,
     metrics: Metrics,
-    layout: PhantomData<L>,
 }
 
 struct Metrics {
@@ -62,7 +60,7 @@ struct Metrics {
     no_thread_state: AtomicUsize,
 }
 
-impl<L: Layout> Unwinder<L> {
+impl Unwinder {
     /// [`init`] must have succeeded first, or an unreadable address crashes the process.
     ///
     /// `code_type` is the address of `PyCode_Type`; frames whose executable has another type are
@@ -78,7 +76,6 @@ impl<L: Layout> Unwinder<L> {
                 contentions: AtomicUsize::new(0),
                 no_thread_state: AtomicUsize::new(0),
             },
-            layout: PhantomData,
         }
     }
 
@@ -112,12 +109,12 @@ impl<L: Layout> Unwinder<L> {
         tstate: usize,
         record: &mut Record<'_, '_, Frame, N>,
     ) -> Result<usize, Error> {
-        let mut frame = match L::CFRAME_FRAME {
+        let mut frame = match layout::CFRAME_FRAME {
             Some(offset) => {
-                let cframe = self.read_at(tstate, L::THREAD_FRAME)?;
+                let cframe = self.read_at(tstate, layout::THREAD_FRAME)?;
                 self.read_at(cframe, offset)?
             }
-            None => self.read_at(tstate, L::THREAD_FRAME)?,
+            None => self.read_at(tstate, layout::THREAD_FRAME)?,
         };
         let mut visited = 0;
         let mut pushed = 0;
@@ -126,18 +123,19 @@ impl<L: Layout> Unwinder<L> {
                 return Err(Error::TooDeep);
             }
             visited += 1;
-            let is_python = match L::OWNER {
+            let is_python = match layout::OWNER {
                 Some(offset) => {
                     let owner_word = self.read_at(frame, offset & !(WORD - 1))?;
                     let owner = owner_word.to_ne_bytes()[offset & (WORD - 1)];
-                    owner < 8 && L::SKIP_OWNERS & (1 << owner) == 0
+                    owner < 8 && layout::SKIP_OWNERS & (1 << owner) == 0
                 }
                 None => true,
             };
             if is_python {
-                let executable = self.read_at(frame, L::EXECUTABLE)? & !L::EXECUTABLE_TAG_BITS;
+                let executable =
+                    self.read_at(frame, layout::EXECUTABLE)? & !layout::EXECUTABLE_TAG_BITS;
                 if executable != 0 && self.read_at(executable, OB_TYPE)? == self.code_type {
-                    let instr = self.read_at(frame, L::INSTR)?;
+                    let instr = self.read_at(frame, layout::INSTR)?;
                     record
                         .push(Frame {
                             code: executable,
@@ -147,7 +145,7 @@ impl<L: Layout> Unwinder<L> {
                     pushed += 1;
                 }
             }
-            frame = self.read_at(frame, L::PREVIOUS)?;
+            frame = self.read_at(frame, layout::PREVIOUS)?;
         }
         Ok(pushed)
     }

@@ -1295,6 +1295,7 @@ dependencies = [
 name = "pyroscope_python_extension"
 version = "1.4.0"
 dependencies = [
+ "cc",
  "cmake",
  "hashbrown 0.17.1",
  "kindasafe",

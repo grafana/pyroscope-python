@@ -1,6 +1,7 @@
 use cmake::Config;
 use std::env;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -21,6 +22,8 @@ fn main() {
     cfg.define("Python3_EXECUTABLE", &python_executable);
     cfg.define("Python3_FIND_STRATEGY", "LOCATION");
 
+    generate_unwind_layout(&manifest_dir, Path::new(&python_executable));
+
     let dst = cfg.build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
@@ -33,6 +36,50 @@ fn main() {
     } else {
         println!("cargo:rustc-link-lib=static=stdc++");
     }
+}
+
+/// Compiles and runs `unwind_offsets.c` against the target Python's headers. The program runs on
+/// the build machine, so the target must be able to run there.
+fn generate_unwind_layout(manifest_dir: &Path, python_executable: &Path) {
+    let source = manifest_dir.join("unwind_offsets.c");
+    println!("cargo:rerun-if-changed={}", source.display());
+
+    let output = Command::new(python_executable)
+        .args([
+            "-c",
+            "import sysconfig; print(sysconfig.get_paths()['include'])",
+        ])
+        .output()
+        .expect("failed to run Python3_EXECUTABLE");
+    assert!(
+        output.status.success(),
+        "failed to query the include dir of {}: {}",
+        python_executable.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let include_dir = String::from_utf8(output.stdout).unwrap();
+    let include_dir = include_dir.trim();
+
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let program = out_dir.join("unwind_offsets");
+    let status = cc::Build::new()
+        .get_compiler()
+        .to_command()
+        .arg("-I")
+        .arg(include_dir)
+        .arg("-o")
+        .arg(&program)
+        .arg(&source)
+        .status()
+        .expect("failed to run the C compiler");
+    assert!(status.success(), "failed to compile {}", source.display());
+
+    let output = Command::new(&program)
+        .output()
+        .unwrap_or_else(|e| panic!("failed to run {}: {e}", program.display()));
+    assert!(output.status.success(), "{} failed", program.display());
+    std::fs::write(out_dir.join("unwind_layout.rs"), output.stdout)
+        .expect("failed to write unwind_layout.rs");
 }
 
 fn rerun_if_native_sources_changed(manifest_dir: &Path, cpp_dir: &Path) {

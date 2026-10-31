@@ -11,7 +11,7 @@ use std::time::Duration;
 use ringbuffer::PopError;
 use timer::{Mode, SignalHandler, Timer};
 use unwind::handler;
-use unwind::{Frame, ThreadStateGetter, V3_11, V3_12, V3_13, V3_14};
+use unwind::{Frame, ThreadStateGetter};
 
 mod resolve;
 // Copied as is from pyroscope-py-spy, where its tests use the rest.
@@ -62,14 +62,19 @@ fn lookup_thread_state_getter() -> Result<ThreadStateGetter, Error> {
     Ok(unsafe { std::mem::transmute::<usize, ThreadStateGetter>(addr) })
 }
 
-type Configure = fn(usize, ThreadStateGetter, usize);
-
-fn configure_for(version: (u8, u8)) -> Result<(Configure, &'static resolve::Layout), Error> {
+fn layout_for(version: (u8, u8)) -> Result<&'static resolve::Layout, Error> {
+    if version != unwind::PY_VERSION {
+        let (major, minor) = version;
+        let (built_major, built_minor) = unwind::PY_VERSION;
+        return Err(format!(
+            "running on Python {major}.{minor}, but built against Python {built_major}.{built_minor}"
+        ));
+    }
     Ok(match version {
-        (3, 11) => (handler::configure::<V3_11>, &resolve::V3_11),
-        (3, 12) => (handler::configure::<V3_12>, &resolve::V3_12),
-        (3, 13) => (handler::configure::<V3_13>, &resolve::V3_13),
-        (3, 14) => (handler::configure::<V3_14>, &resolve::V3_14),
+        (3, 11) => &resolve::V3_11,
+        (3, 12) => &resolve::V3_12,
+        (3, 13) => &resolve::V3_13,
+        (3, 14) => &resolve::V3_14,
         (major, minor) => {
             return Err(format!(
                 "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
@@ -93,7 +98,7 @@ pub struct SignalHandlerSession {
 
 impl SignalHandlerSession {
     pub fn start(config: &Config) -> Result<SignalHandlerSession, Error> {
-        let (configure, layout) = configure_for(config.python_version)?;
+        let layout = layout_for(config.python_version)?;
         unwind::init().map_err(|e| format!("failed to install memory fault handlers: {:?}", e))?;
         let code_type = lookup(c"PyCode_Type")?;
         let types = resolve::Types {
@@ -101,7 +106,7 @@ impl SignalHandlerSession {
             unicode: lookup(c"PyUnicode_Type")?,
             bytes: lookup(c"PyBytes_Type")?,
         };
-        configure(code_type, lookup_thread_state_getter()?, MAX_FRAMES);
+        handler::configure(code_type, lookup_thread_state_getter()?, MAX_FRAMES);
 
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];
