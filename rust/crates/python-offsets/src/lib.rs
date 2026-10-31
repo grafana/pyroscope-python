@@ -4,8 +4,8 @@
 //! pointing to that interpreter. Python 3.10 builds expose no layouts, allowing the SDK
 //! to reject signal sampling at runtime.
 
-#[cfg(any(not(Py_3_10), Py_3_15))]
-compile_error!("the SDK builds on CPython 3.10 to 3.14; signal sampling requires 3.11 to 3.14");
+#[cfg(any(not(Py_3_10), Py_3_16))]
+compile_error!("the SDK builds on CPython 3.10 to 3.15; signal sampling requires 3.11 to 3.15");
 #[cfg(not(target_pointer_width = "64"))]
 compile_error!("the signal sampler requires a 64-bit target");
 #[cfg(any(PyPy, GraalPy, Py_GIL_DISABLED, Py_LIMITED_API))]
@@ -30,3 +30,8 @@ pub use v3_13::*;
 mod v3_14;
 #[cfg(all(Py_3_14, not(Py_3_15)))]
 pub use v3_14::*;
+
+#[cfg(all(Py_3_15, not(Py_3_16)))]
+mod v3_15;
+#[cfg(all(Py_3_15, not(Py_3_16)))]
+pub use v3_15::*;

@@ -9,8 +9,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#if PY_VERSION_HEX < 0x030b0000 || PY_VERSION_HEX >= 0x030f0000
-#error "only Python 3.11 to 3.14 are supported"
+#if PY_VERSION_HEX < 0x030b0000 || PY_VERSION_HEX >= 0x03100000
+#error "only Python 3.11 to 3.15 are supported"
 #endif
 
 #if PY_VERSION_HEX >= 0x030e0000
@@ -76,7 +76,9 @@ static void write_layouts(void) {
     // 3.11 has no frames owned by the C stack: its entry frames are Python frames.
 #if PY_VERSION_HEX >= 0x030c0000
     print_usize("OWNER", offsetof(_PyInterpreterFrame, owner));
+#if PY_VERSION_HEX < 0x030f0000
     fprintf(out, "pub const FRAME_OWNED_BY_CSTACK: u8 = %d;\n", FRAME_OWNED_BY_CSTACK);
+#endif
 #if PY_VERSION_HEX >= 0x030e0000
     fprintf(out, "pub const FRAME_OWNED_BY_INTERPRETER: u8 = %d;\n", FRAME_OWNED_BY_INTERPRETER);
 #endif

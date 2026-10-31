@@ -6,7 +6,7 @@ fn main() {
     pyo3_build_config::use_pyo3_cfgs();
     println!("cargo:rerun-if-env-changed=Python3_EXECUTABLE");
     let version = pyo3_build_config::get().version();
-    if version.major != 3 || !(11..=14).contains(&version.minor) {
+    if version.major != 3 || !(11..=15).contains(&version.minor) {
         return; // No layouts on 3.10; lib.rs rejects other unsupported versions.
     }
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
@@ -24,7 +24,7 @@ const UPDATE_PYTHON_LAYOUTS: &str = "PYROSCOPE_UPDATE_PYTHON_LAYOUTS";
 /// the build machine, so the target must be able to run there.
 fn check_python_layouts(manifest_dir: &Path, python_executable: &Path) {
     let version = pyo3_build_config::get().version();
-    if version.major != 3 || !(11..=14).contains(&version.minor) {
+    if version.major != 3 || !(11..=15).contains(&version.minor) {
         return;
     }
     let source = manifest_dir.join("python_offsets.c");

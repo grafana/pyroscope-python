@@ -21,6 +21,12 @@ use unwind::{Frame, MAX_FRAMES};
 
 #[cfg(Py_3_11)]
 mod resolve;
+#[cfg(all(
+    any(Py_3_15, test),
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+mod tstate;
 #[cfg(Py_3_11)]
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
@@ -67,12 +73,48 @@ pub struct Config {
 
 pub type Error = String;
 
+#[cfg(all(Py_3_11, not(Py_3_15)))]
+fn locate_thread_state() -> Result<(), Error> {
+    Ok(())
+}
+
+/// From 3.15 the handler reads the thread state through [`tstate`]. Must be called on a thread
+/// that holds the GIL.
+#[cfg(all(
+    Py_3_15,
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+fn locate_thread_state() -> Result<(), Error> {
+    use pyo3::{Python, ffi};
+    type PyGetter = unsafe extern "C" fn() -> *mut ffi::PyThreadState;
+    // SAFETY: both are `extern "C"` functions without arguments that return a word.
+    let getter = unsafe {
+        std::mem::transmute::<PyGetter, tstate::ThreadStateGetter>(
+            ffi::PyGILState_GetThisThreadState,
+        )
+    };
+    Python::attach(|py| py.detach(|| tstate::locate(getter)))
+        .map_err(|e| format!("failed to locate the thread state of python 3.15+: {e}"))
+}
+
+#[cfg(all(
+    Py_3_15,
+    not(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))
+))]
+fn locate_thread_state() -> Result<(), Error> {
+    Err("python 3.15+ is supported only on Linux x86_64 and aarch64".to_string())
+}
+
 #[cfg(Py_3_11)]
 fn check_version(version: (u8, u8)) -> Result<(), Error> {
     let (major, minor) = version;
-    if !matches!(version, (3, 11..=14)) {
+    if !matches!(version, (3, 11..=15)) {
         return Err(format!(
-            "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
+            "unwinding in the signal handler supports only Python 3.11 to 3.15, found {major}.{minor}"
         ));
     }
     if version != unwind::PY_VERSION {
@@ -107,6 +149,7 @@ impl SignalHandlerSession {
             unicode: (&raw mut pyo3::ffi::PyUnicode_Type) as usize,
             bytes: (&raw mut pyo3::ffi::PyBytes_Type) as usize,
         };
+        locate_thread_state()?;
 
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];
@@ -203,7 +246,7 @@ impl SignalHandlerSession {
     pub fn start(config: &Config) -> Result<Self, Error> {
         let (major, minor) = config.python_version;
         Err(format!(
-            "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
+            "unwinding in the signal handler supports only Python 3.11 to 3.15, found {major}.{minor}"
         ))
     }
 
@@ -231,7 +274,7 @@ mod tests {
             };
             assert_eq!(
                 SignalHandlerSession::start(&config).err().unwrap(),
-                "unwinding in the signal handler supports only Python 3.11 to 3.14, found 3.10"
+                "unwinding in the signal handler supports only Python 3.11 to 3.15, found 3.10"
             );
         }
     }
