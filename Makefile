@@ -94,7 +94,7 @@ mac/arm64:
 .PHONY: check/tag-version
 check/tag-version:
 	@TAG_VERSION=$${TAG#python-}; \
-	CARGO_VERSION=$$(cd rust && cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version'); \
+	CARGO_VERSION=$$(cd rust && cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "pyroscope_python_extension") | .version'); \
 	if [ "$$TAG_VERSION" != "$$CARGO_VERSION" ]; then \
 		echo "error: tag version ($$TAG_VERSION) does not match Cargo.toml version ($$CARGO_VERSION)"; \
 		exit 1; \

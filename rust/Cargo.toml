@@ -1,3 +1,7 @@
+[workspace]
+members = ["crates/python-offsets", "crates/ringbuffer", "crates/signal-timer"]
+resolver = "3"
+
 [package]
 name = "pyroscope_python_extension"
 version = "1.4.0" # x-release-please-version

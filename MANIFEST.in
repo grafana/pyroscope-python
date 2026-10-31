@@ -1,6 +1,7 @@
 include rust/Cargo.toml
 include rust/Cargo.lock
 include rust/build.rs
+recursive-include rust/crates/ Cargo.toml build.rs *.rs *.c
 recursive-include rust/src/ *.rs
 include rust/include/pyroscope_ffi.h
 include dd-trace-py/CMakeLists.txt

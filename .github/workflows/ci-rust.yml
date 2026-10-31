@@ -50,7 +50,7 @@ jobs:
         run: |
           export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
           export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
-          cargo clippy --locked --all-targets -- --deny warnings
+          cargo clippy --locked --workspace --all-targets -- --deny warnings
         working-directory: rust
 
   test:
@@ -78,7 +78,7 @@ jobs:
         run: |
           export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
           export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
-          cargo test --locked
+          cargo test --locked --workspace
         working-directory: rust
 
   miri:
@@ -100,5 +100,5 @@ jobs:
         run: |
           export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
           export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
-          cargo miri test --locked --lib
+          cargo miri test --locked --workspace --lib
         working-directory: rust
