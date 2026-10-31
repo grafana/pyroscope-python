@@ -18,10 +18,10 @@ static UNWINDER: AtomicPtr<Unwinder> = AtomicPtr::new(ptr::null_mut());
 
 /// Sets what the handler needs. Until it is called the handler does nothing.
 ///
-/// `code_type` is the address of `PyCode_Type`. `max_frames` bounds each walk. Configurations
+/// `code_type` is the address of `PyCode_Type`. [`super::MAX_FRAMES`] bounds each walk. Configurations
 /// are leaked and never freed, since a handler may still be using a replaced one.
-pub fn configure(code_type: usize, thread_state: ThreadStateGetter, max_frames: usize) {
-    let unwinder = Box::leak(Box::new(Unwinder::new(code_type, thread_state, max_frames)));
+pub fn configure(code_type: usize, thread_state: ThreadStateGetter) {
+    let unwinder = Box::leak(Box::new(Unwinder::new(code_type, thread_state)));
     UNWINDER.store(unwinder, Ordering::Release);
 }
 
@@ -37,11 +37,7 @@ fn unwinder() -> Option<&'static Unwinder> {
 
 pub extern "C" fn handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut c_void) {
     if let Some(unwinder) = unwinder() {
-        on_signal(unwinder);
+        // Errors are counted by the unwinder.
+        let _ = unwinder.unwind(&RECORDS);
     }
-}
-
-fn on_signal(unwinder: &Unwinder) {
-    // Errors are counted by the unwinder.
-    let _ = unwinder.unwind(&RECORDS);
 }
