@@ -18,7 +18,7 @@ fn main() {
 
 const UPDATE_PYTHON_LAYOUTS: &str = "PYROSCOPE_UPDATE_PYTHON_LAYOUTS";
 
-/// Checks the layouts in `src/{unwind,resolve}/`, which are selected by
+/// Checks the layouts in `src/v3_*.rs`, which are selected by
 /// pyo3's `Py_3_*` cfgs, against the offsets `python_offsets.c` reads from the target Python's
 /// headers. With `PYROSCOPE_UPDATE_PYTHON_LAYOUTS=1` it writes them instead. The program runs on
 /// the build machine, so the target must be able to run there.
@@ -69,25 +69,20 @@ fn check_python_layouts(manifest_dir: &Path, python_executable: &Path) {
         .unwrap_or_else(|e| panic!("failed to run {}: {e}", program.display()));
     assert!(status.success(), "{} failed", program.display());
 
-    for module in ["unwind", "resolve"] {
-        let generated_path = out_dir.join(format!("{module}.rs"));
-        let checked_in_path = manifest_dir.join(format!(
-            "src/{module}/v{}_{}.rs",
-            version.major, version.minor
-        ));
-        println!("cargo:rerun-if-changed={}", checked_in_path.display());
-        let generated = std::fs::read_to_string(&generated_path).unwrap();
-        if update {
-            std::fs::write(&checked_in_path, &generated).unwrap();
-            continue;
-        }
-        let checked_in = std::fs::read_to_string(&checked_in_path).unwrap_or_default();
-        assert!(
-            checked_in == generated,
-            "{} does not match the headers of {} in {include_dir}:\n{generated}\n\
-             Rerun the build with {UPDATE_PYTHON_LAYOUTS}=1 to update it.",
-            checked_in_path.display(),
-            python_executable.display(),
-        );
+    let generated_path = out_dir.join("layout.rs");
+    let checked_in_path = manifest_dir.join(format!("src/v{}_{}.rs", version.major, version.minor));
+    println!("cargo:rerun-if-changed={}", checked_in_path.display());
+    let generated = std::fs::read_to_string(&generated_path).unwrap();
+    if update {
+        std::fs::write(&checked_in_path, &generated).unwrap();
+        return;
     }
+    let checked_in = std::fs::read_to_string(&checked_in_path).unwrap_or_default();
+    assert!(
+        checked_in == generated,
+        "{} does not match the headers of {} in {include_dir}:\n{generated}\n\
+         Rerun the build with {UPDATE_PYTHON_LAYOUTS}=1 to update it.",
+        checked_in_path.display(),
+        python_executable.display(),
+    );
 }

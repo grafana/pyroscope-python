@@ -2,9 +2,9 @@
 //! same process. A recorded code object may have been freed since, so every read goes through
 //! `kindasafe` and the type of every string and line table is checked before it is used.
 
-use pyroscope_python_offsets::resolve as layout;
+use pyroscope_python_offsets as layout;
 
-use super::unwind::{Frame, OB_TYPE};
+use super::unwind::Frame;
 use super::{Lines, ResolvedFrame};
 use layout::*;
 

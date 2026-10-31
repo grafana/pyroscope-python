@@ -10,7 +10,7 @@
 //! checked-in layouts verified against the target CPython headers by `pyroscope-python-offsets`.
 
 pub mod handler;
-use pyroscope_python_offsets::unwind as layout;
+use pyroscope_python_offsets as layout;
 
 pub use kindasafe_init::init;
 pub use layout::{OB_TYPE, PY_VERSION};
