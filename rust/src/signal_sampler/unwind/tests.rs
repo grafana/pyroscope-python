@@ -41,7 +41,7 @@ fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
     set(&mut tstate, layout::THREAD_FRAME, frame);
     let tstate = tstate.as_ptr() as usize;
 
-    let mut output = [Frame::default(); 8];
+    let mut output = [MaybeUninit::uninit(); 8];
     for (executable, error) in [
         (wrong_code.as_ptr() as usize, Error::InvalidCodeType),
         (0, Error::InvalidCodeType),
@@ -50,8 +50,6 @@ fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
     ] {
         set(&mut outer, layout::EXECUTABLE, executable);
         assert_eq!(unwind_thread(tstate, &mut output), Err(error));
-        // The caller must discard the partial stack on error.
-        assert_eq!(output[0].code, code_addr);
     }
     assert_eq!(
         METRICS.invalid_code_type.load(Ordering::Relaxed),
@@ -66,7 +64,12 @@ fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
     // The output slice can be reused after a failed walk.
     set(&mut outer, layout::EXECUTABLE, code_addr);
     assert_eq!(unwind_thread(tstate, &mut output), Ok(2));
-    assert!(output[..2].iter().all(|frame| frame.code == code_addr));
+    // SAFETY: the successful unwind initialized the first two frames.
+    assert!(
+        output[..2]
+            .iter()
+            .all(|frame| unsafe { frame.assume_init().code == code_addr })
+    );
     assert_eq!(
         METRICS.invalid_code_type.load(Ordering::Relaxed),
         invalid_code_type_before + 2
@@ -112,11 +115,19 @@ fn frame_limit_accepts_256_and_rejects_257() {
     set(&mut tstate, layout::THREAD_FRAME, frame);
     let tstate = tstate.as_ptr() as usize;
 
-    let mut output = [Frame::default(); 256];
+    let mut output = [MaybeUninit::uninit(); 256];
     assert_eq!(unwind_thread(tstate, &mut []), Err(Error::Full));
     assert_eq!(unwind_thread(tstate, &mut output[..255]), Err(Error::Full));
     assert_eq!(METRICS.dropped.load(Ordering::Relaxed), dropped_before + 2);
     assert_eq!(unwind_thread(tstate, &mut output), Ok(256));
+    // SAFETY: the successful unwind initialized all 256 frames.
+    assert!(output.iter().all(|frame| unsafe {
+        frame.assume_init()
+            == Frame {
+                code: code.as_ptr() as usize,
+                instr: 0,
+            }
+    }));
 
     set(&mut frames[MAX_FRAMES - 1], layout::PREVIOUS, extra_frame);
     assert_eq!(unwind_thread(tstate, &mut output), Err(Error::TooDeep));

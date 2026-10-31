@@ -15,6 +15,7 @@ use pyroscope_python_offsets::unwind as layout;
 pub use kindasafe_init::init;
 pub use layout::{OB_TYPE, PY_VERSION};
 
+use core::mem::MaybeUninit;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Maximum number of frames visited in one stack, including skipped frames.
@@ -83,13 +84,14 @@ static METRICS: Metrics = Metrics {
 /// An executable whose type is not `PyCode_Type` fails the entire stack.
 /// [`MAX_FRAMES`] bounds the walk, skipped frames included.
 /// Writes the calling thread's frames into `frames`, innermost first, and returns their count.
-/// On error the slice may contain a partial stack, which the caller must discard.
+/// On `Ok(count)`, `frames[..count]` is initialized. On error, the caller must
+/// discard the partial stack without reading the output.
 /// Unwind errors are counted here; publishing the stack is the caller's responsibility.
-pub fn unwind(frames: &mut [Frame]) -> Result<usize, Error> {
+pub fn unwind(frames: &mut [MaybeUninit<Frame>]) -> Result<usize, Error> {
     unwind_thread(current_thread_state(), frames)
 }
 
-fn unwind_thread(tstate: usize, frames: &mut [Frame]) -> Result<usize, Error> {
+fn unwind_thread(tstate: usize, frames: &mut [MaybeUninit<Frame>]) -> Result<usize, Error> {
     if tstate == 0 {
         METRICS.no_thread_state.fetch_add(1, Ordering::Relaxed);
         return Err(Error::NoThreadState);
@@ -115,7 +117,7 @@ fn current_frame(tstate: usize) -> Result<usize, Error> {
     Ok(frame)
 }
 
-fn walk(tstate: usize, frames: &mut [Frame]) -> Result<usize, Error> {
+fn walk(tstate: usize, frames: &mut [MaybeUninit<Frame>]) -> Result<usize, Error> {
     let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
     let mut frame = current_frame(tstate)?;
     let mut visited = 0;
@@ -140,10 +142,10 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<usize, Error> {
         if executable == 0 || read_usize(executable, OB_TYPE)? != code_type {
             return Err(Error::InvalidCodeType);
         }
-        *frames.get_mut(pushed).ok_or(Error::Full)? = Frame {
+        frames.get_mut(pushed).ok_or(Error::Full)?.write(Frame {
             code: executable,
             instr,
-        };
+        });
         pushed += 1;
         frame = previous;
     }
