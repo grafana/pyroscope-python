@@ -1,7 +1,7 @@
 include rust/Cargo.toml
 include rust/Cargo.lock
 include rust/build.rs
-include rust/unwind_offsets.c
+include rust/python_offsets.c
 recursive-include rust/src/ *.rs
 include rust/include/pyroscope_ffi.h
 include dd-trace-py/CMakeLists.txt

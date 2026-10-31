@@ -62,7 +62,7 @@ fn lookup_thread_state_getter() -> Result<ThreadStateGetter, Error> {
     Ok(unsafe { std::mem::transmute::<usize, ThreadStateGetter>(addr) })
 }
 
-fn layout_for(version: (u8, u8)) -> Result<&'static resolve::Layout, Error> {
+fn check_version(version: (u8, u8)) -> Result<(), Error> {
     if version != unwind::PY_VERSION {
         let (major, minor) = version;
         let (built_major, built_minor) = unwind::PY_VERSION;
@@ -70,17 +70,12 @@ fn layout_for(version: (u8, u8)) -> Result<&'static resolve::Layout, Error> {
             "running on Python {major}.{minor}, but built against Python {built_major}.{built_minor}"
         ));
     }
-    Ok(match version {
-        (3, 11) => &resolve::V3_11,
-        (3, 12) => &resolve::V3_12,
-        (3, 13) => &resolve::V3_13,
-        (3, 14) => &resolve::V3_14,
-        (major, minor) => {
-            return Err(format!(
-                "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
-            ));
-        }
-    })
+    match version {
+        (3, 11..=14) => Ok(()),
+        (major, minor) => Err(format!(
+            "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
+        )),
+    }
 }
 
 /// The timer of a running [`SignalHandlerSession`], shared with the callers of
@@ -98,7 +93,7 @@ pub struct SignalHandlerSession {
 
 impl SignalHandlerSession {
     pub fn start(config: &Config) -> Result<SignalHandlerSession, Error> {
-        let layout = layout_for(config.python_version)?;
+        check_version(config.python_version)?;
         unwind::init().map_err(|e| format!("failed to install memory fault handlers: {:?}", e))?;
         let code_type = lookup(c"PyCode_Type")?;
         let types = resolve::Types {
@@ -130,7 +125,7 @@ impl SignalHandlerSession {
             timer: Arc::new(Mutex::new(Some(timer))),
             _handler: signal_handler,
             buf,
-            resolver: resolve::Resolver::new(layout, types, config.lines),
+            resolver: resolve::Resolver::new(types, config.lines),
         })
     }
 

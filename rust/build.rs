@@ -22,7 +22,7 @@ fn main() {
     cfg.define("Python3_EXECUTABLE", &python_executable);
     cfg.define("Python3_FIND_STRATEGY", "LOCATION");
 
-    generate_unwind_layout(&manifest_dir, Path::new(&python_executable));
+    generate_python_layout(&manifest_dir, Path::new(&python_executable));
 
     let dst = cfg.build();
 
@@ -38,10 +38,10 @@ fn main() {
     }
 }
 
-/// Compiles and runs `unwind_offsets.c` against the target Python's headers. The program runs on
+/// Compiles and runs `python_offsets.c` against the target Python's headers. The program runs on
 /// the build machine, so the target must be able to run there.
-fn generate_unwind_layout(manifest_dir: &Path, python_executable: &Path) {
-    let source = manifest_dir.join("unwind_offsets.c");
+fn generate_python_layout(manifest_dir: &Path, python_executable: &Path) {
+    let source = manifest_dir.join("python_offsets.c");
     println!("cargo:rerun-if-changed={}", source.display());
 
     let output = Command::new(python_executable)
@@ -61,7 +61,7 @@ fn generate_unwind_layout(manifest_dir: &Path, python_executable: &Path) {
     let include_dir = include_dir.trim();
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let program = out_dir.join("unwind_offsets");
+    let program = out_dir.join("python_offsets");
     let status = cc::Build::new()
         .get_compiler()
         .to_command()
@@ -74,12 +74,11 @@ fn generate_unwind_layout(manifest_dir: &Path, python_executable: &Path) {
         .expect("failed to run the C compiler");
     assert!(status.success(), "failed to compile {}", source.display());
 
-    let output = Command::new(&program)
-        .output()
+    let status = Command::new(&program)
+        .arg(&out_dir)
+        .status()
         .unwrap_or_else(|e| panic!("failed to run {}: {e}", program.display()));
-    assert!(output.status.success(), "{} failed", program.display());
-    std::fs::write(out_dir.join("unwind_layout.rs"), output.stdout)
-        .expect("failed to write unwind_layout.rs");
+    assert!(status.success(), "{} failed", program.display());
 }
 
 fn rerun_if_native_sources_changed(manifest_dir: &Path, cpp_dir: &Path) {
