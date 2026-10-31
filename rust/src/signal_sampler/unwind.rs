@@ -90,10 +90,6 @@ fn current_thread_state() -> usize {
     0
 }
 
-pub struct Unwinder {
-    metrics: Metrics,
-}
-
 struct Metrics {
     dropped: AtomicUsize,
     no_thread_state: AtomicUsize,
@@ -101,104 +97,97 @@ struct Metrics {
     read_errors: AtomicUsize,
 }
 
-impl Unwinder {
-    /// [`init`] must have succeeded first, or an unreadable address crashes the process.
-    ///
-    /// An executable whose type is not `PyCode_Type` fails the entire stack.
-    /// [`MAX_FRAMES`] bounds the walk, skipped frames included.
-    pub const fn new() -> Self {
-        Unwinder {
-            metrics: Metrics {
-                dropped: AtomicUsize::new(0),
-                no_thread_state: AtomicUsize::new(0),
-                invalid_code_type: AtomicUsize::new(0),
-                read_errors: AtomicUsize::new(0),
-            },
+static METRICS: Metrics = Metrics {
+    dropped: AtomicUsize::new(0),
+    no_thread_state: AtomicUsize::new(0),
+    invalid_code_type: AtomicUsize::new(0),
+    read_errors: AtomicUsize::new(0),
+};
+
+/// [`init`] must have succeeded first, or an unreadable address crashes the process.
+///
+/// An executable whose type is not `PyCode_Type` fails the entire stack.
+/// [`MAX_FRAMES`] bounds the walk, skipped frames included.
+/// Writes the calling thread's frames into `frames`, innermost first, and returns their count.
+/// On error the slice may contain a partial stack, which the caller must discard.
+/// Unwind errors are counted here; publishing the stack is the caller's responsibility.
+pub fn unwind(frames: &mut [Frame]) -> Result<usize, Error> {
+    unwind_thread(current_thread_state(), frames)
+}
+
+fn unwind_thread(tstate: usize, frames: &mut [Frame]) -> Result<usize, Error> {
+    if tstate == 0 {
+        METRICS.no_thread_state.fetch_add(1, Ordering::Relaxed);
+        return Err(Error::NoThreadState);
+    }
+    walk(tstate, frames).inspect_err(|error| {
+        METRICS.dropped.fetch_add(1, Ordering::Relaxed);
+        match error {
+            Error::InvalidCodeType => {
+                METRICS.invalid_code_type.fetch_add(1, Ordering::Relaxed);
+            }
+            Error::Read => {
+                METRICS.read_errors.fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {}
         }
-    }
+    })
+}
 
-    /// Writes the calling thread's frames into `frames`, innermost first, and returns their count.
-    /// On error the slice may contain a partial stack, which the caller must discard.
-    /// Unwind errors are counted here; publishing the stack is the caller's responsibility.
-    pub fn unwind(&self, frames: &mut [Frame]) -> Result<usize, Error> {
-        self.unwind_thread(current_thread_state(), frames)
-    }
+fn current_frame(tstate: usize) -> Result<usize, Error> {
+    let frame = read_usize(tstate, layout::THREAD_FRAME)?;
+    #[cfg(not(Py_3_13))]
+    let frame = read_usize(frame, layout::CFRAME_FRAME)?;
+    Ok(frame)
+}
 
-    fn unwind_thread(&self, tstate: usize, frames: &mut [Frame]) -> Result<usize, Error> {
-        let metrics = &self.metrics;
-        if tstate == 0 {
-            metrics.no_thread_state.fetch_add(1, Ordering::Relaxed);
-            return Err(Error::NoThreadState);
+fn walk(tstate: usize, frames: &mut [Frame]) -> Result<usize, Error> {
+    let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
+    let mut frame = current_frame(tstate)?;
+    let mut visited = 0;
+    let mut pushed = 0;
+    while frame != 0 {
+        if visited == MAX_FRAMES {
+            return Err(Error::TooDeep);
         }
-        self.walk(tstate, frames).inspect_err(|error| {
-            metrics.dropped.fetch_add(1, Ordering::Relaxed);
-            match error {
-                Error::InvalidCodeType => {
-                    metrics.invalid_code_type.fetch_add(1, Ordering::Relaxed);
-                }
-                Error::Read => {
-                    metrics.read_errors.fetch_add(1, Ordering::Relaxed);
-                }
-                _ => {}
+        visited += 1;
+        let previous = read_usize(frame, layout::PREVIOUS)?;
+        #[cfg(Py_3_12)]
+        {
+            let owner = read_u8(frame, layout::OWNER)?;
+            if SKIP_OWNERS & (1 << owner) != 0 {
+                frame = previous;
+                continue;
             }
-        })
-    }
-
-    fn current_frame(&self, tstate: usize) -> Result<usize, Error> {
-        let frame = self.read_usize(tstate, layout::THREAD_FRAME)?;
-        #[cfg(not(Py_3_13))]
-        let frame = self.read_usize(frame, layout::CFRAME_FRAME)?;
-        Ok(frame)
-    }
-
-    fn walk(&self, tstate: usize, frames: &mut [Frame]) -> Result<usize, Error> {
-        let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
-        let mut frame = self.current_frame(tstate)?;
-        let mut visited = 0;
-        let mut pushed = 0;
-        while frame != 0 {
-            if visited == MAX_FRAMES {
-                return Err(Error::TooDeep);
-            }
-            visited += 1;
-            let previous = self.read_usize(frame, layout::PREVIOUS)?;
-            #[cfg(Py_3_12)]
-            {
-                let owner = self.read_u8(frame, layout::OWNER)?;
-                if SKIP_OWNERS & (1 << owner) != 0 {
-                    frame = previous;
-                    continue;
-                }
-            }
-            let executable = self.read_usize(frame, layout::EXECUTABLE)? & EXECUTABLE_MASK;
-            let instr = self.read_usize(frame, layout::INSTR)?;
-
-            if executable == 0 || self.read_usize(executable, OB_TYPE)? != code_type {
-                return Err(Error::InvalidCodeType);
-            }
-            *frames.get_mut(pushed).ok_or(Error::Full)? = Frame {
-                code: executable,
-                instr,
-            };
-            pushed += 1;
-            frame = previous;
         }
-        Ok(pushed)
-    }
+        let executable = read_usize(frame, layout::EXECUTABLE)? & EXECUTABLE_MASK;
+        let instr = read_usize(frame, layout::INSTR)?;
 
-    fn read_u8(&self, base: usize, offset: usize) -> Result<u8, Error> {
-        let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
-        kindasafe::u64(addr as u64)
-            .map(|word| word as u8)
-            .map_err(|_| Error::Read)
+        if executable == 0 || read_usize(executable, OB_TYPE)? != code_type {
+            return Err(Error::InvalidCodeType);
+        }
+        *frames.get_mut(pushed).ok_or(Error::Full)? = Frame {
+            code: executable,
+            instr,
+        };
+        pushed += 1;
+        frame = previous;
     }
+    Ok(pushed)
+}
 
-    fn read_usize(&self, base: usize, offset: usize) -> Result<usize, Error> {
-        let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
-        kindasafe::u64(addr as u64)
-            .map(|word| word as usize)
-            .map_err(|_| Error::Read)
-    }
+fn read_u8(base: usize, offset: usize) -> Result<u8, Error> {
+    let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
+    kindasafe::u64(addr as u64)
+        .map(|word| word as u8)
+        .map_err(|_| Error::Read)
+}
+
+fn read_usize(base: usize, offset: usize) -> Result<usize, Error> {
+    let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
+    kindasafe::u64(addr as u64)
+        .map(|word| word as usize)
+        .map_err(|_| Error::Read)
 }
 
 #[cfg(all(test, not(miri)))]
