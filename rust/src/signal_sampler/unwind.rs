@@ -6,20 +6,34 @@
 //!
 //! [`handler`] has a ready-made `SIGPROF` handler.
 //!
-//! Supports CPython 3.11 to 3.15, default (GIL) build, 64-bit targets.
+//! Supports CPython 3.10 to 3.15, default (GIL) build, 64-bit targets. The offsets come from the
+//! checked-in layouts verified against the target CPython headers by `pyroscope-python-offsets`.
 
 pub mod handler;
-mod layout;
+use pyroscope_python_offsets::unwind as layout;
 
 pub use kindasafe_init::init;
-pub use layout::{Layout, V3_11, V3_12, V3_13, V3_14, V3_15};
+pub use layout::{OB_TYPE, PY_VERSION};
 
 use super::ringbuffer::{Record, RingBuffer};
-use core::marker::PhantomData;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-pub const OB_TYPE: usize = 8;
-const WORD: usize = size_of::<usize>();
+const EXECUTABLE_MASK: usize = {
+    #[cfg(Py_3_14)]
+    let tag_bits = layout::EXECUTABLE_TAG_BITS;
+    #[cfg(not(Py_3_14))]
+    let tag_bits = 0;
+    !tag_bits
+};
+
+#[cfg(all(Py_3_12, not(Py_3_14)))]
+const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_CSTACK;
+#[cfg(all(Py_3_14, not(Py_3_15)))]
+const SKIP_OWNERS: u8 =
+    (1 << layout::FRAME_OWNED_BY_CSTACK) | (1 << layout::FRAME_OWNED_BY_INTERPRETER);
+/// 3.15 has no `FRAME_OWNED_BY_CSTACK`.
+#[cfg(Py_3_15)]
+const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_INTERPRETER;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
@@ -29,6 +43,8 @@ pub enum Error {
     Contended,
     /// Memory on the chain was unreadable.
     Read,
+    /// A Python frame's executable was null or was not a code object.
+    InvalidCodeType,
     /// The ring buffer has no room for the stack.
     Full,
     /// The chain is longer than `max_frames`, or loops.
@@ -41,6 +57,7 @@ pub enum Error {
 pub struct Frame {
     /// Address of the `PyCodeObject`.
     pub code: usize,
+    /// `f_lasti` (signed instruction index, stored as `usize`) on 3.10,
     /// `prev_instr` on 3.11 and 3.12, `instr_ptr` from 3.13.
     pub instr: usize,
 }
@@ -48,25 +65,25 @@ pub struct Frame {
 /// The thread state of the calling thread, or 0. Called from the signal handler.
 pub type ThreadStateGetter = extern "C" fn() -> usize;
 
-pub struct Unwinder<L> {
+pub struct Unwinder {
     code_type: usize,
     thread_state: ThreadStateGetter,
     max_frames: usize,
     metrics: Metrics,
-    layout: PhantomData<L>,
 }
 
 struct Metrics {
     dropped: AtomicUsize,
     contentions: AtomicUsize,
     no_thread_state: AtomicUsize,
+    invalid_code_type: AtomicUsize,
 }
 
-impl<L: Layout> Unwinder<L> {
+impl Unwinder {
     /// [`init`] must have succeeded first, or an unreadable address crashes the process.
     ///
-    /// `code_type` is the address of `PyCode_Type`; frames whose executable has another type are
-    /// skipped. `thread_state` returns the thread state to walk.
+    /// `code_type` is the address of `PyCode_Type`; an executable of another type fails the
+    /// entire stack. `thread_state` returns the thread state to walk.
     /// `max_frames` bounds the walk, skipped frames included.
     pub const fn new(code_type: usize, thread_state: ThreadStateGetter, max_frames: usize) -> Self {
         Unwinder {
@@ -77,8 +94,8 @@ impl<L: Layout> Unwinder<L> {
                 dropped: AtomicUsize::new(0),
                 contentions: AtomicUsize::new(0),
                 no_thread_state: AtomicUsize::new(0),
+                invalid_code_type: AtomicUsize::new(0),
             },
-            layout: PhantomData,
         }
     }
 
@@ -97,8 +114,11 @@ impl<L: Layout> Unwinder<L> {
             return Err(Error::Contended);
         };
         let mut record = producer.record();
-        let pushed = self.walk(tstate, &mut record).inspect_err(|_| {
+        let pushed = self.walk(tstate, &mut record).inspect_err(|error| {
             metrics.dropped.fetch_add(1, Ordering::Relaxed);
+            if *error == Error::InvalidCodeType {
+                metrics.invalid_code_type.fetch_add(1, Ordering::Relaxed);
+            }
         })?;
         if record.commit().is_err() {
             metrics.dropped.fetch_add(1, Ordering::Relaxed);
@@ -107,18 +127,19 @@ impl<L: Layout> Unwinder<L> {
         Ok(pushed)
     }
 
+    fn current_frame(&self, tstate: usize) -> Result<usize, Error> {
+        let frame = self.read_usize(tstate, layout::THREAD_FRAME)?;
+        #[cfg(all(Py_3_11, not(Py_3_13)))]
+        let frame = self.read_usize(frame, layout::CFRAME_FRAME)?;
+        Ok(frame)
+    }
+
     fn walk<const N: usize>(
         &self,
         tstate: usize,
         record: &mut Record<'_, '_, Frame, N>,
     ) -> Result<usize, Error> {
-        let mut frame = match L::CFRAME_FRAME {
-            Some(offset) => {
-                let cframe = self.read_at(tstate, L::THREAD_FRAME)?;
-                self.read_at(cframe, offset)?
-            }
-            None => self.read_at(tstate, L::THREAD_FRAME)?,
-        };
+        let mut frame = self.current_frame(tstate)?;
         let mut visited = 0;
         let mut pushed = 0;
         while frame != 0 {
@@ -126,36 +147,66 @@ impl<L: Layout> Unwinder<L> {
                 return Err(Error::TooDeep);
             }
             visited += 1;
-            let is_python = match L::OWNER {
-                Some(offset) => {
-                    let owner_word = self.read_at(frame, offset & !(WORD - 1))?;
-                    let owner = owner_word.to_ne_bytes()[offset & (WORD - 1)];
-                    owner < 8 && L::SKIP_OWNERS & (1 << owner) == 0
-                }
-                None => true,
-            };
-            if is_python {
-                let executable = self.read_at(frame, L::EXECUTABLE)? & !L::EXECUTABLE_TAG_BITS;
-                if executable != 0 && self.read_at(executable, OB_TYPE)? == self.code_type {
-                    let instr = self.read_at(frame, L::INSTR)?;
-                    record
-                        .push(Frame {
-                            code: executable,
-                            instr,
-                        })
-                        .map_err(|_| Error::Full)?;
-                    pushed += 1;
-                }
+            let (previous, python_frame) = self.read_frame(frame)?;
+            if let Some(python_frame) = python_frame {
+                record.push(python_frame).map_err(|_| Error::Full)?;
+                pushed += 1;
             }
-            frame = self.read_at(frame, L::PREVIOUS)?;
+            frame = previous;
         }
         Ok(pushed)
     }
 
-    fn read_at(&self, base: usize, offset: usize) -> Result<usize, Error> {
+    /// Returns the previous frame and, for Python-owned frames, the sampled code and instruction.
+    fn read_frame(&self, frame: usize) -> Result<(usize, Option<Frame>), Error> {
+        let previous = self.read_usize(frame, layout::PREVIOUS)?;
+        #[cfg(Py_3_12)]
+        {
+            let owner = self.read_u8(frame, layout::OWNER)?;
+            if SKIP_OWNERS & (1 << owner) != 0 {
+                return Ok((previous, None));
+            }
+        }
+        let executable = self.read_usize(frame, layout::EXECUTABLE)? & EXECUTABLE_MASK;
+        #[cfg(Py_3_11)]
+        let instr = self.read_usize(frame, layout::INSTR)?;
+        #[cfg(not(Py_3_11))]
+        // 3.10 stores an int instruction index instead of a pointer.
+        let instr = self.read_i32(frame, layout::INSTR)? as isize as usize;
+
+        if executable == 0 || self.read_usize(executable, OB_TYPE)? != self.code_type {
+            return Err(Error::InvalidCodeType);
+        }
+        Ok((
+            previous,
+            Some(Frame {
+                code: executable,
+                instr,
+            }),
+        ))
+    }
+
+    fn read_u8(&self, base: usize, offset: usize) -> Result<u8, Error> {
+        let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
+        kindasafe::u64(addr as u64)
+            .map(|word| word as u8)
+            .map_err(|_| Error::Read)
+    }
+
+    fn read_i32(&self, base: usize, offset: usize) -> Result<i32, Error> {
+        let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
+        kindasafe::u64(addr as u64)
+            .map(|word| word as i32)
+            .map_err(|_| Error::Read)
+    }
+
+    fn read_usize(&self, base: usize, offset: usize) -> Result<usize, Error> {
         let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
         kindasafe::u64(addr as u64)
             .map(|word| word as usize)
             .map_err(|_| Error::Read)
     }
 }
+
+#[cfg(all(test, not(miri)))]
+mod tests;

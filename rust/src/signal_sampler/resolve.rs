@@ -1,71 +1,14 @@
 //! Resolves the code objects a signal handler recorded into names, from a normal thread of the
 //! same process. A recorded code object may have been freed since, so every read goes through
-//! `kindasafe` and every object's type is checked before it is used.
+//! `kindasafe` and the type of every string and line table is checked before it is used.
+
+use pyroscope_python_offsets::resolve as layout;
 
 use super::unwind::{Frame, OB_TYPE};
+use layout::*;
 
-/// Offsets of one CPython minor version, default (GIL) build, 64-bit. Taken from py-spy's
-/// bindings.
-pub struct Layout {
-    co_filename: usize,
-    co_qualname: usize,
-    co_firstlineno: usize,
-    co_linetable: usize,
-    co_code_adaptive: usize,
-    ascii_size: usize,
-    compact_size: usize,
-}
-
-const UNICODE_LENGTH: usize = 16;
-const UNICODE_STATE: usize = 32;
-const STATE_KIND_MASK: u64 = 0x1c;
-const STATE_KIND_SHIFT: u64 = 2;
-const STATE_COMPACT: u64 = 0x20;
-const STATE_ASCII: u64 = 0x40;
 const MAX_STRING_LENGTH: usize = 4096;
-const BYTES_SIZE: usize = 16;
-const BYTES_DATA: usize = 32;
 const MAX_LINETABLE_SIZE: usize = 1 << 20;
-
-pub static V3_11: Layout = Layout {
-    co_filename: 112,
-    co_qualname: 128,
-    co_firstlineno: 72,
-    co_linetable: 136,
-    co_code_adaptive: 184,
-    ascii_size: 48,
-    compact_size: 72,
-};
-
-pub static V3_12: Layout = Layout {
-    co_code_adaptive: 192,
-    ..V3_12_TO_3_15
-};
-
-pub static V3_13: Layout = Layout {
-    co_code_adaptive: 200,
-    ..V3_12_TO_3_15
-};
-
-pub static V3_14: Layout = Layout {
-    co_code_adaptive: 208,
-    ..V3_12_TO_3_15
-};
-
-pub static V3_15: Layout = Layout {
-    co_code_adaptive: 208,
-    ..V3_12_TO_3_15
-};
-
-const V3_12_TO_3_15: Layout = Layout {
-    co_filename: 112,
-    co_qualname: 128,
-    co_firstlineno: 68,
-    co_linetable: 136,
-    co_code_adaptive: 0,
-    ascii_size: 40,
-    compact_size: 56,
-};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lines {
@@ -85,22 +28,19 @@ pub struct ResolvedFrame {
 }
 
 pub struct Types {
-    pub code: usize,
     pub unicode: usize,
     pub bytes: usize,
 }
 
 pub struct Resolver {
-    layout: &'static Layout,
     types: Types,
     lines: Lines,
     scratch: Vec<u8>,
 }
 
 impl Resolver {
-    pub fn new(layout: &'static Layout, types: Types, lines: Lines) -> Self {
+    pub fn new(types: Types, lines: Lines) -> Self {
         Resolver {
-            layout,
             types,
             lines,
             scratch: Vec::new(),
@@ -120,19 +60,15 @@ impl Resolver {
     /// `None` for shim frames, which have no file name.
     fn resolve_frame(&mut self, frame: &Frame) -> Result<Option<ResolvedFrame>, String> {
         let code = frame.code;
-        if read_word(code + OB_TYPE)? != self.types.code {
-            return Err(format!("{code:#x} is no longer a code object"));
-        }
-        let layout = self.layout;
-        let filename = self.read_string(read_word(code + layout.co_filename)?)?;
+        let filename = self.read_string(read_word(code + CO_FILENAME)?)?;
         if filename.is_empty() || filename == "<shim>" {
             return Ok(None);
         }
-        let name = self.read_string(read_word(code + layout.co_qualname)?)?;
+        let name = self.read_string(read_word(code + CO_QUALNAME)?)?;
         let line = match self.lines {
             Lines::None => 0,
-            Lines::First => first_line(code, layout)?,
-            Lines::LastInstruction => self.line(frame, layout).unwrap_or(0),
+            Lines::First => first_line(code)?,
+            Lines::LastInstruction => self.line(frame).unwrap_or(0),
         };
         Ok(Some(ResolvedFrame {
             name,
@@ -142,9 +78,9 @@ impl Resolver {
     }
 
     /// A line number that cannot be read is not worth dropping the stack for.
-    fn line(&mut self, frame: &Frame, layout: &Layout) -> Result<u32, String> {
-        let first_line = first_line(frame.code, layout)?;
-        let table = read_word(frame.code + layout.co_linetable)?;
+    fn line(&mut self, frame: &Frame) -> Result<u32, String> {
+        let first_line = first_line(frame.code)?;
+        let table = read_word(frame.code + CO_LINETABLE)?;
         if table == 0 || read_word(table + OB_TYPE)? != self.types.bytes {
             return Err(format!("{table:#x} is not an exact bytes"));
         }
@@ -153,10 +89,14 @@ impl Resolver {
             return Err(format!("line table at {table:#x} is too long: {size}"));
         }
         self.read_bytes(table + BYTES_DATA, size)?;
-        let lasti = frame
-            .instr
-            .wrapping_sub(frame.code + layout.co_code_adaptive) as isize;
-        Ok(line_number(first_line as i32, lasti, &self.scratch).max(0) as u32)
+        #[cfg(Py_3_11)]
+        let line = {
+            let lasti = frame.instr.wrapping_sub(frame.code + CO_CODE_ADAPTIVE) as isize;
+            line_number(first_line as i32, lasti, &self.scratch)
+        };
+        #[cfg(not(Py_3_11))]
+        let line = line_number_310(first_line as i32, frame.instr as isize, &self.scratch);
+        Ok(line.max(0) as u32)
     }
 
     fn read_string(&mut self, addr: usize) -> Result<String, String> {
@@ -171,11 +111,15 @@ impl Resolver {
             return Err(format!("string at {addr:#x} is too long: {length}"));
         }
         let state = read_word(addr + UNICODE_STATE)? as u64;
+        #[cfg(not(Py_3_11))]
+        if state & STATE_READY == 0 {
+            return Err(format!("string at {addr:#x} is not ready"));
+        }
         if state & STATE_COMPACT == 0 {
             return Err(format!("string at {addr:#x} is not compact"));
         }
         if state & STATE_ASCII != 0 {
-            self.read_bytes(addr + self.layout.ascii_size, length)?;
+            self.read_bytes(addr + ASCII_SIZE, length)?;
             return String::from_utf8(self.scratch.clone())
                 .map_err(|_| format!("ascii string at {addr:#x} is not utf-8"));
         }
@@ -183,7 +127,7 @@ impl Resolver {
         if !matches!(kind, 1 | 2 | 4) {
             return Err(format!("string at {addr:#x} has kind {kind}"));
         }
-        self.read_bytes(addr + self.layout.compact_size, length * kind)?;
+        self.read_bytes(addr + COMPACT_SIZE, length * kind)?;
         let units = self.scratch.chunks_exact(kind).map(|unit| match kind {
             1 => unit[0] as u32,
             2 => u16::from_ne_bytes([unit[0], unit[1]]) as u32,
@@ -202,14 +146,15 @@ impl Resolver {
     }
 }
 
-fn first_line(code: usize, layout: &Layout) -> Result<u32, String> {
+fn first_line(code: usize) -> Result<u32, String> {
     // `co_firstlineno` is an `int`.
-    Ok(read_word(code + layout.co_firstlineno)? as u32)
+    Ok(read_word(code + CO_FIRSTLINENO)? as u32)
 }
 
 /// Unpacks the location table of python 3.11+, see
 /// <https://github.com/python/cpython/blob/3.11/Objects/locations.md>. `lasti` is the byte offset
 /// of the instruction from `co_code_adaptive`. Ported from py-spy.
+#[cfg(any(test, Py_3_11))]
 fn line_number(first_line: i32, lasti: isize, table: &[u8]) -> i32 {
     let mut line_number = first_line;
     let mut bytecode_address: isize = 0;
@@ -248,6 +193,29 @@ fn line_number(first_line: i32, lasti: isize, table: &[u8]) -> i32 {
     line_number
 }
 
+/// Unpacks 3.10's (byte range length, signed line delta) pairs. `lasti` counts code units.
+/// <https://github.com/python/cpython/blob/3.10/Objects/lnotab_notes.txt>
+#[cfg(any(test, not(Py_3_11)))]
+fn line_number_310(first_line: i32, lasti: isize, table: &[u8]) -> i32 {
+    if lasti < 0 {
+        return first_line;
+    }
+    let mut line = first_line;
+    let mut end = 0;
+    for entry in table.as_chunks::<2>().0 {
+        end += isize::from(entry[0]);
+        let delta = entry[1] as i8;
+        if delta != -128 {
+            line += i32::from(delta);
+        }
+        if end > lasti * 2 {
+            return if delta == -128 { 0 } else { line };
+        }
+    }
+    0
+}
+
+#[cfg(any(test, Py_3_11))]
 fn read_varint(index: &mut usize, table: &[u8]) -> Option<usize> {
     let mut byte = *table.get(*index)?;
     *index += 1;
@@ -262,6 +230,7 @@ fn read_varint(index: &mut usize, table: &[u8]) -> Option<usize> {
     Some(ret)
 }
 
+#[cfg(any(test, Py_3_11))]
 fn read_signed_varint(index: &mut usize, table: &[u8]) -> Option<isize> {
     let unsigned_val = read_varint(index, table)?;
     if unsigned_val & 1 != 0 {
@@ -282,12 +251,38 @@ mod tests {
     use super::*;
 
     #[test]
+    fn python_310_line_number_ranges() {
+        // CPython's documented example: long ranges, no line, and an empty range
+        // used to encode a large positive delta, followed by a backwards line jump.
+        let table = [
+            6, 1, 44, 1, 254, 5, 46, 0, 10, 128, 16, 1, 0, 127, 4, 73, 2, 255,
+        ];
+        for (start, end, line) in [
+            (0, 6, 1),
+            (6, 50, 2),
+            (50, 350, 7),
+            (350, 360, 0),
+            (360, 376, 8),
+            (376, 380, 208),
+            (380, 382, 207),
+        ] {
+            for byte in (start..end).step_by(2) {
+                assert_eq!(line_number_310(0, byte / 2, &table), line, "byte {byte}");
+            }
+        }
+        assert_eq!(line_number_310(12, -1, &table), 12);
+        assert_eq!(line_number_310(12, 0, &[]), 0);
+        assert_eq!(line_number_310(12, 0, &[2]), 0);
+    }
+
+    #[test]
     fn test_py3_11_line_numbers() {
         let table = [
             128_u8, 0, 221, 4, 8, 132, 74, 136, 118, 209, 4, 22, 212, 4, 22, 208, 4, 22, 208, 4,
             22, 208, 4, 22,
         ];
-        let lasti = 214 - V3_11.co_code_adaptive as isize;
+        // `co_code_adaptive` is at 184 on 3.11.
+        let lasti = 214 - 184;
         assert_eq!(line_number(4, lasti, &table), 5);
     }
 

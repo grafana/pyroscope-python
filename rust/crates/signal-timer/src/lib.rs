@@ -171,3 +171,6 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 pub fn gettid() -> pid_t {
     unsafe { libc::syscall(libc::SYS_gettid) as pid_t }
 }
+
+#[cfg(all(test, not(miri)))]
+mod tests;

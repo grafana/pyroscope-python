@@ -11,7 +11,7 @@ use std::time::Duration;
 use ringbuffer::PopError;
 use timer::{Mode, SignalHandler, Timer};
 use unwind::handler;
-use unwind::{Frame, ThreadStateGetter, V3_11, V3_12, V3_13, V3_14, V3_15};
+use unwind::{Frame, ThreadStateGetter};
 
 mod resolve;
 #[cfg(all(
@@ -19,11 +19,8 @@ mod resolve;
     any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
 mod tstate;
-// Copied as is from pyroscope-py-spy, where its tests use the rest.
-#[allow(dead_code)]
-pub mod ringbuffer;
-#[allow(dead_code)]
-pub mod timer;
+use pyroscope_ringbuffer as ringbuffer;
+use pyroscope_signal_timer as timer;
 #[allow(dead_code)]
 pub mod unwind;
 
@@ -85,21 +82,20 @@ fn lookup_thread_state_getter(version: (u8, u8)) -> Result<ThreadStateGetter, Er
     Err("python 3.15+ is supported only on Linux x86_64 and aarch64".to_string())
 }
 
-type Configure = fn(usize, ThreadStateGetter, usize);
-
-fn configure_for(version: (u8, u8)) -> Result<(Configure, &'static resolve::Layout), Error> {
-    Ok(match version {
-        (3, 11) => (handler::configure::<V3_11>, &resolve::V3_11),
-        (3, 12) => (handler::configure::<V3_12>, &resolve::V3_12),
-        (3, 13) => (handler::configure::<V3_13>, &resolve::V3_13),
-        (3, 14) => (handler::configure::<V3_14>, &resolve::V3_14),
-        (3, 15) => (handler::configure::<V3_15>, &resolve::V3_15),
-        (major, minor) => {
-            return Err(format!(
-                "unwinding in the signal handler supports only Python 3.11 to 3.15, found {major}.{minor}"
-            ));
-        }
-    })
+fn check_version(version: (u8, u8)) -> Result<(), Error> {
+    let (major, minor) = version;
+    if !matches!(version, (3, 10..=15)) {
+        return Err(format!(
+            "unwinding in the signal handler supports only Python 3.10 to 3.15, found {major}.{minor}"
+        ));
+    }
+    if version != unwind::PY_VERSION {
+        let (built_major, built_minor) = unwind::PY_VERSION;
+        return Err(format!(
+            "running on Python {major}.{minor}, but built against Python {built_major}.{built_minor}"
+        ));
+    }
+    Ok(())
 }
 
 /// The timer of a running [`SignalHandlerSession`], shared with the callers of
@@ -117,15 +113,14 @@ pub struct SignalHandlerSession {
 
 impl SignalHandlerSession {
     pub fn start(config: &Config) -> Result<SignalHandlerSession, Error> {
-        let (configure, layout) = configure_for(config.python_version)?;
+        check_version(config.python_version)?;
         unwind::init().map_err(|e| format!("failed to install memory fault handlers: {:?}", e))?;
         let code_type = lookup(c"PyCode_Type")?;
         let types = resolve::Types {
-            code: code_type,
             unicode: lookup(c"PyUnicode_Type")?,
             bytes: lookup(c"PyBytes_Type")?,
         };
-        configure(
+        handler::configure(
             code_type,
             lookup_thread_state_getter(config.python_version)?,
             MAX_FRAMES,
@@ -153,7 +148,7 @@ impl SignalHandlerSession {
             timer: Arc::new(Mutex::new(Some(timer))),
             _handler: signal_handler,
             buf,
-            resolver: resolve::Resolver::new(layout, types, config.lines),
+            resolver: resolve::Resolver::new(types, config.lines),
         })
     }
 
