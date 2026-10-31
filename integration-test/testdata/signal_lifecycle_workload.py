@@ -1,0 +1,82 @@
+import faulthandler
+import hashlib
+import os
+from pathlib import Path
+import signal
+import threading
+import time
+
+import pyroscope
+
+
+def configure(**kwargs):
+    return pyroscope.configure(
+        application_name="signal-lifecycle",
+        server_address=os.environ["PYROSCOPE_SERVER_ADDRESS"],
+        cpu_implementation=pyroscope.ProfilerImplementation.Signal,
+        **kwargs,
+    )
+
+
+def zero_rate():
+    for timer in (pyroscope.SignalTimer.ITimer, pyroscope.SignalTimer.CTimer):
+        assert not configure(sample_rate=0, signal_timer=timer)
+    assert configure()
+    assert pyroscope.shutdown()
+
+
+def ctimer_shutdown_fork():
+    timer = pyroscope.SignalTimer.CTimer
+    assert configure(signal_timer=timer)
+    assert pyroscope.shutdown()
+    pid = os.fork()
+    if pid == 0:
+        try:
+            assert configure(signal_timer=timer)
+            timers = Path("/proc/self/timers").read_text()
+            assert f"tid.{threading.get_native_id()}" in timers, timers
+            assert pyroscope.shutdown()
+        except BaseException:
+            import traceback
+            traceback.print_exc()
+            os._exit(1)
+        os._exit(0)
+    _, status = os.waitpid(pid, 0)
+    assert os.waitstatus_to_exitcode(status) == 0, status
+
+
+def fault_handler_takeover():
+    assert configure()
+    faulthandler.enable()
+    signal.raise_signal(signal.SIGPROF)
+    assert pyroscope.shutdown()
+    assert not configure(), "restart must not reuse replaced recovery handlers"
+    assert faulthandler.is_enabled()
+
+
+def bounded_drain():
+    stop = threading.Event()
+    blob = b"x" * 1048576
+
+    def deep(depth):
+        if depth:
+            return deep(depth - 1)
+        while not stop.is_set():
+            hashlib.sha256(blob).digest()  # Native CPU work releases the GIL.
+
+    assert configure(signal_timer=pyroscope.SignalTimer.CTimer, sample_rate=1000)
+    threads = [threading.Thread(target=deep, args=(200,)) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    try:
+        time.sleep(1)
+        # Keep producing until shutdown returns. A broken unbounded drain cannot rely on
+        # the workers stopping to empty the queue; the harness times out such a process.
+        assert pyroscope.shutdown()
+    finally:
+        stop.set()
+        for thread in threads:
+            thread.join()
+
+
+globals()[os.environ["SCENARIO"]]()

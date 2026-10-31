@@ -10,6 +10,7 @@ LOGGER = logging.getLogger(__name__)
 
 LineNo = lib.LineNo
 ProfilerImplementation = lib.ProfilerImplementation
+SignalTimer = lib.SignalTimer
 
 def configure(
         app_name=None,
@@ -36,6 +37,7 @@ def configure(
         mem_enable_mem_domain=True,
         cpu_enabled=True,
         cpu_implementation=ProfilerImplementation.PySpy,
+        signal_timer=SignalTimer.ITimer,
 ):
     if app_name is not None:
         warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
@@ -73,6 +75,7 @@ def configure(
         mem_enable_mem_domain,
         cpu_enabled,
         cpu_implementation,
+        signal_timer,
     )
 
 def configure_experimental_stack_profiler(
@@ -193,5 +196,11 @@ def _install_stack_threads(threading, register, unregister):
     Thread._set_native_id = _set_native_id
     Thread._bootstrap_inner = _bootstrap_inner
 
+    _register_stack_threads(threading, register)
+
+def _register_stack_threads(threading, register):
+    current_id = threading.get_ident()
     for tid, thread in list(threading._active.items()):
-        register(tid, getattr(thread, "native_id", None) or tid)
+        # Older Python versions retain the parent's Thread.native_id after fork.
+        native_id = threading.get_native_id() if tid == current_id else getattr(thread, "native_id", None) or tid
+        register(tid, native_id)

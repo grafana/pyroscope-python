@@ -1,0 +1,17 @@
+[package]
+name = "pyroscope-python-unwind"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98.0"
+publish = false
+
+[dependencies]
+pyroscope-python-offsets = { path = "../python-offsets" }
+pyroscope-ringbuffer = { path = "../ringbuffer" }
+pyo3-ffi.workspace = true
+kindasafe = "0.1.1"
+kindasafe_init = "0.1.1"
+libc = "0.2"
+
+[build-dependencies]
+pyo3-build-config.workspace = true

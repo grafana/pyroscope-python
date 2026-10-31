@@ -21,6 +21,8 @@ fn main() {
     cfg.define("Python3_EXECUTABLE", &python_executable);
     cfg.define("Python3_FIND_STRATEGY", "LOCATION");
 
+    pyo3_build_config::use_pyo3_cfgs();
+
     let dst = cfg.build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());

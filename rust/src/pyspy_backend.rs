@@ -122,6 +122,10 @@ impl Drop for Pyspy {
 }
 
 impl Reporter {
+    pub fn new(buffer: Arc<Mutex<StackBuffer>>) -> Self {
+        Reporter { buffer }
+    }
+
     pub fn report(&self) -> Result<ReportBatch> {
         let report = std::mem::take(&mut *self.buffer.lock()?);
         let reports: Vec<Report> = report.into();

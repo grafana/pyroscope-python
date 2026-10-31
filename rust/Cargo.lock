@@ -762,6 +762,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "kindasafe"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46ccffcebe25cf8699373a15a75485766efa6968ae20af87e910e65276251fd5"
+
+[[package]]
+name = "kindasafe_init"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98ae7076cfbde82f1e3d114b1f661d157c72288415846b0287ed3fe06624a876"
+dependencies = [
+ "kindasafe",
+ "libc",
+ "spin",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1275,6 +1292,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyroscope-python-unwind"
+version = "0.1.0"
+dependencies = [
+ "kindasafe",
+ "kindasafe_init",
+ "libc",
+ "pyo3-build-config",
+ "pyo3-ffi",
+ "pyroscope-python-offsets",
+ "pyroscope-ringbuffer",
+]
+
+[[package]]
 name = "pyroscope-ringbuffer"
 version = "0.1.0"
 dependencies = [
@@ -1294,6 +1324,7 @@ version = "1.4.0"
 dependencies = [
  "cmake",
  "hashbrown 0.17.1",
+ "kindasafe",
  "lazy_static",
  "libc",
  "libflate",
@@ -1302,6 +1333,11 @@ dependencies = [
  "prost",
  "py-spy",
  "pyo3",
+ "pyo3-build-config",
+ "pyroscope-python-offsets",
+ "pyroscope-python-unwind",
+ "pyroscope-ringbuffer",
+ "pyroscope-signal-timer",
  "reqwest",
  "thiserror",
  "url",
