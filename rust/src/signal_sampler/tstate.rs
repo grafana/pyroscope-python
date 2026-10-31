@@ -12,11 +12,13 @@
 //! every thread, which holds when python or libpython is loaded at startup. [`locate`] checks that.
 
 use super::Error;
-use super::unwind::ThreadStateGetter;
 use core::ffi::c_void;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 const WORD: usize = size_of::<usize>();
+
+/// `PyGILState_GetThisThreadState`, returning the thread state of the calling thread or 0.
+pub type ThreadStateGetter = extern "C" fn() -> usize;
 
 static OFFSET: AtomicUsize = AtomicUsize::new(0);
 

@@ -64,12 +64,36 @@ pub struct Frame {
     pub instr: usize,
 }
 
-/// The thread state of the calling thread, or 0. Called from the signal handler.
-pub type ThreadStateGetter = extern "C" fn() -> usize;
+#[cfg(not(Py_3_15))]
+fn current_thread_state() -> usize {
+    // SAFETY: this queries the calling thread's state without requiring the GIL.
+    unsafe { pyo3::ffi::PyGILState_GetThisThreadState() as usize }
+}
+
+/// From 3.15 `PyGILState_GetThisThreadState` is not async-signal-safe, see
+/// [`tstate`](super::tstate).
+#[cfg(all(
+    Py_3_15,
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+fn current_thread_state() -> usize {
+    super::tstate::gilstate()
+}
+
+/// `SignalHandlerSession::start` refuses to start here.
+#[cfg(all(
+    Py_3_15,
+    not(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))
+))]
+fn current_thread_state() -> usize {
+    0
+}
 
 pub struct Unwinder {
-    code_type: usize,
-    thread_state: ThreadStateGetter,
     metrics: Metrics,
 }
 
@@ -78,23 +102,22 @@ struct Metrics {
     contentions: AtomicUsize,
     no_thread_state: AtomicUsize,
     invalid_code_type: AtomicUsize,
+    read_errors: AtomicUsize,
 }
 
 impl Unwinder {
     /// [`init`] must have succeeded first, or an unreadable address crashes the process.
     ///
-    /// `code_type` is the address of `PyCode_Type`; an executable of another type fails the
-    /// entire stack. `thread_state` returns the thread state to walk.
+    /// An executable whose type is not `PyCode_Type` fails the entire stack.
     /// [`MAX_FRAMES`] bounds the walk, skipped frames included.
-    pub const fn new(code_type: usize, thread_state: ThreadStateGetter) -> Self {
+    pub const fn new() -> Self {
         Unwinder {
-            code_type,
-            thread_state,
             metrics: Metrics {
                 dropped: AtomicUsize::new(0),
                 contentions: AtomicUsize::new(0),
                 no_thread_state: AtomicUsize::new(0),
                 invalid_code_type: AtomicUsize::new(0),
+                read_errors: AtomicUsize::new(0),
             },
         }
     }
@@ -103,8 +126,15 @@ impl Unwinder {
     /// thread, innermost first, and returns the number of frames. On error nothing is committed
     /// and the error is counted.
     pub fn unwind<const N: usize>(&self, records: &RingBuffer<Frame, N>) -> Result<usize, Error> {
+        self.unwind_thread(current_thread_state(), records)
+    }
+
+    fn unwind_thread<const N: usize>(
+        &self,
+        tstate: usize,
+        records: &RingBuffer<Frame, N>,
+    ) -> Result<usize, Error> {
         let metrics = &self.metrics;
-        let tstate = (self.thread_state)();
         if tstate == 0 {
             metrics.no_thread_state.fetch_add(1, Ordering::Relaxed);
             return Err(Error::NoThreadState);
@@ -116,8 +146,14 @@ impl Unwinder {
         let mut record = producer.record();
         let pushed = self.walk(tstate, &mut record).inspect_err(|error| {
             metrics.dropped.fetch_add(1, Ordering::Relaxed);
-            if *error == Error::InvalidCodeType {
-                metrics.invalid_code_type.fetch_add(1, Ordering::Relaxed);
+            match error {
+                Error::InvalidCodeType => {
+                    metrics.invalid_code_type.fetch_add(1, Ordering::Relaxed);
+                }
+                Error::Read => {
+                    metrics.read_errors.fetch_add(1, Ordering::Relaxed);
+                }
+                _ => {}
             }
         })?;
         if record.commit().is_err() {
@@ -139,6 +175,7 @@ impl Unwinder {
         tstate: usize,
         record: &mut Record<'_, '_, Frame, N>,
     ) -> Result<usize, Error> {
+        let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
         let mut frame = self.current_frame(tstate)?;
         let mut visited = 0;
         let mut pushed = 0;
@@ -159,7 +196,7 @@ impl Unwinder {
             let executable = self.read_usize(frame, layout::EXECUTABLE)? & EXECUTABLE_MASK;
             let instr = self.read_usize(frame, layout::INSTR)?;
 
-            if executable == 0 || self.read_usize(executable, OB_TYPE)? != self.code_type {
+            if executable == 0 || self.read_usize(executable, OB_TYPE)? != code_type {
                 return Err(Error::InvalidCodeType);
             }
             record

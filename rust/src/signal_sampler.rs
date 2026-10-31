@@ -17,12 +17,12 @@ use timer::{Mode, SignalHandler};
 #[cfg(Py_3_11)]
 use unwind::handler;
 #[cfg(Py_3_11)]
-use unwind::{Frame, MAX_FRAMES, ThreadStateGetter};
+use unwind::{Frame, MAX_FRAMES};
 
 #[cfg(Py_3_11)]
 mod resolve;
 #[cfg(all(
-    Py_3_11,
+    any(Py_3_15, test),
     target_os = "linux",
     any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
@@ -73,38 +73,39 @@ pub struct Config {
 
 pub type Error = String;
 
-#[cfg(Py_3_11)]
-extern "C" fn current_thread_state() -> usize {
-    // SAFETY: this queries the calling thread's state without requiring the GIL.
-    unsafe { pyo3::ffi::PyGILState_GetThisThreadState() as usize }
+#[cfg(all(Py_3_11, not(Py_3_15)))]
+fn locate_thread_state() -> Result<(), Error> {
+    Ok(())
 }
 
-/// Must be called on a thread that holds the GIL.
-#[cfg(Py_3_11)]
-fn thread_state_getter(version: (u8, u8)) -> Result<ThreadStateGetter, Error> {
-    if version < (3, 15) {
-        return Ok(current_thread_state);
-    }
-    #[cfg(all(
+/// From 3.15 the handler reads the thread state through [`tstate`]. Must be called on a thread
+/// that holds the GIL.
+#[cfg(all(
+    Py_3_15,
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+fn locate_thread_state() -> Result<(), Error> {
+    use pyo3::{Python, ffi};
+    type PyGetter = unsafe extern "C" fn() -> *mut ffi::PyThreadState;
+    // SAFETY: both are `extern "C"` functions without arguments that return a word.
+    let getter = unsafe {
+        std::mem::transmute::<PyGetter, tstate::ThreadStateGetter>(
+            ffi::PyGILState_GetThisThreadState,
+        )
+    };
+    Python::attach(|py| py.detach(|| tstate::locate(getter)))
+        .map_err(|e| format!("failed to locate the thread state of python 3.15+: {e}"))
+}
+
+#[cfg(all(
+    Py_3_15,
+    not(all(
         target_os = "linux",
         any(target_arch = "x86_64", target_arch = "aarch64")
-    ))]
-    {
-        use pyo3::{Python, ffi};
-        // Points into libpython, which `locate` searches for the thread local.
-        type PyGetter = unsafe extern "C" fn() -> *mut ffi::PyThreadState;
-        // SAFETY: both are `extern "C"` functions without arguments that return a word.
-        let getter = unsafe {
-            std::mem::transmute::<PyGetter, ThreadStateGetter>(ffi::PyGILState_GetThisThreadState)
-        };
-        Python::attach(|py| py.detach(|| tstate::locate(getter)))
-            .map_err(|e| format!("failed to locate the thread state of python 3.15+: {e}"))?;
-        Ok(tstate::gilstate)
-    }
-    #[cfg(not(all(
-        target_os = "linux",
-        any(target_arch = "x86_64", target_arch = "aarch64")
-    )))]
+    ))
+))]
+fn locate_thread_state() -> Result<(), Error> {
     Err("python 3.15+ is supported only on Linux x86_64 and aarch64".to_string())
 }
 
@@ -144,12 +145,12 @@ impl SignalHandlerSession {
     pub fn start(config: &Config) -> Result<SignalHandlerSession, Error> {
         check_version(config.python_version)?;
         unwind::init().map_err(|e| format!("failed to install memory fault handlers: {:?}", e))?;
-        let code_type = (&raw mut pyo3::ffi::PyCode_Type) as usize;
         let types = resolve::Types {
             unicode: (&raw mut pyo3::ffi::PyUnicode_Type) as usize,
             bytes: (&raw mut pyo3::ffi::PyBytes_Type) as usize,
         };
-        handler::configure(code_type, thread_state_getter(config.python_version)?);
+        locate_thread_state()?;
+        handler::configure();
 
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];
