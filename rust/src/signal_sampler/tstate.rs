@@ -180,4 +180,79 @@ mod tests {
             .is_err()
         );
     }
+
+    const LIBPYTHON: &str = "PYROSCOPE_TEST_LIBPYTHON";
+
+    /// Runs [`locate_in_dlopened_libpython`] in a child process with `tunables` and returns
+    /// its output.
+    fn run_dlopened(libpython: &str, tunables: &str) -> String {
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "signal_sampler::tstate::tests::locate_in_dlopened_libpython",
+                "--include-ignored",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("PYROSCOPE_TEST_LIBPYTHON_CHILD", libpython)
+            .env("GLIBC_TUNABLES", tunables)
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(
+            out.status.success(),
+            "child failed: {stdout}{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        stdout
+    }
+
+    /// libpython `dlopen`ed by a host that does not link it, like an embedding plugin.
+    ///
+    /// Without spare static TLS its TLS is dynamic, which [`locate`] must refuse. By default
+    /// glibc may put it in the spare static TLS area, where [`locate`] may refuse or succeed,
+    /// and the child checks the reads when it succeeds.
+    #[test]
+    fn dlopened_libpython() {
+        let Ok(libpython) = std::env::var(LIBPYTHON) else {
+            eprintln!("{LIBPYTHON} is not set, skipping");
+            return;
+        };
+        let spare_static_tls = run_dlopened(&libpython, "");
+        assert!(spare_static_tls.contains("locate: "), "{spare_static_tls}");
+        let dynamic_tls = run_dlopened(&libpython, "glibc.rtld.optional_static_tls=0");
+        assert!(dynamic_tls.contains("locate: Err"), "{dynamic_tls}");
+    }
+
+    #[test]
+    #[ignore = "run by dlopened_libpython in a child process"]
+    fn locate_in_dlopened_libpython() {
+        let libpython =
+            std::ffi::CString::new(std::env::var("PYROSCOPE_TEST_LIBPYTHON_CHILD").unwrap())
+                .unwrap();
+        // SAFETY: plain libdl and CPython embedding calls with the signatures they have.
+        unsafe {
+            let lib = libc::dlopen(libpython.as_ptr(), libc::RTLD_NOW | libc::RTLD_GLOBAL);
+            assert!(!lib.is_null(), "dlopen failed");
+            let sym = |name: &std::ffi::CStr| {
+                let addr = libc::dlsym(lib, name.as_ptr());
+                assert!(!addr.is_null(), "{name:?} not found");
+                addr as usize
+            };
+            let initialize: extern "C" fn(libc::c_int) =
+                std::mem::transmute(sym(c"Py_InitializeEx"));
+            let save_thread: extern "C" fn() -> usize =
+                std::mem::transmute(sym(c"PyEval_SaveThread"));
+            let getter: ThreadStateGetter =
+                std::mem::transmute(sym(c"PyGILState_GetThisThreadState"));
+            initialize(0);
+            let tstate = save_thread();
+            let result = locate(getter);
+            println!("locate: {result:?}");
+            if result.is_ok() {
+                assert_eq!(gilstate(), tstate);
+                assert_eq!(std::thread::spawn(|| gilstate()).join().unwrap(), 0);
+            }
+        }
+    }
 }
