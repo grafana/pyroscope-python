@@ -63,6 +63,38 @@ func TestPythonSignalProfilerCTimer(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, signalTimer: "CTimer"})
 }
 
+func TestPythonSignalProfilerCTimerRawFork(t *testing.T) {
+	skipUnlessPythonSupportsSignal(t)
+	wheelDir := ensureWheel(t)
+	net := dockertest.CreateNetwork(t)
+	pyroscopeURL := startPyroscope(t, net)
+	for _, scenario := range []string{"main", "unregistered"} {
+		t.Run(scenario, func(t *testing.T) {
+			appName := fmt.Sprintf("pyroscopers.python.test.rawfork.%s.%d", scenario, time.Now().UnixNano())
+			canary := randomHex(t, 16)
+			workload := startPythonTestContainer(t, net, wheelDir, "signal_ctimer_workload.py", map[string]string{
+				"SCENARIO":                   scenario,
+				"PYROSCOPE_APPLICATION_NAME": appName,
+				"CANARY":                     canary,
+			})
+			selector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
+			requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector, "raw_fork_child_burn", 45*time.Second)
+		})
+	}
+}
+
+func TestPythonSignalProfilerCTimerArmingFailure(t *testing.T) {
+	skipUnlessPythonSupportsSignal(t)
+	wheelDir := ensureWheel(t)
+	net := dockertest.CreateNetwork(t)
+	startPyroscope(t, net)
+	workload := startPythonTestContainer(t, net, wheelDir, "signal_ctimer_workload.py", map[string]string{
+		"SCENARIO": "arming_failure",
+	})
+	requireContainerExit(t, workload, 0, time.Minute)
+	t.Log(workload.Logs(t))
+}
+
 func TestPythonSignalProfilerLifecycle(t *testing.T) {
 	skipUnlessPythonSupportsSignal(t)
 	wheelDir := ensureWheel(t)
