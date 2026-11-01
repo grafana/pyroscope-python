@@ -9,8 +9,7 @@ publish = false
 pyroscope-python-offsets = { path = "../python-offsets" }
 pyroscope-ringbuffer = { path = "../ringbuffer" }
 pyo3-ffi.workspace = true
-kindasafe = "0.1.1"
-kindasafe_init = "0.1.1"
+pykindasafe.workspace = true
 libc = "0.2"
 
 [build-dependencies]

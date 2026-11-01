@@ -1,10 +1,12 @@
 //! Resolves the code objects a signal handler recorded into names, from a normal thread of the
 //! same process. A recorded code object may have been freed since, so every read goes through
-//! `kindasafe` and the type of every string and line table is checked before it is used.
+//! an OS-mediated byte copy. String and line-table types and lengths are checked before use;
+//! a readable reused address can still produce a misattributed sample.
 
 use pyroscope_python_offsets as layout;
 
-use super::unwind::{Frame, recovery_active};
+use super::memory::Memory;
+use super::unwind::Frame;
 use super::{Lines, ResolvedFrame};
 use layout::*;
 
@@ -20,15 +22,17 @@ pub struct Resolver {
     types: Types,
     lines: Lines,
     scratch: Vec<u8>,
+    memory: Memory,
 }
 
 impl Resolver {
-    pub fn new(types: Types, lines: Lines) -> Self {
-        Resolver {
+    pub fn new(types: Types, lines: Lines) -> Result<Self, String> {
+        Ok(Resolver {
             types,
             lines,
             scratch: Vec::new(),
-        }
+            memory: Memory::new().map_err(|e| format!("failed to open process memory: {e}"))?,
+        })
     }
 
     pub fn resolve_stack(&mut self, frames: &[Frame]) -> Result<Vec<ResolvedFrame>, String> {
@@ -44,14 +48,14 @@ impl Resolver {
     /// `None` for shim frames, which have no file name.
     fn resolve_frame(&mut self, frame: &Frame) -> Result<Option<ResolvedFrame>, String> {
         let code = frame.code;
-        let filename = self.read_string(read_word(code + CO_FILENAME)?)?;
+        let filename = self.read_string(self.read_word(code + CO_FILENAME)?)?;
         if filename.is_empty() || filename == "<shim>" {
             return Ok(None);
         }
-        let name = self.read_string(read_word(code + CO_QUALNAME)?)?;
+        let name = self.read_string(self.read_word(code + CO_QUALNAME)?)?;
         let line = match self.lines {
             Lines::None => 0,
-            Lines::First => first_line(code)?,
+            Lines::First => self.first_line(code)?,
             Lines::LastInstruction => self.line(frame).unwrap_or(0),
         };
         Ok(Some(ResolvedFrame {
@@ -63,12 +67,12 @@ impl Resolver {
 
     /// A line number that cannot be read is not worth dropping the stack for.
     fn line(&mut self, frame: &Frame) -> Result<u32, String> {
-        let first_line = first_line(frame.code)?;
-        let table = read_word(frame.code + CO_LINETABLE)?;
-        if table == 0 || read_word(table + OB_TYPE)? != self.types.bytes {
+        let first_line = self.first_line(frame.code)?;
+        let table = self.read_word(frame.code + CO_LINETABLE)?;
+        if table == 0 || self.read_word(table + OB_TYPE)? != self.types.bytes {
             return Err(format!("{table:#x} is not an exact bytes"));
         }
-        let size = read_word(table + BYTES_SIZE)?;
+        let size = self.read_word(table + BYTES_SIZE)?;
         if size > MAX_LINETABLE_SIZE {
             return Err(format!("line table at {table:#x} is too long: {size}"));
         }
@@ -87,14 +91,14 @@ impl Resolver {
         if addr == 0 {
             return Err("null string".to_string());
         }
-        if read_word(addr + OB_TYPE)? != self.types.unicode {
+        if self.read_word(addr + OB_TYPE)? != self.types.unicode {
             return Err(format!("{addr:#x} is not an exact str"));
         }
-        let length = read_word(addr + UNICODE_LENGTH)?;
+        let length = self.read_word(addr + UNICODE_LENGTH)?;
         if length > MAX_STRING_LENGTH {
             return Err(format!("string at {addr:#x} is too long: {length}"));
         }
-        let state = read_word(addr + UNICODE_STATE)? as u64;
+        let state = self.read_word(addr + UNICODE_STATE)? as u64;
         #[cfg(not(Py_3_11))]
         if state & STATE_READY == 0 {
             return Err(format!("string at {addr:#x} is not ready"));
@@ -123,17 +127,29 @@ impl Resolver {
     }
 
     fn read_bytes(&mut self, addr: usize, len: usize) -> Result<(), String> {
-        ensure_recovery()?;
         self.scratch.clear();
         self.scratch.resize(len, 0);
-        kindasafe::slice(&mut self.scratch, addr as u64)
+        self.memory
+            .read(addr, &mut self.scratch)
             .map_err(|e| format!("failed to read {len} bytes at {addr:#x}: {e:?}"))
     }
-}
 
-fn first_line(code: usize) -> Result<u32, String> {
-    // `co_firstlineno` is an `int`.
-    Ok(read_word(code + CO_FIRSTLINENO)? as u32)
+    fn first_line(&self, code: usize) -> Result<u32, String> {
+        // `co_firstlineno` is an `int`.
+        let mut out = [0; 4];
+        self.memory
+            .read(code + CO_FIRSTLINENO, &mut out)
+            .map_err(|e| e.to_string())?;
+        Ok(u32::from_ne_bytes(out))
+    }
+
+    fn read_word(&self, addr: usize) -> Result<usize, String> {
+        let mut out = [0; size_of::<usize>()];
+        self.memory
+            .read(addr, &mut out)
+            .map_err(|e| format!("failed to read {addr:#x}: {e}"))?;
+        Ok(usize::from_ne_bytes(out))
+    }
 }
 
 /// Unpacks the location table of python 3.11+, see
@@ -222,21 +238,6 @@ fn read_signed_varint(index: &mut usize, table: &[u8]) -> Option<isize> {
         Some(-((unsigned_val >> 1) as isize))
     } else {
         Some((unsigned_val >> 1) as isize)
-    }
-}
-
-fn read_word(addr: usize) -> Result<usize, String> {
-    ensure_recovery()?;
-    kindasafe::u64(addr as u64)
-        .map(|word| word as usize)
-        .map_err(|e| format!("failed to read {addr:#x}: {e:?}"))
-}
-
-fn ensure_recovery() -> Result<(), String> {
-    if recovery_active() {
-        Ok(())
-    } else {
-        Err("memory fault recovery handlers are no longer installed".to_string())
     }
 }
 
