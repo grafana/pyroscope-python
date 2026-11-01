@@ -29,7 +29,9 @@ jobs:
           components: rustfmt
 
       - name: Run formatting check
-        run: cargo fmt --all --check
+        run: |
+          cargo fmt --all --check
+          cargo fmt --manifest-path ../kindasafe/Cargo.toml --all --check
         working-directory: rust
 
   clippy:
@@ -51,6 +53,7 @@ jobs:
           export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
           export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
           cargo clippy --locked --workspace --all-targets -- --deny warnings
+          cargo clippy --manifest-path ../kindasafe/Cargo.toml --locked --workspace --all-targets -- --deny warnings
         working-directory: rust
 
   test:
@@ -79,6 +82,7 @@ jobs:
           export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
           export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
           cargo test --locked --workspace
+          cargo test --manifest-path ../kindasafe/Cargo.toml --locked --workspace
         working-directory: rust
 
   miri:
@@ -101,4 +105,5 @@ jobs:
           export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
           export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
           cargo miri test --locked --workspace --lib
+          cargo miri test --manifest-path ../kindasafe/Cargo.toml --locked --workspace --lib
         working-directory: rust
