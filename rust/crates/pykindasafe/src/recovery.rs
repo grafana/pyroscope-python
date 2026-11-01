@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicPtr, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU8, Ordering};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum InitError {
@@ -15,11 +15,11 @@ const _: SignalHandler = crash_handler;
 // snapshot is initialized in ordinary thread context and then immutable forever.
 // We intentionally retain it even on partial installation failure: a delivery
 // may already hold its address. Neither handlers nor initialization reclaim it.
-struct PublishedAction(AtomicPtr<libc::sigaction>);
+struct PublishedAction(AtomicPtr<libc::sigaction>, AtomicBool);
 
 impl PublishedAction {
     const fn new() -> Self {
-        Self(AtomicPtr::new(std::ptr::null_mut()))
+        Self(AtomicPtr::new(std::ptr::null_mut()), AtomicBool::new(false))
     }
 
     fn publish(&self, action: libc::sigaction) {
@@ -53,6 +53,13 @@ pub fn is_initialized() -> Option<Result<(), InitError>> {
 }
 /// Install process-wide recovery handlers once, from ordinary thread context.
 /// Do not call from a signal handler: initialization may lock and allocate.
+///
+/// Previous ignore/default dispositions and callback signatures are preserved
+/// for software-generated deliveries. The kernel applies the previous mask,
+/// NODEFER, ONSTACK and RESTART policy. A previous RESETHAND callback is logically
+/// consumed by the first fallback, not by a recovered read; later fallbacks take
+/// default. OS disposition queries still see our trampoline. Interposition cannot
+/// make ignored signals invisible to every interrupted syscall or debugger.
 ///
 /// # Safety
 /// Coordinate all SIGSEGV/SIGBUS disposition changes with other process users.
@@ -115,7 +122,7 @@ unsafe extern "C" fn crash_handler(
         let ctx: *mut libc::ucontext_t = data as *mut libc::ucontext_t;
         let pc = (*ctx).uc_mcontext.gregs[libc::REG_RIP as usize] as usize;
         for x in crate::crash_points().crash_points {
-            if x.pc == pc {
+            if x.pc == pc && is_memory_fault(sig, (*info).si_code) {
                 (*ctx).uc_mcontext.gregs[libc::REG_RIP as usize] = (pc + x.skip) as libc::greg_t;
                 let reg_idx = match x.signal_reg {
                     crate::Reg::Rax => libc::REG_RAX as usize,
@@ -143,7 +150,7 @@ unsafe extern "C" fn crash_handler(
         let ss = &mut (*mctx).__ss;
         let pc = ss.__rip as usize;
         for x in crate::crash_points().crash_points {
-            if x.pc == pc {
+            if x.pc == pc && is_memory_fault(sig, (*info).si_code) {
                 ss.__rip = (pc + x.skip) as u64;
                 match x.signal_reg {
                     crate::Reg::Rax => ss.__rax = sig as u64,
@@ -168,7 +175,7 @@ unsafe extern "C" fn crash_handler(
         let ctx: *mut libc::ucontext_t = data as *mut libc::ucontext_t;
         let pc = (*ctx).uc_mcontext.pc as usize;
         for x in crate::crash_points().crash_points {
-            if x.pc == pc {
+            if x.pc == pc && is_memory_fault(sig, (*info).si_code) {
                 (*ctx).uc_mcontext.pc = (pc + x.skip) as u64;
                 // libc provides no named constants for aarch64 register indices;
                 // mcontext_t.regs is [u64; 31] where index matches register number.
@@ -197,7 +204,7 @@ unsafe extern "C" fn crash_handler(
         let mctx = (*ctx).uc_mcontext;
         let pc = (*mctx).__ss.__pc as usize;
         for x in crate::crash_points().crash_points {
-            if x.pc == pc {
+            if x.pc == pc && is_memory_fault(sig, (*info).si_code) {
                 (*mctx).__ss.__pc = (pc + x.skip) as u64;
                 // libc provides no named constants for aarch64 register indices;
                 // __darwin_arm_thread_state64.__x is [u64; 29] where index matches register number.
@@ -213,22 +220,53 @@ unsafe extern "C" fn crash_handler(
     }
 }
 
-fn call_fallback(
+// Software-generated signals must chain even if they interrupt a read at an
+// instruction listed in crash_points. Darwin uses positive SI_USER (0x10001),
+// so its memory-fault codes must be selected explicitly.
+fn is_memory_fault(sig: libc::c_int, code: libc::c_int) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        matches!(sig, libc::SIGSEGV | libc::SIGBUS) && code > 0
+    }
+    #[cfg(target_os = "macos")]
+    {
+        match sig {
+            libc::SIGSEGV => matches!(code, 1 | 2), // SEGV_MAPERR, SEGV_ACCERR
+            libc::SIGBUS => matches!(code, 1..=3),  // BUS_ADRALN, BUS_ADRERR, BUS_OBJERR
+            _ => false,
+        }
+    }
+}
+
+unsafe fn call_fallback(
     sig: libc::c_int,
     info: *mut libc::siginfo_t,
     data: *mut libc::c_void,
-    fallback: libc::sigaction,
+    action: &libc::sigaction,
+    reset: &AtomicBool,
 ) {
-    if fallback.sa_sigaction == 0 {
-        restore_default_ignal_handler(sig);
-    } else {
-        let handler = unsafe {
-            std::mem::transmute::<
-                usize,
-                extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut libc::c_void),
-            >(fallback.sa_sigaction)
-        };
-        handler(sig, info, data);
+    if action.sa_sigaction == libc::SIG_IGN {
+        return;
+    }
+    if action.sa_sigaction == libc::SIG_DFL
+        || (action.sa_flags & libc::SA_RESETHAND != 0 && reset.swap(true, Ordering::AcqRel))
+    {
+        default_action(sig);
+    }
+    // The kernel applied the original mask, NODEFER, ONSTACK and RESTART flags
+    // when entering our trampoline. RESETHAND is virtualized so recovered reads
+    // do not consume the previous callback. Exactly one fallback delivery wins
+    // the atomic above; recursive/concurrent/subsequent deliveries take default.
+    // A sigaction query sees our trampoline, not this logical one-shot state.
+    unsafe {
+        if action.sa_flags & libc::SA_SIGINFO != 0 {
+            let handler: SignalHandler = std::mem::transmute(action.sa_sigaction);
+            handler(sig, info, data);
+        } else {
+            let handler: unsafe extern "C" fn(libc::c_int) =
+                std::mem::transmute(action.sa_sigaction);
+            handler(sig);
+        }
     }
 }
 unsafe fn fallback(sig: libc::c_int, info: *mut libc::siginfo_t, data: *mut libc::c_void) {
@@ -239,7 +277,7 @@ unsafe fn fallback(sig: libc::c_int, info: *mut libc::siginfo_t, data: *mut libc
     };
     // A slot is published before its callback can become reachable.
     if let Some(action) = slot.get() {
-        call_fallback(sig, info, data, *action);
+        unsafe { call_fallback(sig, info, data, action, &slot.1) };
     }
 }
 
@@ -255,7 +293,9 @@ fn new_signal_handler(
     }
     let mut new = old;
     new.sa_sigaction = handler as usize;
-    new.sa_flags |= libc::SA_RESTART | libc::SA_SIGINFO;
+    // Preserve the application's mask and delivery/restart policy. Never let
+    // kernel one-shot handling remove recovery after the first recovered read.
+    new.sa_flags = (old.sa_flags & !libc::SA_RESETHAND) | libc::SA_SIGINFO;
     // Publication MUST precede the install syscall. An immediate or concurrent
     // delivery during that syscall can already use the old disposition.
     slot.publish(old);
@@ -265,9 +305,27 @@ fn new_signal_handler(
     Ok(())
 }
 
-fn restore_default_ignal_handler(sig: libc::c_int) {
-    let action: libc::sigaction = unsafe { std::mem::zeroed() };
-    unsafe { libc::sigaction(sig, &action, std::ptr::null_mut()) };
+fn default_action(sig: libc::c_int) -> ! {
+    // Both signals we handle have fatal defaults. Restore and redeliver the
+    // current signal on this thread even for raise()/kill(), which cannot be
+    // expected to recur after returning. No lock, allocation or unwinding.
+    unsafe {
+        let mut action: libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = libc::SIG_DFL;
+        libc::sigemptyset(&mut action.sa_mask);
+        if libc::sigaction(sig, &action, std::ptr::null_mut()) != 0 {
+            libc::_exit(128 + sig);
+        }
+        if libc::raise(sig) != 0 {
+            libc::_exit(128 + sig);
+        }
+        let mut unblock: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut unblock);
+        libc::sigaddset(&mut unblock, sig);
+        libc::pthread_sigmask(libc::SIG_UNBLOCK, &unblock, std::ptr::null_mut());
+        // Only reachable on an OS failure or an uncoordinated foreign owner.
+        libc::_exit(128 + sig);
+    }
 }
 
 /// Sanity check that kindasafe crash recovery is working.
@@ -400,5 +458,27 @@ mod publication_tests {
         assert_eq!(calls, 1);
         assert!(segv.get().is_none());
         assert!(bus.get().is_none());
+    }
+}
+
+#[cfg(test)]
+mod disposition_tests {
+    use super::*;
+
+    #[test]
+    fn software_deliveries_are_not_memory_faults() {
+        #[cfg(target_os = "linux")]
+        for code in [libc::SI_USER, libc::SI_TKILL, libc::SI_QUEUE] {
+            assert!(!is_memory_fault(libc::SIGBUS, code));
+            assert!(!is_memory_fault(libc::SIGSEGV, code));
+        }
+        #[cfg(target_os = "macos")]
+        for code in [0x10001, 0x10002] {
+            // Darwin SI_USER and SI_QUEUE
+            assert!(!is_memory_fault(libc::SIGBUS, code));
+            assert!(!is_memory_fault(libc::SIGSEGV, code));
+        }
+        assert!(is_memory_fault(libc::SIGBUS, libc::BUS_ADRERR));
+        assert!(is_memory_fault(libc::SIGSEGV, 1));
     }
 }
