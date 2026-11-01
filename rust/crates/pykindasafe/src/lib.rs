@@ -20,8 +20,14 @@ pub fn u64(at: Ptr) -> Result<Ptr, ReadMemError> {
     }
 }
 
+// Keep the writable derivation shared by both public copy wrappers. This small
+// boundary also lets Miri check destination provenance without executing asm.
+fn with_destination<T>(buf: &mut [u8], copy: impl FnOnce(*mut u8, u64) -> T) -> T {
+    copy(buf.as_mut_ptr(), buf.len() as u64)
+}
+
 pub fn slice(buf: &mut [u8], at: Ptr) -> Result<(), ReadMemError> {
-    let res = arch::slice(buf.as_ptr(), at, buf.len() as u64);
+    let res = with_destination(buf, |dst, len| arch::slice(dst, at, len));
     if res.signal == 0 {
         Ok(())
     } else {
@@ -33,7 +39,7 @@ pub fn str(buf: &mut [u8], at: Ptr) -> Result<&str, ReadMemError> {
     if at == 0 {
         return Ok("");
     }
-    let res = arch::slice(buf.as_ptr(), at, buf.len() as u64);
+    let res = with_destination(buf, |dst, len| arch::slice(dst, at, len));
     if res.signal != 0 {
         return Err(ReadMemError { signal: res.signal });
     }
@@ -105,9 +111,9 @@ pub mod arch {
 
     #[unsafe(naked)]
     pub extern "sysv64" fn slice(
-        _dst: *const u8, // rdi
-        _src: u64,       // rsi
-        _n: u64,         // rdx
+        _dst: *mut u8, // rdi
+        _src: u64,     // rsi
+        _n: u64,       // rdx
     ) -> VecResult {
         core::arch::naked_asm!(
             "mov ecx, edx", // 00010000 	89 D1 	mov 	ecx, edx
@@ -160,9 +166,9 @@ pub mod arch {
 
     #[unsafe(naked)]
     pub extern "C" fn slice(
-        _dst: *const u8, // x0
-        _src: u64,       // x1
-        _n: u64,         // x2
+        _dst: *mut u8, // x0
+        _src: u64,     // x1
+        _n: u64,       // x2
     ) -> VecResult {
         core::arch::naked_asm!(
             "cbz x2, 2f", // offset 0: skip if n==0
@@ -192,5 +198,33 @@ pub mod arch {
                 },
             ],
         }
+    }
+}
+
+#[cfg(test)]
+mod pointer_contract_tests {
+    use super::*;
+
+    #[test]
+    fn mutable_destination_is_writable() {
+        let mut destination = [0; 8];
+        with_destination(&mut destination, |ptr, len| {
+            // SAFETY: the callback receives exclusive access to the entire buffer.
+            unsafe { core::ptr::write_bytes(ptr, 0x61, len as usize) };
+        });
+        assert_eq!(destination, [0x61; 8]);
+    }
+
+    #[test]
+    #[cfg(not(miri))]
+    fn both_wrappers_copy_into_mutable_storage() {
+        init().unwrap();
+        let source = *b"hello\0";
+        let mut destination = [0; 6];
+        slice(&mut destination, source.as_ptr() as Ptr).unwrap();
+        assert_eq!(destination, source);
+        destination.fill(0xff);
+        assert_eq!(str(&mut destination, source.as_ptr() as Ptr), Ok("hello"));
+        assert_eq!(destination, source);
     }
 }
