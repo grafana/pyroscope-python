@@ -6,6 +6,89 @@ pub enum InitError {
     SanityCheckFailed,
 }
 
+/// Why a read must be declined without touching its source address.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum RecoveryError {
+    /// Includes incomplete or failed installation.
+    NotInitialized,
+    SignalBlocked {
+        signal: libc::c_int,
+    },
+    /// pthread_sigmask returns an error number directly, not through errno.
+    MaskQueryFailed {
+        error: libc::c_int,
+    },
+}
+
+// Access the calling thread's errno directly: no lazy Rust TLS initialization.
+fn errno_location() -> *mut libc::c_int {
+    #[cfg(target_os = "linux")]
+    {
+        unsafe { libc::__errno_location() }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        unsafe { libc::__error() }
+    }
+}
+
+struct PreserveErrno(libc::c_int);
+impl PreserveErrno {
+    fn new() -> Self {
+        Self(unsafe { *errno_location() })
+    }
+}
+impl Drop for PreserveErrno {
+    fn drop(&mut self) {
+        unsafe { *errno_location() = self.0 };
+    }
+}
+
+/// Check recovery availability on the **calling thread**, including a signal
+/// handler's currently active mask (not only the interrupted ucontext mask).
+/// Uses lock-free status and POSIX async-signal-safe pthread_sigmask/sigismember;
+/// it never changes the mask, allocates, waits, or changes errno.
+///
+/// On failure, a sampler should skip the sample and a worker should decline the
+/// read. Do not temporarily unblock fault signals: they may be blocked because
+/// a different recovery handler is already active. This result must not be
+/// cached across thread changes, mask changes, or signal-handler boundaries.
+/// Every public read repeats this check. Success does not establish ownership
+/// of foreign memory or detect uncoordinated replacement of our handlers.
+pub fn check_recovery() -> Result<(), RecoveryError> {
+    check_recovery_with(is_initialized() == Some(Ok(())), |mask| unsafe {
+        // With a null set, how is ignored; only query this thread's mask.
+        libc::pthread_sigmask(libc::SIG_SETMASK, std::ptr::null(), mask)
+    })
+}
+
+fn check_recovery_with(
+    initialized: bool,
+    query_mask: impl FnOnce(&mut libc::sigset_t) -> libc::c_int,
+) -> Result<(), RecoveryError> {
+    let _errno = PreserveErrno::new();
+    if !initialized {
+        return Err(RecoveryError::NotInitialized);
+    }
+    let mut mask: libc::sigset_t = unsafe { std::mem::zeroed() };
+    let error = query_mask(&mut mask);
+    if error != 0 {
+        return Err(RecoveryError::MaskQueryFailed { error });
+    }
+    for signal in [libc::SIGSEGV, libc::SIGBUS] {
+        match unsafe { libc::sigismember(&mask, signal) } {
+            0 => {}
+            1 => return Err(RecoveryError::SignalBlocked { signal }),
+            _ => {
+                return Err(RecoveryError::MaskQueryFailed {
+                    error: unsafe { *errno_location() },
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
 type SignalHandler = unsafe extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut libc::c_void);
 
 // Every cfg-selected platform callback must satisfy the OS C ABI at compile time.
@@ -71,8 +154,8 @@ pub fn is_initialized() -> Option<Result<(), InitError>> {
 /// retains its correct fallback for the process lifetime.
 /// Previous callbacks must remain callable for the process lifetime and support
 /// signal-context invocation. Do not unload their code. Callers must check the
-/// result before reading and must arrange deliverable fault signals on each
-/// reading thread. Initialization alone does not prove that thread's mask safe.
+/// result before enabling reads. Each read checks the current thread's mask;
+/// initialization alone does not prove that thread's mask safe.
 ///
 /// ```compile_fail
 /// let _ = pykindasafe::init();
@@ -340,6 +423,7 @@ fn default_action(sig: libc::c_int) -> ! {
 /// The installation and delivery obligations of [`crate::u64`] apply. Call only
 /// from ordinary thread context: this function maps and unmaps a test page.
 pub unsafe fn sanity_check() -> Result<(), InitError> {
+    check_recovery().map_err(|_| InitError::SanityCheckFailed)?;
     unsafe {
         let page = libc::mmap(
             std::ptr::null_mut(),
@@ -356,8 +440,8 @@ pub unsafe fn sanity_check() -> Result<(), InitError> {
         let result = crate::u64(addr);
         libc::munmap(page, 4096);
         match result {
-            Err(_) => Ok(()),
-            Ok(_) => Err(InitError::SanityCheckFailed),
+            Err(crate::ReadMemError::Fault { .. }) => Ok(()),
+            _ => Err(InitError::SanityCheckFailed),
         }
     }
 }
@@ -480,5 +564,34 @@ mod disposition_tests {
         }
         assert!(is_memory_fault(libc::SIGBUS, libc::BUS_ADRERR));
         assert!(is_memory_fault(libc::SIGSEGV, 1));
+    }
+}
+
+#[cfg(test)]
+mod mask_query_tests {
+    use super::*;
+
+    #[test]
+    fn query_failure_is_reported_without_clobbering_errno() {
+        unsafe { *errno_location() = libc::EDOM };
+        let result = check_recovery_with(true, |_| {
+            unsafe { *errno_location() = libc::ERANGE };
+            libc::EINVAL
+        });
+        assert_eq!(
+            result,
+            Err(RecoveryError::MaskQueryFailed {
+                error: libc::EINVAL
+            })
+        );
+        assert_eq!(unsafe { *errno_location() }, libc::EDOM);
+    }
+
+    #[test]
+    fn incomplete_initialization_declines_without_query() {
+        assert_eq!(
+            check_recovery_with(false, |_| panic!("must not query")),
+            Err(RecoveryError::NotInitialized)
+        );
     }
 }

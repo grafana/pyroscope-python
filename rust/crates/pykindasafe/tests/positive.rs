@@ -81,7 +81,7 @@ fn u64_sigsegv() -> TestResult {
     trigger_sigsegv(|p| {
         assert_eq!(
             u64(p),
-            Err(pykindasafe::ReadMemError {
+            Err(pykindasafe::ReadMemError::Fault {
                 signal: PROT_NONE_SIGNAL
             })
         );
@@ -95,7 +95,7 @@ fn u64_sigbus() -> TestResult {
     trigger_sigbus(|p| {
         assert_eq!(
             u64(p),
-            Err(pykindasafe::ReadMemError {
+            Err(pykindasafe::ReadMemError::Fault {
                 signal: libc::SIGBUS as u64
             })
         );
@@ -113,13 +113,13 @@ fn u64_unaligned_page_boundary() -> TestResult {
         assert_eq!(u64(p + boundary - 0x8), Ok(0x6161616161616161));
         assert_eq!(
             u64(p + boundary - 0x7),
-            Err(pykindasafe::ReadMemError {
+            Err(pykindasafe::ReadMemError::Fault {
                 signal: PROT_NONE_SIGNAL
             })
         );
         assert_eq!(
             u64(p + boundary),
-            Err(pykindasafe::ReadMemError {
+            Err(pykindasafe::ReadMemError::Fault {
                 signal: PROT_NONE_SIGNAL
             })
         );
@@ -156,7 +156,7 @@ fn vec_sigsegv() -> TestResult {
         let mut buf = [0u8; 8];
         assert_eq!(
             slice(&mut buf, p as Ptr),
-            Err(pykindasafe::ReadMemError {
+            Err(pykindasafe::ReadMemError::Fault {
                 signal: PROT_NONE_SIGNAL
             })
         );
@@ -172,7 +172,7 @@ fn vec_sigbus() -> TestResult {
         let res = slice(&mut buf, p as Ptr);
         assert_eq!(
             res,
-            Err(pykindasafe::ReadMemError {
+            Err(pykindasafe::ReadMemError::Fault {
                 signal: libc::SIGBUS as u64
             })
         );
@@ -188,7 +188,7 @@ fn vec_sigsegv_page_boundary() -> TestResult {
         let mut buf = [0u8; 16];
         assert_eq!(
             slice(&mut buf, (p + boundary - 8) as Ptr),
-            Err(pykindasafe::ReadMemError {
+            Err(pykindasafe::ReadMemError::Fault {
                 signal: PROT_NONE_SIGNAL
             })
         );

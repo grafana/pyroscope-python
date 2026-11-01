@@ -17,11 +17,22 @@
 
 mod recovery;
 
-pub use recovery::{InitError, init, is_initialized, sanity_check};
+pub use recovery::{InitError, RecoveryError, check_recovery, init, is_initialized, sanity_check};
 
-#[derive(Debug, PartialEq)]
-pub struct ReadMemError {
-    pub signal: u64,
+/// A failed read. Recovery precondition failures occur before touching source
+/// memory; `Fault` can leave a slice partially copied.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum ReadMemError {
+    Fault { signal: u64 },
+    RecoveryUnavailable(RecoveryError),
+    InvalidUtf8,
+    MissingNul,
+}
+
+impl From<RecoveryError> for ReadMemError {
+    fn from(error: RecoveryError) -> Self {
+        Self::RecoveryUnavailable(error)
+    }
 }
 
 pub type Ptr = u64;
@@ -36,20 +47,28 @@ pub type Ptr = u64;
 /// reused memory must still satisfy these observation obligations. Do not read
 /// device memory or locations where a byte load has side effects.
 ///
-/// `init` must have succeeded, its handlers must still be installed, and both
-/// SIGSEGV and SIGBUS must be deliverable on this thread, including inside a
-/// nested signal handler. The caller must preserve those conditions throughout
-/// the read. A fault is reported; it does not prove other source accesses safe.
+/// The recovery handlers must not be replaced after successful [`init`]. The
+/// function checks initialization and the current thread's SIGSEGV/SIGBUS mask
+/// before every access and declines the read if recovery is unavailable, also
+/// in nested signal contexts. Do not modify the saved signal mask/context via
+/// another handler or nonlocal control flow between this check and the load.
+/// Ordinary returning handlers restore the checked mask. No Rust source
+/// reference is created. Recovery does not prove other source accesses safe.
+///
+/// This operation is signal-safe and preserves errno. Use [`check_recovery`] to
+/// decline a whole sample early; its result is not a cached or transferable
+/// permit. The read still checks on the actual calling thread.
 ///
 /// ```compile_fail
 /// let _ = pykindasafe::u64(0);
 /// ```
 pub unsafe fn u64(at: Ptr) -> Result<Ptr, ReadMemError> {
+    check_recovery()?;
     let res = unsafe { arch::u64(at) };
     if res.signal == 0 {
         Ok(res.value)
     } else {
-        Err(ReadMemError { signal: res.signal })
+        Err(ReadMemError::Fault { signal: res.signal })
     }
 }
 
@@ -66,18 +85,19 @@ fn with_destination<T>(buf: &mut [u8], copy: impl FnOnce(*mut u8, u64) -> T) -> 
 /// recovery obligations of [`u64`]. Source and destination must not overlap;
 /// `buf` must remain exclusively writable throughout the operation. No source
 /// alignment or Rust allocation membership is required. Source address plus
-/// length must not wrap the address space. Until the assembly count is widened,
-/// the length must also fit in a `u32` on x86_64.
+/// length must not wrap the address space. On x86_64 the length must also fit
+/// in a `u32` (the assembly counter limit).
 ///
 /// ```compile_fail
 /// let _ = pykindasafe::slice(&mut [0; 8], 0);
 /// ```
 pub unsafe fn slice(buf: &mut [u8], at: Ptr) -> Result<(), ReadMemError> {
+    check_recovery()?;
     let res = with_destination(buf, |dst, len| unsafe { arch::slice(dst, at, len) });
     if res.signal == 0 {
         Ok(())
     } else {
-        Err(ReadMemError { signal: res.signal })
+        Err(ReadMemError::Fault { signal: res.signal })
     }
 }
 
@@ -96,20 +116,17 @@ pub unsafe fn str(buf: &mut [u8], at: Ptr) -> Result<&str, ReadMemError> {
     if at == 0 {
         return Ok("");
     }
-    let res = with_destination(buf, |dst, len| unsafe { arch::slice(dst, at, len) });
-    if res.signal != 0 {
-        return Err(ReadMemError { signal: res.signal });
-    }
+    unsafe { slice(buf, at) }?;
     for i in 0..buf.len() {
         if buf[i] == 0 {
             let v = &buf[..i];
             return match core::str::from_utf8(v) {
                 Ok(v) => Ok(v),
-                Err(_) => Err(ReadMemError { signal: 228 }), //todo
+                Err(_) => Err(ReadMemError::InvalidUtf8),
             };
         }
     }
-    Err(ReadMemError { signal: 229 }) //todo
+    Err(ReadMemError::MissingNul)
 }
 
 pub(crate) fn crash_points() -> CrashPoints {
