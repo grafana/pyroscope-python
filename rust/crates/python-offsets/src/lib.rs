@@ -1,11 +1,10 @@
 //! Checked CPython layouts for the signal sampler, selected by pyo3's Python version cfgs.
 //! `build.rs` compares the selected files with the target interpreter's headers. To regenerate
 //! them, build with `PYROSCOPE_UPDATE_PYTHON_LAYOUTS=1` and `Python3_EXECUTABLE` / `PYO3_PYTHON`
-//! pointing to that interpreter. Supports CPython 3.10 to 3.14.
-//! The checked-in 3.15 layout is reserved for follow-up support and is not selected yet.
+//! pointing to that interpreter. Supports CPython 3.10 to 3.15.
 
-#[cfg(any(not(Py_3_10), Py_3_15))]
-compile_error!("the signal sampler requires CPython 3.10 to 3.14");
+#[cfg(any(not(Py_3_10), Py_3_16))]
+compile_error!("the Python offsets require CPython 3.10 to 3.15");
 #[cfg(not(target_pointer_width = "64"))]
 compile_error!("the signal sampler requires a 64-bit target");
 #[cfg(any(PyPy, GraalPy, Py_GIL_DISABLED, Py_LIMITED_API))]
@@ -35,3 +34,8 @@ pub use v3_13::*;
 mod v3_14;
 #[cfg(all(Py_3_14, not(Py_3_15)))]
 pub use v3_14::*;
+
+#[cfg(all(Py_3_15, not(Py_3_16)))]
+mod v3_15;
+#[cfg(all(Py_3_15, not(Py_3_16)))]
+pub use v3_15::*;
