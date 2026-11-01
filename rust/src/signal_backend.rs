@@ -180,20 +180,45 @@ pub mod threads {
         Ok(())
     }
 
+    #[cfg(target_os = "linux")]
     pub(super) fn attach(timer: SharedTimer) -> Result<()> {
         if INSTALLED.get().is_none() {
             return Err(PyroscopeError::new(
                 "Signal: the thread hooks of the CTimer are not installed",
             ));
         }
+        let id = unsafe { pyo3::ffi::PyThread_get_thread_ident() };
+        let caller_tid = pyroscope_signal_timer::gettid();
         let mut slot = lock(&TIMER);
-        for &tid in lock(&LIVE).get_or_insert_default().values() {
-            if let Err(e) = signal_sampler::thread_created(&timer, tid) {
+        let mut live = lock(&LIVE);
+        let live = live.get_or_insert_default();
+        if let Some(previous) = live.insert(id, caller_tid).filter(|&tid| tid != caller_tid) {
+            log::warn!(
+                target: LOG_TAG,
+                "replacing registered native thread id {previous} with calling thread id {caller_tid}; \
+                 the process probably forked without Python's fork hooks \
+                 (for example uWSGI without --py-call-uwsgi-fork-hooks)"
+            );
+        }
+        signal_sampler::thread_created(&timer, caller_tid).map_err(|e| {
+            PyroscopeError::new(&format!(
+                "Signal: failed to arm the configure caller's CPU timer: {e}"
+            ))
+        })?;
+        for &tid in live.values() {
+            if tid != caller_tid
+                && let Err(e) = signal_sampler::thread_created(&timer, tid)
+            {
                 log::warn!(target: LOG_TAG, "{e}");
             }
         }
         *slot = Some(timer);
         Ok(())
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub(super) fn attach(_timer: SharedTimer) -> Result<()> {
+        Err(PyroscopeError::new("Signal: CTimer works only on Linux"))
     }
 
     pub(super) fn detach() {
