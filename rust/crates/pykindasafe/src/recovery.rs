@@ -446,7 +446,8 @@ pub unsafe fn sanity_check() -> Result<(), InitError> {
     }
 }
 
-#[cfg(test)]
+// These tests install real OS handlers and execute native recovery assembly.
+#[cfg(all(test, not(miri)))]
 mod tests {
     use super::*;
 
