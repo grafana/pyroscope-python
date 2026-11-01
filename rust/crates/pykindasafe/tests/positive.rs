@@ -1,4 +1,13 @@
-use pykindasafe::{Ptr, slice, u64};
+use pykindasafe::{Ptr, ReadMemError};
+
+// Test-only wrappers: all tests initialize recovery before reading, use stable
+// initialized source allocations (or inaccessible mappings), and distinct buffers.
+fn u64(at: Ptr) -> Result<Ptr, ReadMemError> {
+    unsafe { pykindasafe::u64(at) }
+}
+fn slice(buf: &mut [u8], at: Ptr) -> Result<(), ReadMemError> {
+    unsafe { pykindasafe::slice(buf, at) }
+}
 use std::fmt;
 
 type TestResult<T = ()> = std::result::Result<T, TestError>;
@@ -38,14 +47,14 @@ const PROT_NONE_SIGNAL: u64 = libc::SIGBUS as u64;
 
 #[test]
 fn test_init() -> TestResult {
-    pykindasafe::init()?;
-    pykindasafe::init()?;
+    unsafe { pykindasafe::init() }?;
+    unsafe { pykindasafe::init() }?;
     Ok(())
 }
 
 #[test]
 fn u64_aligned() -> TestResult {
-    pykindasafe::init()?;
+    unsafe { pykindasafe::init() }?;
 
     let x: Vec<u8> = vec![0xca, 0xfe, 0xba, 0xbe, 0xde, 0xad, 0xbe, 0xef];
     let x_ptr = x.as_ptr() as Ptr;
@@ -57,7 +66,7 @@ fn u64_aligned() -> TestResult {
 
 #[test]
 fn u64_unaligned() -> TestResult {
-    pykindasafe::init()?;
+    unsafe { pykindasafe::init() }?;
 
     let x: Vec<u8> = vec![0xca, 0xfe, 0xba, 0xbe, 0xde, 0xad, 0xbe, 0xef, 0x00];
     let x_ptr = x.as_ptr() as Ptr + 1;
@@ -68,7 +77,7 @@ fn u64_unaligned() -> TestResult {
 
 #[test]
 fn u64_sigsegv() -> TestResult {
-    pykindasafe::init()?;
+    unsafe { pykindasafe::init() }?;
     trigger_sigsegv(|p| {
         assert_eq!(
             u64(p),
@@ -82,7 +91,7 @@ fn u64_sigsegv() -> TestResult {
 
 #[test]
 fn u64_sigbus() -> TestResult {
-    pykindasafe::init()?;
+    unsafe { pykindasafe::init() }?;
     trigger_sigbus(|p| {
         assert_eq!(
             u64(p),
@@ -96,7 +105,7 @@ fn u64_sigbus() -> TestResult {
 
 #[test]
 fn u64_unaligned_page_boundary() -> TestResult {
-    pykindasafe::init()?;
+    unsafe { pykindasafe::init() }?;
 
     trigger_sigsegv_page_boundary(|p, ps| {
         let boundary = ps as u64;
@@ -120,7 +129,7 @@ fn u64_unaligned_page_boundary() -> TestResult {
 
 #[test]
 fn vec_aligned() -> TestResult {
-    pykindasafe::init()?;
+    unsafe { pykindasafe::init() }?;
     let mut buf = vec![0u8; 8];
     let x: Vec<u8> = vec![0xca, 0xfe, 0xba, 0xbe, 0xde, 0xad, 0xbe, 0xef];
     slice(&mut buf, x.as_ptr() as Ptr)?;
@@ -130,7 +139,7 @@ fn vec_aligned() -> TestResult {
 
 #[test]
 fn vec_unaligned() -> TestResult {
-    pykindasafe::init()?;
+    unsafe { pykindasafe::init() }?;
     let mut buf = vec![0u8; 8];
     let x: Vec<u8> = vec![0xca, 0xfe, 0xba, 0xbe, 0xde, 0xad, 0xbe, 0xef, 0xcc];
     let x_ptr = x.as_ptr() as Ptr + 1;
@@ -142,7 +151,7 @@ fn vec_unaligned() -> TestResult {
 
 #[test]
 fn vec_sigsegv() -> TestResult {
-    pykindasafe::init()?;
+    unsafe { pykindasafe::init() }?;
     trigger_sigsegv(|p| {
         let mut buf = [0u8; 8];
         assert_eq!(
@@ -157,7 +166,7 @@ fn vec_sigsegv() -> TestResult {
 
 #[test]
 fn vec_sigbus() -> TestResult {
-    pykindasafe::init()?;
+    unsafe { pykindasafe::init() }?;
     trigger_sigbus(|p| {
         let mut buf = [0u8; 8];
         let res = slice(&mut buf, p as Ptr);
@@ -172,7 +181,7 @@ fn vec_sigbus() -> TestResult {
 }
 #[test]
 fn vec_sigsegv_page_boundary() -> TestResult {
-    pykindasafe::init()?;
+    unsafe { pykindasafe::init() }?;
 
     trigger_sigsegv_page_boundary(|p, ps| {
         let boundary = ps as u64;

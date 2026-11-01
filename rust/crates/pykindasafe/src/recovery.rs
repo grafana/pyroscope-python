@@ -10,11 +10,27 @@ static mut FALLBACK_SIGBUS: libc::sigaction = unsafe { std::mem::zeroed() };
 
 static INIT_LOCK: spin::Mutex<Option<Result<(), InitError>>> = spin::Mutex::new(None);
 
+/// Query initialization from ordinary thread context; this may take a lock.
+/// Do not call from a signal handler. Success does not detect later replacement.
 pub fn is_initialized() -> Option<Result<(), InitError>> {
     let g = INIT_LOCK.lock();
     g.clone()
 }
-pub fn init() -> Result<(), InitError> {
+/// Install process-wide recovery handlers once, from ordinary thread context.
+/// Do not call from a signal handler: initialization may lock and allocate.
+///
+/// # Safety
+/// Coordinate all SIGSEGV/SIGBUS disposition changes with other process users.
+/// No foreign owner may change those dispositions during installation or reads.
+/// Previous callbacks must remain callable for the process lifetime and support
+/// signal-context invocation. Do not unload their code. Callers must check the
+/// result before reading and must arrange deliverable fault signals on each
+/// reading thread. Initialization alone does not prove that thread's mask safe.
+///
+/// ```compile_fail
+/// let _ = pykindasafe::init();
+/// ```
+pub unsafe fn init() -> Result<(), InitError> {
     let mut g = INIT_LOCK.lock();
     if let Some(prev) = g.clone() {
         return prev;
@@ -25,7 +41,7 @@ pub fn init() -> Result<(), InitError> {
     res
 }
 
-pub fn init_locked() -> Result<(), InitError> {
+fn init_locked() -> Result<(), InitError> {
     unsafe {
         FALLBACK_SIGSEGV = new_signal_handler(libc::SIGSEGV, crash_handler)
             .map_err(|_| InitError::InstallSignalHandlersFailed)?;
@@ -176,7 +192,7 @@ fn new_signal_handler(
     }
 }
 
-pub fn restore_default_ignal_handler(sig: libc::c_int) {
+fn restore_default_ignal_handler(sig: libc::c_int) {
     let action: libc::sigaction = unsafe { std::mem::zeroed() };
     unsafe { libc::sigaction(sig, &action, std::ptr::null_mut()) };
 }
@@ -189,7 +205,10 @@ pub fn restore_default_ignal_handler(sig: libc::c_int) {
 ///
 /// Returns `Ok(())` if the sanity check passes, `Err(SanityCheckFailed)` if
 /// the read unexpectedly succeeded (meaning crash recovery is broken).
-pub fn sanity_check() -> Result<(), InitError> {
+/// # Safety
+/// The installation and delivery obligations of [`crate::u64`] apply. Call only
+/// from ordinary thread context: this function maps and unmaps a test page.
+pub unsafe fn sanity_check() -> Result<(), InitError> {
     unsafe {
         let page = libc::mmap(
             std::ptr::null_mut(),
@@ -218,15 +237,15 @@ mod tests {
 
     #[test]
     fn test_init_idempotent() {
-        assert!(init().is_ok());
-        assert!(init().is_ok());
+        assert!(unsafe { init() }.is_ok());
+        assert!(unsafe { init() }.is_ok());
         assert!(is_initialized().is_some());
         assert_eq!(is_initialized(), Some(Ok(())));
     }
 
     #[test]
     fn test_sanity_check() {
-        assert!(init().is_ok());
-        assert!(sanity_check().is_ok());
+        assert!(unsafe { init() }.is_ok());
+        assert!(unsafe { sanity_check() }.is_ok());
     }
 }
