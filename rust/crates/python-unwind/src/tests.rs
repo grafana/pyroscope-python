@@ -45,7 +45,7 @@ fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
     for (executable, error) in [
         (wrong_code.as_ptr() as usize, Error::InvalidCodeType),
         (0, Error::InvalidCodeType),
-        // Reading ob_type in the unmapped null page fails through kindasafe.
+        // Reading ob_type in the unmapped null page fails through pykindasafe.
         (8, Error::Read),
     ] {
         set(&mut outer, layout::EXECUTABLE, executable);
@@ -212,6 +212,40 @@ fn fault_handler_takeover_disables_reads_and_restart() {
         assert!(
             status.success(),
             "child failed after takeover of signal {signal}: {status}"
+        );
+    }
+}
+
+#[test]
+fn blocked_fault_signal_skips_sample_without_latching_takeover() {
+    let _guard = METRICS_LOCK.lock().unwrap();
+    init().unwrap();
+    for signal in [libc::SIGSEGV, libc::SIGBUS] {
+        let mut mask: libc::sigset_t = unsafe { std::mem::zeroed() };
+        let mut previous: libc::sigset_t = unsafe { std::mem::zeroed() };
+        unsafe {
+            libc::sigemptyset(&mut mask);
+            libc::sigaddset(&mut mask, signal);
+            assert_eq!(
+                libc::pthread_sigmask(libc::SIG_BLOCK, &mask, &mut previous),
+                0
+            );
+        }
+        // A known invalid source must never be touched while recovery is blocked.
+        let mut frames = [Frame::default()];
+        let result = unwind_thread(1, &mut frames);
+        let active = recovery_active();
+        let restart = init();
+        assert_eq!(
+            unsafe { libc::pthread_sigmask(libc::SIG_SETMASK, &previous, std::ptr::null_mut()) },
+            0
+        );
+        assert_eq!(result, Err(Error::RecoveryUnavailable));
+        assert!(!active);
+        assert!(restart.is_ok());
+        assert!(
+            recovery_active(),
+            "temporary mask must not disable later samples"
         );
     }
 }

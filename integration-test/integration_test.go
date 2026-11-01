@@ -100,7 +100,7 @@ func TestPythonSignalProfilerLifecycle(t *testing.T) {
 	wheelDir := ensureWheel(t)
 	net := dockertest.CreateNetwork(t)
 	startPyroscope(t, net)
-	for _, scenario := range []string{"zero_rate", "ctimer_shutdown_fork", "fault_handler_takeover", "bounded_drain"} {
+	for _, scenario := range []string{"zero_rate", "ctimer_shutdown_fork", "fault_handler_takeover", "bounded_drain", "fault_fallback"} {
 		t.Run(scenario, func(t *testing.T) {
 			workload := startPythonTestContainer(t, net, wheelDir, "signal_lifecycle_workload.py", map[string]string{
 				"SCENARIO": scenario,

@@ -14,6 +14,7 @@ use timer::{Mode, SignalHandler};
 use unwind::handler;
 use unwind::{Frame, MAX_FRAMES};
 
+mod memory;
 mod resolve;
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
@@ -100,6 +101,8 @@ impl SignalHandlerSession {
             bytes: (&raw mut pyo3::ffi::PyBytes_Type) as usize,
         };
 
+        let resolver = resolve::Resolver::new(types, config.lines)?;
+
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];
         if let Some(mut consumer) = handler::consumer() {
@@ -122,7 +125,7 @@ impl SignalHandlerSession {
             timer: Arc::new(Mutex::new(Some(timer))),
             _handler: signal_handler,
             buf,
-            resolver: resolve::Resolver::new(types, config.lines),
+            resolver,
         })
     }
 

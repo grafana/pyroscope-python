@@ -2,12 +2,20 @@
 //! No allocation, no locks, no recursion.
 //!
 //! The handler records only code object addresses. Names are resolved later on a normal thread,
-//! which must check the code object is still alive, and line numbers from the instruction pointer.
+//! which must establish object lifetime before native loads, or use OS-mediated byte copies
+//! into owned storage. An address alone does not establish lifetime or object identity.
 //!
 //! [`handler`] has a ready-made `SIGPROF` handler.
 //!
 //! Supports CPython 3.10 to 3.14, default (GIL) build, 64-bit targets. The offsets come from the
 //! checked-in layouts verified against the target CPython headers by `pyroscope-python-offsets`.
+//!
+//! Native reads rely on CPython's current-thread ownership of the active frame chain: the
+//! interrupted thread is paused, active frames retain their code, and other threads must not
+//! mutate that chain. Free-threaded builds and foreign mutation of interpreter internals are
+//! unsupported. This is a runtime assumption, not a proof for every CPython interruption point.
+//! Applications must coordinate SIGSEGV/SIGBUS disposition changes with initialization/reads;
+//! the ownership preflight detects completed takeovers but cannot close a concurrent race.
 
 mod fault_handlers;
 pub mod handler;
@@ -82,7 +90,8 @@ static METRICS: Metrics = Metrics {
     read_errors: AtomicUsize::new(0),
 };
 
-/// [`init`] must have succeeded first, or an unreadable address crashes the process.
+/// [`init`] must have succeeded and both fault signals must be deliverable on this thread.
+/// Otherwise the sample is declined with [`Error::RecoveryUnavailable`].
 ///
 /// An executable whose type is not `PyCode_Type` fails the entire stack.
 /// [`MAX_FRAMES`] bounds the walk, skipped frames included.
@@ -145,7 +154,7 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
         #[cfg(Py_3_11)]
         let instr = read_usize(frame, layout::INSTR)?;
         #[cfg(not(Py_3_11))]
-        let instr = read_usize(frame, layout::INSTR)? as i32 as isize as usize;
+        let instr = i32::from_ne_bytes(read_bytes::<4>(frame, layout::INSTR)?) as isize as usize;
 
         if executable == 0 || read_usize(executable, OB_TYPE)? != code_type {
             return Err(Error::InvalidCodeType);
@@ -162,15 +171,30 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
 
 #[cfg(Py_3_12)]
 fn read_u8(base: usize, offset: usize) -> Result<u8, Error> {
+    Ok(read_bytes::<1>(base, offset)?[0])
+}
+
+#[cfg(any(Py_3_12, not(Py_3_11)))]
+fn read_bytes<const N: usize>(base: usize, offset: usize) -> Result<[u8; N], Error> {
     let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
-    kindasafe::u64(addr as u64)
-        .map(|word| word as u8)
-        .map_err(|_| Error::Read)
+    addr.checked_add(N).ok_or(Error::Invalid)?;
+    let mut out = [0; N];
+    // SAFETY: only current-thread frame fields enter here; the runtime ownership assumptions
+    // are stated at crate level. Copy exactly the field width, not adjacent padding. Output
+    // is separate initialized stack storage, the range is checked, and N is 1 or 4. Recovery
+    // ownership was checked by walk; pykindasafe checks this thread's active mask per read.
+    unsafe { pykindasafe::slice(&mut out, addr as u64) }.map_err(|_| Error::Read)?;
+    Ok(out)
 }
 
 fn read_usize(base: usize, offset: usize) -> Result<usize, Error> {
     let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
-    kindasafe::u64(addr as u64)
+    addr.checked_add(size_of::<usize>()).ok_or(Error::Invalid)?;
+    // SAFETY: these are pointer-sized fields of the interrupted thread's retained frame
+    // chain/code objects, under the runtime ownership assumptions documented at crate level.
+    // No Rust reference to source memory is created. walk checks handler ownership; each
+    // pykindasafe access also verifies the current thread can receive both recovery signals.
+    unsafe { pykindasafe::u64(addr as u64) }
         .map(|word| word as usize)
         .map_err(|_| Error::Read)
 }

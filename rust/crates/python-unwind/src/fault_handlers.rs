@@ -1,4 +1,4 @@
-//! Tracks the recovery handlers installed by kindasafe. A foreign replacement is authoritative:
+//! Tracks the recovery handlers installed by pykindasafe. A foreign replacement is authoritative:
 //! stop reading memory and refuse later starts instead of reclaiming its signals.
 
 use std::sync::OnceLock;
@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug, Clone)]
 pub enum InitError {
-    Install(kindasafe_init::InitError),
+    Install(pykindasafe::InitError),
     Inspect,
     Replaced,
 }
@@ -22,7 +22,11 @@ static ENABLED: AtomicBool = AtomicBool::new(false);
 pub fn init() -> Result<(), InitError> {
     HANDLERS
         .get_or_init(|| {
-            kindasafe_init::init().map_err(InitError::Install)?;
+            // SAFETY: SDK configuration serializes our installation. Applications must
+            // coordinate foreign disposition changes as documented by this crate; callbacks
+            // we chain to must remain loaded. The checks below detect completed takeovers,
+            // but cannot make uncoordinated foreign sigaction calls safe.
+            unsafe { pykindasafe::init() }.map_err(InitError::Install)?;
             let mut addresses = [0; 2];
             for (address, signal) in addresses.iter_mut().zip(SIGNALS) {
                 *address = action(signal).ok_or(InitError::Inspect)?.sa_sigaction;
@@ -32,17 +36,23 @@ pub fn init() -> Result<(), InitError> {
         })
         .as_ref()
         .map_err(Clone::clone)?;
-    if recovery_active() {
+    if handlers_active() {
         Ok(())
     } else {
         Err(InitError::Replaced)
     }
 }
 
-/// Checks both dispositions without allocating or locking. Call before fault-prone reads,
-/// including reads outside the signal handler. Once takeover is observed, reading stays disabled.
+/// Checks both dispositions and the calling thread's active signal mask without allocating or
+/// locking. Once takeover is observed, reading stays disabled; a blocked mask only skips this
+/// call and does not disable other threads or later samples.
 /// As with any disposition check, a concurrent foreign sigaction can race the following read.
 pub fn recovery_active() -> bool {
+    // A blocked signal is temporary and thread-local. It must not latch ENABLED=false.
+    handlers_active() && pykindasafe::check_recovery().is_ok()
+}
+
+fn handlers_active() -> bool {
     if !ENABLED.load(Ordering::Acquire) {
         return false;
     }

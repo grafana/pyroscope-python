@@ -3,6 +3,8 @@ import hashlib
 import os
 from pathlib import Path
 import signal
+import subprocess
+import sys
 import threading
 import time
 
@@ -77,6 +79,34 @@ def bounded_drain():
         stop.set()
         for thread in threads:
             thread.join()
+
+
+def fault_fallback_child():
+    signum = int(os.environ["FALLBACK_SIGNAL"])
+    ignored = os.environ["FALLBACK_IGNORED"] == "1"
+    signal.signal(signum, signal.SIG_IGN if ignored else signal.SIG_DFL)
+    assert configure()
+    if os.environ["FALLBACK_STOPPED"] == "1":
+        assert pyroscope.shutdown()
+    # Normal user-generated delivery tests fallback dispatch, not memory faults.
+    signal.raise_signal(signum)
+    assert ignored, "default SIGBUS/SIGSEGV unexpectedly returned"
+    if os.environ["FALLBACK_STOPPED"] == "0":
+        assert pyroscope.shutdown()
+
+
+def fault_fallback():
+    for signum in (signal.SIGBUS, signal.SIGSEGV):
+        for ignored in (False, True):
+            for stopped in (False, True):
+                env = dict(os.environ, SCENARIO="fault_fallback_child",
+                           FALLBACK_SIGNAL=str(int(signum)),
+                           FALLBACK_IGNORED=str(int(ignored)),
+                           FALLBACK_STOPPED=str(int(stopped)))
+                child = subprocess.run([sys.executable, __file__], env=env, timeout=30)
+                expected = 0 if ignored else -int(signum)
+                assert child.returncode == expected, (signum, ignored, stopped, child.returncode)
+                print("fallback passed", signum, ignored, stopped, flush=True)
 
 
 globals()[os.environ["SCENARIO"]]()
