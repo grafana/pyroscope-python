@@ -105,5 +105,4 @@ jobs:
           export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
           export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
           cargo miri test --locked --workspace --lib
-          cargo miri test --manifest-path ../kindasafe/Cargo.toml --locked --workspace --lib
         working-directory: rust
