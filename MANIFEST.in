@@ -12,3 +12,5 @@ recursive-include dd-trace-py/ddtrace *.h
 recursive-include dd-trace-py/ddtrace *.cpp
 recursive-include dd-trace-py/ddtrace *.hpp
 recursive-include dd-trace-py/ddtrace *.cc
+include rust/crates/pykindasafe/LICENSE
+include rust/crates/pykindasafe/UPSTREAM.md
