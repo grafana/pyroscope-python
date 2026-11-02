@@ -92,7 +92,7 @@ fn current_thread_state() -> usize {
     any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
 fn current_thread_state() -> usize {
-    // The read goes through pykindasafe, so it needs the same guard as `walk`.
+    // The read goes through kindasafe, so it needs the same guard as `walk`.
     if recovery_active() {
         tstate::gilstate()
     } else {

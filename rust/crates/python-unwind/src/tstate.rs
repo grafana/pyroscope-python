@@ -47,12 +47,16 @@ pub fn locate(getter: ThreadStateGetter) -> Result<(), Error> {
 }
 
 fn read(offset: usize) -> usize {
+    if !crate::recovery_active() {
+        return 0;
+    }
     let addr = thread_pointer().wrapping_add(offset);
     // SAFETY: `find` checked that `offset` lands in libpython's static TLS block, so on threads
     // created through libc this is a word of the calling thread's own TLS, which no other thread
     // writes. A thread whose thread pointer libc did not set up may give an unmapped address,
-    // which pykindasafe declines or recovers from.
-    unsafe { pykindasafe::u64(addr as u64) }.map_or(0, |word| word as usize)
+    // which kindasafe recovers from. Handler ownership and the active signal mask were
+    // checked above.
+    unsafe { kindasafe::u64(addr as u64) }.map_or(0, |word| word as usize)
 }
 
 /// The offset from the thread pointer of the only word that holds `value` in the calling thread's
