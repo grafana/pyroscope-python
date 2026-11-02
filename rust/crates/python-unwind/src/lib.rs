@@ -178,23 +178,29 @@ fn read_u8(base: usize, offset: usize) -> Result<u8, Error> {
 fn read_bytes<const N: usize>(base: usize, offset: usize) -> Result<[u8; N], Error> {
     let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
     addr.checked_add(N).ok_or(Error::Invalid)?;
+    if !fault_handlers::signals_unblocked() {
+        return Err(Error::Read);
+    }
     let mut out = [0; N];
     // SAFETY: only current-thread frame fields enter here; the runtime ownership assumptions
     // are stated at crate level. Copy exactly the field width, not adjacent padding. Output
     // is separate initialized stack storage, the range is checked, and N is 1 or 4. Recovery
-    // ownership was checked by walk; pykindasafe checks this thread's active mask per read.
-    unsafe { pykindasafe::slice(&mut out, addr as u64) }.map_err(|_| Error::Read)?;
+    // ownership was checked by walk; the active signal mask was checked above.
+    unsafe { kindasafe::slice(&mut out, addr as u64) }.map_err(|_| Error::Read)?;
     Ok(out)
 }
 
 fn read_usize(base: usize, offset: usize) -> Result<usize, Error> {
     let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
     addr.checked_add(size_of::<usize>()).ok_or(Error::Invalid)?;
+    if !fault_handlers::signals_unblocked() {
+        return Err(Error::Read);
+    }
     // SAFETY: these are pointer-sized fields of the interrupted thread's retained frame
     // chain/code objects, under the runtime ownership assumptions documented at crate level.
-    // No Rust reference to source memory is created. walk checks handler ownership; each
-    // pykindasafe access also verifies the current thread can receive both recovery signals.
-    unsafe { pykindasafe::u64(addr as u64) }
+    // No Rust reference to source memory is created. walk checks handler ownership;
+    // the check above verifies that this thread can receive both recovery signals.
+    unsafe { kindasafe::u64(addr as u64) }
         .map(|word| word as usize)
         .map_err(|_| Error::Read)
 }

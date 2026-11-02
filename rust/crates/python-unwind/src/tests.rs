@@ -45,7 +45,7 @@ fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
     for (executable, error) in [
         (wrong_code.as_ptr() as usize, Error::InvalidCodeType),
         (0, Error::InvalidCodeType),
-        // Reading ob_type in the unmapped null page fails through pykindasafe.
+        // Reading ob_type in the unmapped null page fails through kindasafe.
         (8, Error::Read),
     ] {
         set(&mut outer, layout::EXECUTABLE, executable);
@@ -234,6 +234,9 @@ fn blocked_fault_signal_skips_sample_without_latching_takeover() {
         // A known invalid source must never be touched while recovery is blocked.
         let mut frames = [Frame::default()];
         let result = unwind_thread(1, &mut frames);
+        let word_result = read_usize(1, 0);
+        #[cfg(any(Py_3_12, not(Py_3_11)))]
+        let byte_result = read_bytes::<1>(1, 0);
         let active = recovery_active();
         let restart = init();
         assert_eq!(
@@ -241,6 +244,9 @@ fn blocked_fault_signal_skips_sample_without_latching_takeover() {
             0
         );
         assert_eq!(result, Err(Error::RecoveryUnavailable));
+        assert_eq!(word_result, Err(Error::Read));
+        #[cfg(any(Py_3_12, not(Py_3_11)))]
+        assert_eq!(byte_result, Err(Error::Read));
         assert!(!active);
         assert!(restart.is_ok());
         assert!(
