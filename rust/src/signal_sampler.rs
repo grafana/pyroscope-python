@@ -60,11 +60,48 @@ pub type Error = String;
 
 const MAX_DRAIN_STACKS: usize = 64;
 
+#[cfg(not(Py_3_15))]
+fn locate_thread_state() -> Result<(), Error> {
+    Ok(())
+}
+
+/// From 3.15 the handler reads the thread state through [`unwind::tstate`]. Must be called on a
+/// thread that holds the GIL.
+#[cfg(all(
+    Py_3_15,
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+fn locate_thread_state() -> Result<(), Error> {
+    use pyo3::{Python, ffi};
+    use unwind::tstate;
+    type PyGetter = unsafe extern "C" fn() -> *mut ffi::PyThreadState;
+    // SAFETY: both are `extern "C"` functions without arguments that return a word.
+    let getter = unsafe {
+        std::mem::transmute::<PyGetter, tstate::ThreadStateGetter>(
+            ffi::PyGILState_GetThisThreadState,
+        )
+    };
+    Python::attach(|py| py.detach(|| tstate::locate(getter)))
+        .map_err(|e| format!("failed to locate the thread state of python 3.15+: {e}"))
+}
+
+#[cfg(all(
+    Py_3_15,
+    not(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))
+))]
+fn locate_thread_state() -> Result<(), Error> {
+    Err("python 3.15+ is supported only on Linux x86_64 and aarch64".to_string())
+}
+
 fn check_version(version: (u8, u8)) -> Result<(), Error> {
     let (major, minor) = version;
-    if !matches!(version, (3, 10..=14)) {
+    if !matches!(version, (3, 10..=15)) {
         return Err(format!(
-            "unwinding in the signal handler supports only Python 3.10 to 3.14, found {major}.{minor}"
+            "unwinding in the signal handler supports only Python 3.10 to 3.15, found {major}.{minor}"
         ));
     }
     if version != unwind::PY_VERSION {
@@ -100,6 +137,7 @@ impl SignalHandlerSession {
             unicode: (&raw mut pyo3::ffi::PyUnicode_Type) as usize,
             bytes: (&raw mut pyo3::ffi::PyBytes_Type) as usize,
         };
+        locate_thread_state()?;
 
         let resolver = resolve::Resolver::new(types, config.lines)?;
 

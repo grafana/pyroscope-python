@@ -7,7 +7,7 @@
 //!
 //! [`handler`] has a ready-made `SIGPROF` handler.
 //!
-//! Supports CPython 3.10 to 3.14, default (GIL) build, 64-bit targets. The offsets come from the
+//! Supports CPython 3.10 to 3.15, default (GIL) build, 64-bit targets. The offsets come from the
 //! checked-in layouts verified against the target CPython headers by `pyroscope-python-offsets`.
 //!
 //! Native reads rely on CPython's current-thread ownership of the active frame chain: the
@@ -19,6 +19,12 @@
 
 mod fault_handlers;
 pub mod handler;
+#[cfg(all(
+    any(Py_3_15, all(test, not(miri))),
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+pub mod tstate;
 use pyroscope_python_offsets as layout;
 
 pub use fault_handlers::{InitError, init, recovery_active};
@@ -39,9 +45,12 @@ const EXECUTABLE_MASK: usize = {
 
 #[cfg(all(Py_3_12, not(Py_3_14)))]
 const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_CSTACK;
-#[cfg(Py_3_14)]
+#[cfg(all(Py_3_14, not(Py_3_15)))]
 const SKIP_OWNERS: u8 =
     (1 << layout::FRAME_OWNED_BY_CSTACK) | (1 << layout::FRAME_OWNED_BY_INTERPRETER);
+/// 3.15 has no `FRAME_OWNED_BY_CSTACK`.
+#[cfg(Py_3_15)]
+const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_INTERPRETER;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
@@ -70,10 +79,37 @@ pub struct Frame {
     pub instr: usize,
 }
 
+#[cfg(not(Py_3_15))]
 fn current_thread_state() -> usize {
-    // TODO: PyGILState_GetThisThreadState is not safe on 3.15; find another way to get the tstate.
     // SAFETY: this queries the calling thread's state without requiring the GIL.
     unsafe { pyo3_ffi::PyGILState_GetThisThreadState() as usize }
+}
+
+/// From 3.15 `PyGILState_GetThisThreadState` is not async-signal-safe, see [`tstate`].
+#[cfg(all(
+    Py_3_15,
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+fn current_thread_state() -> usize {
+    // The read goes through kindasafe, so it needs the same guard as `walk`.
+    if recovery_active() {
+        tstate::gilstate()
+    } else {
+        0
+    }
+}
+
+/// The signal sampler refuses to start here.
+#[cfg(all(
+    Py_3_15,
+    not(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))
+))]
+fn current_thread_state() -> usize {
+    0
 }
 
 struct Metrics {
