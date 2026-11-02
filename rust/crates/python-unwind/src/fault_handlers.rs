@@ -1,4 +1,4 @@
-//! Tracks the recovery handlers installed by pykindasafe. A foreign replacement is authoritative:
+//! Tracks the recovery handlers installed by kindasafe. A foreign replacement is authoritative:
 //! stop reading memory and refuse later starts instead of reclaiming its signals.
 
 use std::sync::OnceLock;
@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Debug, Clone)]
 pub enum InitError {
-    Install(pykindasafe::InitError),
+    Install(kindasafe_init::InitError),
     Inspect,
     Replaced,
 }
@@ -26,7 +26,7 @@ pub fn init() -> Result<(), InitError> {
             // coordinate foreign disposition changes as documented by this crate; callbacks
             // we chain to must remain loaded. The checks below detect completed takeovers,
             // but cannot make uncoordinated foreign sigaction calls safe.
-            unsafe { pykindasafe::init() }.map_err(InitError::Install)?;
+            unsafe { kindasafe_init::init() }.map_err(InitError::Install)?;
             let mut addresses = [0; 2];
             for (address, signal) in addresses.iter_mut().zip(SIGNALS) {
                 *address = action(signal).ok_or(InitError::Inspect)?.sa_sigaction;
@@ -49,7 +49,21 @@ pub fn init() -> Result<(), InitError> {
 /// As with any disposition check, a concurrent foreign sigaction can race the following read.
 pub fn recovery_active() -> bool {
     // A blocked signal is temporary and thread-local. It must not latch ENABLED=false.
-    handlers_active() && pykindasafe::check_recovery().is_ok()
+    handlers_active() && signals_unblocked()
+}
+
+// kindasafe performs the load directly, so check the calling thread's mask here
+// and before each read. Returning nested handlers restore the checked mask.
+pub(super) fn signals_unblocked() -> bool {
+    // SAFETY: a null set only queries the active mask. Both calls are async-signal-safe,
+    // and SIGNALS contains valid signal numbers.
+    unsafe {
+        let mut mask = std::mem::zeroed();
+        libc::pthread_sigmask(libc::SIG_SETMASK, std::ptr::null(), &mut mask) == 0
+            && SIGNALS
+                .into_iter()
+                .all(|signal| libc::sigismember(&mask, signal) == 0)
+    }
 }
 
 fn handlers_active() -> bool {

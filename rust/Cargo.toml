@@ -4,6 +4,7 @@ resolver = "3"
 
 [workspace.dependencies]
 kindasafe = { path = "../kindasafe/kindasafe" }
+kindasafe_init = { path = "../kindasafe/kindasafe_init" }
 pyo3 = { version = "=0.30.1", features = ["extension-module"] }
 pyo3-ffi = { version = "=0.30.1", features = ["extension-module"] }
 pyo3-build-config = { version = "=0.30.1", features = ["resolve-config"] }

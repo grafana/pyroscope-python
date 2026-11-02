@@ -742,6 +742,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "kindasafe"
+version = "0.1.1"
+
+[[package]]
+name = "kindasafe_init"
+version = "0.1.1"
+dependencies = [
+ "kindasafe",
+ "libc",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1241,8 +1253,9 @@ dependencies = [
 name = "pyroscope-python-unwind"
 version = "0.1.0"
 dependencies = [
+ "kindasafe",
+ "kindasafe_init",
  "libc",
- "pykindasafe",
  "pyo3-build-config",
  "pyo3-ffi",
  "pyroscope-python-offsets",
