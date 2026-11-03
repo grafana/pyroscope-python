@@ -179,15 +179,14 @@ func TestPythonStackProfilerCpuTimerFork(t *testing.T) {
 	_, minor := pythonVersion(t)
 	prefix := threadStackPrefix(profileConfig{stack: true}, minor) +
 		"run_worker.<locals>.work;cpu_timer_worker_fork_onstack_signal.<locals>.work;burn_after_fork;burn_for"
-		// One second is spent in burn_for before the fork, then 15 seconds after.
-		// Observed post-fork samples split about 1/3 in sum's caller and 2/3 in
-		// the generator. Allow interpreter and sampling variance around that split.
+	// One second is spent in burn_for before the fork, then 15 seconds after.
+	// The inline arithmetic loop stays in one Python frame, so the complete
+	// post-fork stack should receive about 15/16 (94%) of the CPU sample weight.
 	requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector, profileShape{
 		stacks: []stackShare{
-			{prefix, 0.15, 0.45},
-			{prefix + ";burn_for.<locals>.<genexpr>", 0.45, 0.80},
+			{prefix, 0.90, 1},
 		},
-		minTotal: int64(3 * time.Second), minCoverage: 0.85,
+		minTotal: int64(3 * time.Second), minCoverage: 0.90,
 	}, 3*time.Minute)
 	requireContainerExit(t, workload, 0, 3*time.Minute)
 }
