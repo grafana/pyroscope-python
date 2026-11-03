@@ -23,6 +23,8 @@ crate-type = ["cdylib"]
 name = "_native"
 
 [dependencies]
+kindasafe.workspace = true
+kindasafe_init.workspace = true
 pyroscope-python-unwind = { path = "crates/python-unwind" }
 pyroscope-python-offsets = { path = "crates/python-offsets" }
 pyroscope-ringbuffer = { path = "crates/ringbuffer" }
@@ -41,9 +43,6 @@ hashbrown = "0.17.1"
 lazy_static = "1.5.0"
 pyo3.workspace = true
 
-
-[target.'cfg(target_os = "macos")'.dependencies]
-mach2 = "0.6"
 
 [build-dependencies]
 cmake = "0.1"

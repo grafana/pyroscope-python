@@ -1,11 +1,15 @@
 //! Resolves the code objects a signal handler recorded into names, from a normal thread of the
-//! same process. A recorded code object may have been freed since, so every read goes through
-//! an OS-mediated byte copy. String and line-table types and lengths are checked before use;
-//! a readable reused address can still produce a misattributed sample.
+//! same process. Kindasafe reads potentially stale addresses into untrusted bytes. String and
+//! line-table types and lengths are checked before use; torn reads or a reused address can
+//! still produce a misattributed sample.
+//!
+//! Session startup initializes recovery. The application must preserve its handlers and keep
+//! SIGSEGV/SIGBUS unblocked on the resolver thread. Source ranges must not overlap unrelated
+//! live Rust exclusive borrows, including after allocation reuse. These are runtime assumptions,
+//! not properties established by a recorded address or by fault recovery.
 
 use pyroscope_python_offsets as layout;
 
-use super::memory::Memory;
 use super::unwind::Frame;
 use super::{Lines, ResolvedFrame};
 use layout::*;
@@ -22,17 +26,15 @@ pub struct Resolver {
     types: Types,
     lines: Lines,
     scratch: Vec<u8>,
-    memory: Memory,
 }
 
 impl Resolver {
-    pub fn new(types: Types, lines: Lines) -> Result<Self, String> {
-        Ok(Resolver {
+    pub fn new(types: Types, lines: Lines) -> Self {
+        Resolver {
             types,
             lines,
             scratch: Vec::new(),
-            memory: Memory::new().map_err(|e| format!("failed to open process memory: {e}"))?,
-        })
+        }
     }
 
     pub fn resolve_stack(&mut self, frames: &[Frame]) -> Result<Vec<ResolvedFrame>, String> {
@@ -129,27 +131,42 @@ impl Resolver {
     fn read_bytes(&mut self, addr: usize, len: usize) -> Result<(), String> {
         self.scratch.clear();
         self.scratch.resize(len, 0);
-        self.memory
-            .read(addr, &mut self.scratch)
-            .map_err(|e| format!("failed to read {len} bytes at {addr:#x}: {e:?}"))
+        read_into(addr, &mut self.scratch)
     }
 
     fn first_line(&self, code: usize) -> Result<u32, String> {
         // `co_firstlineno` is an `int`.
         let mut out = [0; 4];
-        self.memory
-            .read(code + CO_FIRSTLINENO, &mut out)
-            .map_err(|e| e.to_string())?;
+        let addr = code
+            .checked_add(CO_FIRSTLINENO)
+            .ok_or("memory address range overflow")?;
+        read_into(addr, &mut out)?;
         Ok(u32::from_ne_bytes(out))
     }
 
     fn read_word(&self, addr: usize) -> Result<usize, String> {
-        let mut out = [0; size_of::<usize>()];
-        self.memory
-            .read(addr, &mut out)
-            .map_err(|e| format!("failed to read {addr:#x}: {e}"))?;
-        Ok(usize::from_ne_bytes(out))
+        addr.checked_add(size_of::<usize>())
+            .ok_or("memory address range overflow")?;
+        // SAFETY: recovery and source-borrow assumptions are documented at module level.
+        // Supported targets are 64-bit; consume the result as untrusted bytes.
+        unsafe { kindasafe::u64(addr as u64) }
+            .map(|word| word as usize)
+            .map_err(|e| format!("failed to read {addr:#x}: {e:?}"))
     }
+}
+
+/// An error may leave a partial copy in `out`; callers must discard it.
+fn read_into(addr: usize, out: &mut [u8]) -> Result<(), String> {
+    addr.checked_add(out.len())
+        .ok_or("memory address range overflow")?;
+    if out.is_empty() {
+        return Ok(());
+    }
+    // SAFETY: recovery and source-borrow assumptions are documented at module level.
+    // The destination is separate, initialized, exclusively borrowed storage. The source
+    // range is checked for overflow and copied without constructing a source reference.
+    unsafe { kindasafe::slice(out, addr as u64) }
+        .map_err(|e| format!("failed to read {} bytes at {addr:#x}: {e:?}", out.len()))
 }
 
 /// Unpacks the location table of python 3.11+, see
@@ -244,6 +261,57 @@ fn read_signed_varint(index: &mut usize, table: &[u8]) -> Option<isize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(not(miri))]
+    fn resolver() -> Resolver {
+        super::super::init().unwrap();
+        Resolver::new(
+            Types {
+                unicode: 0,
+                bytes: 0,
+            },
+            Lines::First,
+        )
+    }
+
+    #[cfg(not(miri))]
+    #[test]
+    fn reads_fields_and_bytes_with_kindasafe() {
+        let mut resolver = resolver();
+        let word = 0x0123_4567_89ab_cdefusize;
+        assert_eq!(resolver.read_word(&raw const word as usize).unwrap(), word);
+
+        let bytes = [11u8, 22, 33, 44];
+        resolver
+            .read_bytes(bytes.as_ptr() as usize, bytes.len())
+            .unwrap();
+        assert_eq!(resolver.scratch, bytes);
+
+        // co_firstlineno has exactly four bytes, not a pointer-sized field.
+        let mut code = [0u8; CO_FIRSTLINENO + 4];
+        code[CO_FIRSTLINENO..].copy_from_slice(&123u32.to_ne_bytes());
+        assert_eq!(resolver.first_line(code.as_ptr() as usize).unwrap(), 123);
+    }
+
+    #[cfg(not(miri))]
+    #[test]
+    fn failed_reads_return_errors_and_allow_later_reads() {
+        let mut resolver = resolver();
+        assert!(resolver.read_word(0).is_err());
+        assert!(resolver.read_bytes(0, 4).is_err());
+        assert!(resolver.first_line(0).is_err());
+        assert!(resolver.read_word(usize::MAX - 1).is_err());
+        assert!(resolver.read_bytes(usize::MAX - 1, 4).is_err());
+        assert!(resolver.first_line(usize::MAX).is_err());
+
+        resolver.read_bytes(0, 0).unwrap();
+        assert!(resolver.scratch.is_empty());
+        let bytes = [55u8, 66];
+        resolver
+            .read_bytes(bytes.as_ptr() as usize, bytes.len())
+            .unwrap();
+        assert_eq!(resolver.scratch, bytes);
+    }
 
     #[test]
     fn python_310_line_number_ranges() {

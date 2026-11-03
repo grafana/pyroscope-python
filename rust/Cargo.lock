@@ -1281,11 +1281,12 @@ version = "1.4.0"
 dependencies = [
  "cmake",
  "hashbrown 0.17.1",
+ "kindasafe",
+ "kindasafe_init",
  "lazy_static",
  "libc",
  "libflate",
  "log",
- "mach2 0.6.0",
  "pretty_env_logger",
  "prost",
  "py-spy",

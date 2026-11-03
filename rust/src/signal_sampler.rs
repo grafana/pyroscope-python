@@ -13,11 +13,26 @@ use timer::Timer;
 use timer::{Mode, SignalHandler};
 use unwind::{Frame, MAX_FRAMES};
 
-mod memory;
 mod resolve;
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
+
+#[derive(Debug, Clone)]
+pub enum InitError {
+    Install(kindasafe_init::InitError),
+}
+
+/// Installs recovery once; kindasafe caches the result, including failures.
+/// SDK users must prevent concurrent SIGSEGV/SIGBUS changes during installation and
+/// keep the installed handlers unchanged afterward, including across profiler restarts.
+/// Previously installed handlers must support chaining and remain loaded.
+pub fn init() -> Result<(), InitError> {
+    // SAFETY: kindasafe serializes its installation. SDK users must coordinate other
+    // signal users and keep chained callbacks loaded as documented above and in the
+    // unwinder's crate-level contract.
+    unsafe { kindasafe_init::init() }.map_err(InitError::Install)
+}
 
 extern "C" fn signal_handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut libc::c_void) {
     unwind::handler();
@@ -98,13 +113,15 @@ impl SignalHandlerSession {
         if config.sampling_rate == 0 {
             return Err("the sampling rate must be greater than zero".to_string());
         }
-        unwind::init().map_err(|e| format!("failed to install memory fault handlers: {:?}", e))?;
+        init().map_err(|InitError::Install(error)| {
+            format!("failed to install memory fault handlers: {error:?}")
+        })?;
         let types = resolve::Types {
             unicode: (&raw mut pyo3::ffi::PyUnicode_Type) as usize,
             bytes: (&raw mut pyo3::ffi::PyBytes_Type) as usize,
         };
 
-        let resolver = resolve::Resolver::new(types, config.lines)?;
+        let resolver = resolve::Resolver::new(types, config.lines);
 
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];

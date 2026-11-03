@@ -3,6 +3,11 @@ use super::*;
 // Serialize tests that inspect the process-wide counters.
 static METRICS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+fn init() {
+    // SAFETY: tests preserve kindasafe's handlers and do not install other handlers.
+    unsafe { kindasafe_init::init() }.unwrap();
+}
+
 // Unit tests do not link libpython. Only this symbol's address is used, never its contents.
 #[unsafe(export_name = "PyCode_Type")]
 static CODE_TYPE: usize = 0;
@@ -16,7 +21,7 @@ fn set(memory: &mut [usize], offset: usize, value: usize) {
 fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
     let _guard = METRICS_LOCK.lock().unwrap();
     let dropped_before = METRICS.dropped.load(Ordering::Relaxed);
-    init().unwrap();
+    init();
     let code_type = (&raw mut pyo3_ffi::PyCode_Type) as usize;
     let mut code = [0usize; 4];
     set(&mut code, OB_TYPE, code_type);
@@ -81,7 +86,7 @@ fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
 fn frame_limit_accepts_256_and_rejects_257() {
     let _guard = METRICS_LOCK.lock().unwrap();
     let dropped_before = METRICS.dropped.load(Ordering::Relaxed);
-    init().unwrap();
+    init();
     let code_type = (&raw mut pyo3_ffi::PyCode_Type) as usize;
     let mut code = [0usize; 4];
     set(&mut code, OB_TYPE, code_type);
@@ -134,7 +139,7 @@ fn frame_limit_accepts_256_and_rejects_257() {
 #[test]
 fn python_310_reads_signed_lasti_and_returns_the_output_subslice() {
     let _guard = METRICS_LOCK.lock().unwrap();
-    init().unwrap();
+    init();
     let mut code = [0usize; 4];
     set(
         &mut code,

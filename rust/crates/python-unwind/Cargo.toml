@@ -10,6 +10,8 @@ pyroscope-python-offsets = { path = "../python-offsets" }
 pyroscope-ringbuffer = { path = "../ringbuffer" }
 pyo3-ffi.workspace = true
 kindasafe.workspace = true
+
+[dev-dependencies]
 kindasafe_init.workspace = true
 
 [build-dependencies]

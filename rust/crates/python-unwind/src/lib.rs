@@ -1,11 +1,11 @@
 //! Walks the CPython frame chain of a thread from a signal handler into a caller-provided slice.
 //! No allocation, no locks, no recursion.
 //!
-//! The handler records only code object addresses. Names are resolved later on a normal thread,
-//! which must establish object lifetime before native loads, or use OS-mediated byte copies
-//! into owned storage. An address alone does not establish lifetime or object identity.
+//! The handler records only code object addresses. Names are resolved later on a normal thread
+//! using kindasafe under its recovery and source-borrow preconditions. An address alone does
+//! not establish lifetime or object identity; deferred reads can observe reused or changing memory.
 //!
-//! Call [`init`], invoke [`handler`] from a `SIGPROF` callback, and drain with [`consumer`].
+//! Initialize kindasafe recovery, invoke [`handler`] from a `SIGPROF` callback, and drain with [`consumer`].
 //! Each record contains the interrupted thread's frames, innermost first.
 //!
 //! Supports CPython 3.10 to 3.14, default (GIL) build, 64-bit targets. The offsets come from the
@@ -50,22 +50,6 @@ const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_CSTACK;
 const SKIP_OWNERS: u8 =
     (1 << layout::FRAME_OWNED_BY_CSTACK) | (1 << layout::FRAME_OWNED_BY_INTERPRETER);
 
-#[derive(Debug, Clone)]
-pub enum InitError {
-    Install(kindasafe_init::InitError),
-}
-
-/// Installs recovery once; kindasafe caches the result, including failures.
-/// SDK users must prevent concurrent SIGSEGV/SIGBUS changes during installation and
-/// keep the installed handlers unchanged afterward, including across profiler restarts.
-/// Previously installed handlers must support chaining and remain loaded.
-pub fn init() -> Result<(), InitError> {
-    // SAFETY: kindasafe serializes its installation. SDK users must coordinate other
-    // signal users and keep chained callbacks loaded as documented above and in the
-    // crate-level contract.
-    unsafe { kindasafe_init::init() }.map_err(InitError::Install)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
     /// The calling thread has no Python thread state.
@@ -94,15 +78,13 @@ pub struct Frame {
 const SLOTS: usize = 1 << 16;
 
 static RECORDS: RingBuffer<Frame, SLOTS> = RingBuffer::new();
-static CONTENTIONS: AtomicUsize = AtomicUsize::new(0);
-static DROPPED: AtomicUsize = AtomicUsize::new(0);
 
 /// Reads the records the handler wrote. `None` if another consumer is active.
 pub fn consumer() -> Option<Consumer<'static, Frame, SLOTS>> {
     RECORDS.consumer()
 }
 
-/// Unwinds the interrupted thread into the ring buffer. Requires [`init`] to have succeeded
+/// Unwinds the interrupted thread into the ring buffer. Requires successful recovery initialization
 /// and both recovery signals to remain unblocked, as documented by [`unwind`].
 pub fn handler() {
     // TODO: consider MaybeUninit for frame storage after measuring the initialization cost.
@@ -112,11 +94,11 @@ pub fn handler() {
         return;
     };
     let Some(mut producer) = RECORDS.producer() else {
-        CONTENTIONS.fetch_add(1, Ordering::Relaxed);
+        METRICS.contentions.fetch_add(1, Ordering::Relaxed);
         return;
     };
     if producer.push_slice(frames).is_err() {
-        DROPPED.fetch_add(1, Ordering::Relaxed);
+        METRICS.buffer_dropped.fetch_add(1, Ordering::Relaxed);
     }
 }
 
@@ -127,6 +109,8 @@ fn current_thread_state() -> usize {
 }
 
 struct Metrics {
+    contentions: AtomicUsize,
+    buffer_dropped: AtomicUsize,
     dropped: AtomicUsize,
     no_thread_state: AtomicUsize,
     invalid_code_type: AtomicUsize,
@@ -134,13 +118,15 @@ struct Metrics {
 }
 
 static METRICS: Metrics = Metrics {
+    contentions: AtomicUsize::new(0),
+    buffer_dropped: AtomicUsize::new(0),
     dropped: AtomicUsize::new(0),
     no_thread_state: AtomicUsize::new(0),
     invalid_code_type: AtomicUsize::new(0),
     read_errors: AtomicUsize::new(0),
 };
 
-/// [`init`] must have succeeded and both fault signals must be deliverable on this thread
+/// Recovery initialization must have succeeded and both fault signals must be deliverable on this thread
 /// throughout the walk. These caller preconditions are not checked at runtime; a failed
 /// memory read can crash the process if they are violated.
 ///
