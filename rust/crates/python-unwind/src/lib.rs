@@ -1,3 +1,5 @@
+#![no_std]
+
 //! Walks the CPython frame chain of a thread from a signal handler into a caller-provided slice.
 //! No allocation, no locks, no recursion.
 //!
@@ -25,6 +27,9 @@
 //! another signal handler. Initialization and signal masks are not checked while unwinding;
 //! violating these preconditions can turn a failed memory read into a process crash.
 //! Kindasafe reads use direct memory loads without syscalls on the successful memory-load path.
+
+#[cfg(test)]
+extern crate std;
 
 use pyroscope_python_offsets as layout;
 use pyroscope_ringbuffer::{Consumer, RingBuffer};

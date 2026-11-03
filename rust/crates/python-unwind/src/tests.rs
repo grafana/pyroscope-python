@@ -1,4 +1,5 @@
 use super::*;
+use std::vec;
 
 // Serialize tests that inspect the process-wide counters.
 static METRICS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
