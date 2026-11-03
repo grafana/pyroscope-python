@@ -4,7 +4,6 @@ import warnings
 
 import pyroscope
 
-
 WARNING_TEXT = "Forking after Pyroscope starts is unsupported"
 
 

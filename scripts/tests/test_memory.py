@@ -4,7 +4,6 @@ import threading
 import time
 import traceback
 import uuid
-
 from urllib.parse import quote
 
 try:
@@ -13,7 +12,6 @@ except ImportError:
     from urllib2 import Request, urlopen
 
 import pyroscope
-
 
 app_name = "pyroscopers.python.test.memory"
 logger = logging.getLogger()

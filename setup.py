@@ -1,9 +1,10 @@
-from setuptools import setup
-from setuptools_rust import Binding, RustExtension
-from pathlib import Path
+import os
 import sys
 import sysconfig
-import os
+from pathlib import Path
+
+from setuptools import setup
+from setuptools_rust import Binding, RustExtension
 
 # The C++ profilers read version-specific CPython internal structs, so they
 # must be compiled against the exact Python the wheel targets. Pass the

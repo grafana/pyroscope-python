@@ -4,7 +4,6 @@ import threading
 
 import pyroscope
 
-
 logger = logging.getLogger(__name__)
 THREADS = 4
 ITERATIONS = 25

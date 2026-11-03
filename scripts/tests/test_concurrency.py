@@ -4,7 +4,6 @@ import threading
 
 import pyroscope
 
-
 app_name = "pyroscopers.python.test.concurrency"
 logger = logging.getLogger()
 

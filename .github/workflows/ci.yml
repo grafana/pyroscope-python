@@ -35,7 +35,7 @@ jobs:
       - run: git diff --exit-code
 
   python-format:
-    name: ruff format --check
+    name: ruff format and import order
     runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-small' || 'ubuntu-latest' }}
 
     steps:
@@ -46,6 +46,10 @@ jobs:
         with:
           version: "0.17.3"
           args: "format --check --diff"
+      - uses: astral-sh/ruff-action@278981a28ce3188b1e39527901f38254bf3aac89 # v4.1.0
+        with:
+          version: "0.17.3"
+          args: "check --select I --diff"
 
   python-linux-build:
     strategy:

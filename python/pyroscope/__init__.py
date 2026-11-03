@@ -1,10 +1,9 @@
-import warnings
 import logging
 import sys
+import warnings
+from contextlib import contextmanager
 
 from . import _native as lib
-
-from contextlib import contextmanager
 
 LOGGER = logging.getLogger(__name__)
 

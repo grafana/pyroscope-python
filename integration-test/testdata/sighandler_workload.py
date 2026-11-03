@@ -12,7 +12,6 @@ from typing import NamedTuple
 
 import pyroscope
 
-
 FAULTHANDLER_BANNER = "Fatal Python error: Segmentation fault"
 TAKEN_OVER = "SIGSEGV/SIGBUS handler was taken over by another component"
 CPU_TIMER_RESTART_REFUSED = (
