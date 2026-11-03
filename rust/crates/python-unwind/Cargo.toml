@@ -11,7 +11,6 @@ pyroscope-ringbuffer = { path = "../ringbuffer" }
 pyo3-ffi.workspace = true
 kindasafe.workspace = true
 kindasafe_init.workspace = true
-libc = "0.2"
 
 [build-dependencies]
 pyo3-build-config.workspace = true

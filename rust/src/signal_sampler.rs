@@ -1,6 +1,6 @@
 //! Samples the current process by unwinding python stacks inside a `SIGPROF` handler.
 //!
-//! The handler lives in `unwind::handler`. It records code object addresses into a
+//! The C signal callback delegates to `unwind::handler`, which records code object addresses into a
 //! ring buffer. A normal thread drains it and resolves names, tolerating code objects that were
 //! freed in the meantime. A tick interrupts one running thread, so only threads on the CPU are
 //! sampled.
@@ -18,6 +18,10 @@ mod resolve;
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
+
+extern "C" fn signal_handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut libc::c_void) {
+    unwind::handler();
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lines {
@@ -108,7 +112,7 @@ impl SignalHandlerSession {
             while consumer.pop_slice(&mut buf).is_ok() {}
         }
 
-        let signal_handler = SignalHandler::install(Timer::SIGNAL, unwind::handler)
+        let signal_handler = SignalHandler::install(Timer::SIGNAL, signal_handler)
             .map_err(|e| format!("failed to install the signal handler: {e}"))?;
         let interval = Duration::from_secs_f64(1.0 / config.sampling_rate as f64);
         let mode = match config.signal_timer {
