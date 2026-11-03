@@ -25,11 +25,9 @@
 //! violating these preconditions can turn a failed memory read into a process crash.
 //! Kindasafe reads use direct memory loads without syscalls on the successful memory-load path.
 
-mod fault_handlers;
 pub mod handler;
 use pyroscope_python_offsets as layout;
 
-pub use fault_handlers::{InitError, init};
 pub use layout::{OB_TYPE, PY_VERSION};
 
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -50,6 +48,22 @@ const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_CSTACK;
 #[cfg(Py_3_14)]
 const SKIP_OWNERS: u8 =
     (1 << layout::FRAME_OWNED_BY_CSTACK) | (1 << layout::FRAME_OWNED_BY_INTERPRETER);
+
+#[derive(Debug, Clone)]
+pub enum InitError {
+    Install(kindasafe_init::InitError),
+}
+
+/// Installs recovery once; kindasafe caches the result, including failures.
+/// SDK users must prevent concurrent SIGSEGV/SIGBUS changes during installation and
+/// keep the installed handlers unchanged afterward, including across profiler restarts.
+/// Previously installed handlers must support chaining and remain loaded.
+pub fn init() -> Result<(), InitError> {
+    // SAFETY: kindasafe serializes its installation. SDK users must coordinate other
+    // signal users and keep chained callbacks loaded as documented above and in the
+    // crate-level contract.
+    unsafe { kindasafe_init::init() }.map_err(InitError::Install)
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
