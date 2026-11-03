@@ -51,9 +51,13 @@ const EXECUTABLE_MASK: usize = {
 
 #[cfg(all(Py_3_12, not(Py_3_14)))]
 const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_CSTACK;
-#[cfg(Py_3_14)]
+#[cfg(all(Py_3_14, not(Py_3_15)))]
 const SKIP_OWNERS: u8 =
     (1 << layout::FRAME_OWNED_BY_CSTACK) | (1 << layout::FRAME_OWNED_BY_INTERPRETER);
+// CPython 3.15 removed C-stack-owned frames. Keep the crate buildable for the
+// other profilers; Signal startup still rejects 3.15 before installing a timer.
+#[cfg(Py_3_15)]
+const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_INTERPRETER;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
