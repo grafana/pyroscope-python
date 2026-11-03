@@ -1157,7 +1157,7 @@ dependencies = [
 [[package]]
 name = "py-spy"
 version = "0.4.2"
-source = "git+https://github.com/grafana/pyroscope-py-spy?rev=10ee4e9#10ee4e951be5632d3730d52b85883ccbbb175a9e"
+source = "git+https://github.com/grafana/pyroscope-py-spy?rev=3179ee8#3179ee887a0d1178bea5a8dc6bcd18b8f6d137fe"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1292,10 +1292,10 @@ dependencies = [
  "py-spy",
  "pyo3",
  "pyo3-build-config",
- "pyroscope-python-offsets",
  "pyroscope-python-unwind",
  "pyroscope-ringbuffer",
  "pyroscope-signal-timer",
+ "remoteprocess",
  "reqwest",
  "thiserror",
  "url",

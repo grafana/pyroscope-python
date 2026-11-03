@@ -29,9 +29,10 @@ not check initialization or signal masks; a failed read in that state can crash 
 process. Kindasafe reads use direct memory loads
 without syscalls on the successful memory-load path.
 
-Deferred name and line resolution reads addresses after Python resumes. These reads
-assume source ranges do not overlap unrelated live Rust exclusive borrows, including
-after allocation reuse. Fault recovery does not establish this condition. Type and
+Deferred name and line resolution uses py-spy's decoder with kindasafe memory reads
+after Python resumes. These reads assume source ranges do not overlap unrelated live
+Rust exclusive borrows, including after allocation reuse. Fault recovery does not
+establish this condition. Type and
 length validation cannot prevent all incorrect attribution from reused addresses or
 inconsistent reads.
 

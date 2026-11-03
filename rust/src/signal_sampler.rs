@@ -14,6 +14,7 @@ use timer::{Mode, SignalHandler};
 use unwind::{Frame, MAX_FRAMES};
 
 mod resolve;
+pub use py_spy::{Frame as ResolvedFrame, config::LineNo as Lines};
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
@@ -36,23 +37,6 @@ pub fn init() -> Result<(), InitError> {
 
 extern "C" fn signal_handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut libc::c_void) {
     unwind::handler();
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Lines {
-    /// Every line is 0.
-    None,
-    /// The first line of the function.
-    First,
-    /// The line of the instruction the frame executes.
-    LastInstruction,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ResolvedFrame {
-    pub name: String,
-    pub filename: String,
-    pub line: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -116,9 +100,10 @@ impl SignalHandlerSession {
         init().map_err(|InitError::Install(error)| {
             format!("failed to install memory fault handlers: {error:?}")
         })?;
-        let types = resolve::Types {
-            unicode: (&raw mut pyo3::ffi::PyUnicode_Type) as usize,
-            bytes: (&raw mut pyo3::ffi::PyBytes_Type) as usize,
+        let types = py_spy::python_process_info::Types {
+            code: (&raw mut pyo3::ffi::PyCode_Type) as usize,
+            string: (&raw mut pyo3::ffi::PyUnicode_Type) as usize,
+            dict: (&raw mut pyo3::ffi::PyDict_Type) as usize,
         };
 
         let resolver = resolve::Resolver::new(types, config.lines);

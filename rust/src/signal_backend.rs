@@ -107,7 +107,7 @@ fn to_stack_trace(frames: Vec<ResolvedFrame>, backend_config: &BackendConfig) ->
         .map(|frame| StackFrame {
             name: frame.name,
             filename: frame.filename,
-            line: frame.line,
+            line: frame.line.max(0) as u32,
         })
         .collect();
     StackTrace::new(backend_config, Some(std::process::id()), None, None, frames)

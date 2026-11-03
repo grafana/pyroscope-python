@@ -371,16 +371,6 @@ impl From<LineNo> for py_spy::config::LineNo {
     }
 }
 
-impl From<LineNo> for signal_sampler::Lines {
-    fn from(val: LineNo) -> Self {
-        match val {
-            LineNo::LastInstruction => signal_sampler::Lines::LastInstruction,
-            LineNo::First => signal_sampler::Lines::First,
-            LineNo::NoLine => signal_sampler::Lines::None,
-        }
-    }
-}
-
 #[pymodule]
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LineNo>()?;
