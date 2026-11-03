@@ -82,7 +82,9 @@ def main():
         enable_logging=True,
         oncpu=oncpu,
         gil_only=gil_only,
-        cpu_implementation=getattr(pyroscope.ProfilerImplementation, cpu_implementation),
+        cpu_implementation=getattr(
+            pyroscope.ProfilerImplementation, cpu_implementation
+        ),
         report_pid=True,
         report_thread_id=True,
         report_thread_name=True,

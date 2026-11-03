@@ -35,3 +35,6 @@ requires = [
 
 
 build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+extend-exclude = ["dd-trace-py"]

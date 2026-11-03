@@ -95,7 +95,9 @@ def main():
             code = wait_child(fork(lambda: None), CHILD_DEADLINE_SECONDS)
             if code != 0:
                 raise AssertionError(f"fork child {i} exited with {code}")
-        code = wait_child(fork(fork_child_main), CHILD_PROFILE_SECONDS + CHILD_DEADLINE_SECONDS)
+        code = wait_child(
+            fork(fork_child_main), CHILD_PROFILE_SECONDS + CHILD_DEADLINE_SECONDS
+        )
         if code != 0:
             raise AssertionError(f"profiled fork child exited with {code}")
     finally:

@@ -4,14 +4,12 @@ import warnings
 
 import pyroscope
 
-
 WARNING_TEXT = "Forking after Pyroscope starts is unsupported"
 
 
 def exercise_memory_allocations():
     allocations = [
-        {"index": index, "payload": f"allocation-{index}"}
-        for index in range(50_000)
+        {"index": index, "payload": f"allocation-{index}"} for index in range(50_000)
     ]
     if len(allocations) != 50_000:
         raise AssertionError("failed to create memory-profiler test allocations")
