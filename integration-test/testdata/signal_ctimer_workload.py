@@ -3,12 +3,12 @@ import ctypes
 import errno
 import hashlib
 import os
-from pathlib import Path
 import resource
 import signal
 import threading
 import time
 import traceback
+from pathlib import Path
 
 import pyroscope
 
@@ -75,7 +75,11 @@ def raw_fork(unregistered):
 
 def arming_failure():
     libc = ctypes.CDLL(None, use_errno=True)
-    libc.timer_create.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+    libc.timer_create.argtypes = [
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_void_p),
+    ]
     libc.timer_create.restype = ctypes.c_int
     libc.timer_delete.argtypes = [ctypes.c_void_p]
     original_limit = resource.getrlimit(resource.RLIMIT_SIGPENDING)
@@ -88,7 +92,10 @@ def arming_failure():
         if result == 0:
             libc.timer_delete(timer_id)
         assert result == -1 and error == errno.EAGAIN, (result, error)
-        print("timer_create probe failed with EAGAIN under RLIMIT_SIGPENDING=0", flush=True)
+        print(
+            "timer_create probe failed with EAGAIN under RLIMIT_SIGPENDING=0",
+            flush=True,
+        )
         configured = configure()
     finally:
         resource.setrlimit(resource.RLIMIT_SIGPENDING, original_limit)

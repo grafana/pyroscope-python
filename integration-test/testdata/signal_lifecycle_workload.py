@@ -2,12 +2,12 @@ import ctypes
 import faulthandler
 import hashlib
 import os
-from pathlib import Path
 import signal
 import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 
 import pyroscope
 
@@ -41,6 +41,7 @@ def ctimer_shutdown_fork():
             assert pyroscope.shutdown()
         except BaseException:
             import traceback
+
             traceback.print_exc()
             os._exit(1)
         os._exit(0)
@@ -121,13 +122,21 @@ def fault_fallback():
     for signum in (signal.SIGBUS, signal.SIGSEGV):
         for ignored in (False, True):
             for stopped in (False, True):
-                env = dict(os.environ, SCENARIO="fault_fallback_child",
-                           FALLBACK_SIGNAL=str(int(signum)),
-                           FALLBACK_IGNORED=str(int(ignored)),
-                           FALLBACK_STOPPED=str(int(stopped)))
+                env = dict(
+                    os.environ,
+                    SCENARIO="fault_fallback_child",
+                    FALLBACK_SIGNAL=str(int(signum)),
+                    FALLBACK_IGNORED=str(int(ignored)),
+                    FALLBACK_STOPPED=str(int(stopped)),
+                )
                 child = subprocess.run([sys.executable, __file__], env=env, timeout=30)
                 expected = 0 if ignored else -int(signum)
-                assert child.returncode == expected, (signum, ignored, stopped, child.returncode)
+                assert child.returncode == expected, (
+                    signum,
+                    ignored,
+                    stopped,
+                    child.returncode,
+                )
                 print("fallback passed", signum, ignored, stopped, flush=True)
 
 

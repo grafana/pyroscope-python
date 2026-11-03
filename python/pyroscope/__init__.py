@@ -219,9 +219,14 @@ def _install_stack_threads(threading, register, unregister):
 
     _register_stack_threads(threading, register)
 
+
 def _register_stack_threads(threading, register):
     current_id = threading.get_ident()
     for tid, thread in list(threading._active.items()):
         # Older Python versions retain the parent's Thread.native_id after fork.
-        native_id = threading.get_native_id() if tid == current_id else getattr(thread, "native_id", None) or tid
+        native_id = (
+            threading.get_native_id()
+            if tid == current_id
+            else getattr(thread, "native_id", None) or tid
+        )
         register(tid, native_id)
