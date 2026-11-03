@@ -48,9 +48,7 @@ def main():
     logger.info("counters %s", counters)
     diff = counters["configured"] - counters["shutdown"]
     if diff not in (0, 1):
-        raise AssertionError(
-            f"inconsistent configure/shutdown accounting: {counters}"
-        )
+        raise AssertionError(f"inconsistent configure/shutdown accounting: {counters}")
 
     if pyroscope.shutdown() != (diff == 1):
         raise AssertionError(

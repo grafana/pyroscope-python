@@ -16,10 +16,12 @@ import os
 python_root = Path(sys.base_prefix).resolve()
 
 env = os.environ.copy()
-env.update({
-    "Python3_ROOT_DIR": f"{python_root}",
-    "Python3_EXECUTABLE": sys.executable,
-})
+env.update(
+    {
+        "Python3_ROOT_DIR": f"{python_root}",
+        "Python3_EXECUTABLE": sys.executable,
+    }
+)
 
 if sysconfig.get_config_var("Py_GIL_DISABLED") == 1:
     raise SystemExit(

@@ -15,7 +15,7 @@ except ImportError:
 import pyroscope
 
 
-app_name = 'pyroscopers.python.test.memory'
+app_name = "pyroscopers.python.test.memory"
 logger = logging.getLogger()
 
 event = threading.Event()
@@ -38,17 +38,20 @@ def wait_render(profile_type, canary, needle):
     while True:
         time.sleep(2)
         query = f'{profile_type}{{service_name="{app_name}", canary="{canary}"}}'
-        u = 'http://localhost:4040/pyroscope/render?from=now-1h&until=now&query=' + quote(query)
+        u = (
+            "http://localhost:4040/pyroscope/render?from=now-1h&until=now&query="
+            + quote(query)
+        )
         response = None
         try:
-            logging.info('render %s', u)
+            logging.info("render %s", u)
             req = Request(u)
             response = urlopen(req)
             code = response.getcode()
             body = response.read()
-            logging.info('render body %s', body.decode('utf-8'))
-            if code == 200 and body != b'' and needle in body:
-                print(f'good {profile_type} {canary}')
+            logging.info("render body %s", body.decode("utf-8"))
+            if code == 200 and body != b"" and needle in body:
+                print(f"good {profile_type} {canary}")
                 return
         except Exception:
             if response is not None:
@@ -60,7 +63,7 @@ def wait_render(profile_type, canary, needle):
 def main():
     logger.setLevel(logging.INFO)
     canary = uuid.uuid4().hex
-    logging.info('canary %s', canary)
+    logging.info("canary %s", canary)
 
     if pyroscope.configure(
         application_name=app_name,
@@ -68,16 +71,16 @@ def main():
         cpu_enabled=False,
         mem_enabled=False,
     ):
-        raise AssertionError('configure accepted disabled CPU and memory profiling')
+        raise AssertionError("configure accepted disabled CPU and memory profiling")
 
     pyroscope.configure(
         application_name=app_name,
-        server_address='http://localhost:4040',
+        server_address="http://localhost:4040",
         enable_logging=True,
         cpu_enabled=False,
         mem_enabled=True,
         tags={
-            'canary': canary,
+            "canary": canary,
         },
     )
 
@@ -85,14 +88,14 @@ def main():
     thread.start()
 
     def watchdog():
-        logging.info('Watchdog expired. Test timeout. Exiting...')
+        logging.info("Watchdog expired. Test timeout. Exiting...")
         os._exit(7)
 
     alarm = threading.Timer(120, watchdog)
     alarm.start()
 
-    wait_render('memory:alloc_space:bytes:space:bytes', canary, b'memhog')
-    wait_render('memory:inuse_space:bytes:space:bytes', canary, b'memhog')
+    wait_render("memory:alloc_space:bytes:space:bytes", canary, b"memhog")
+    wait_render("memory:inuse_space:bytes:space:bytes", canary, b"memhog")
 
     alarm.cancel()
 
@@ -100,8 +103,8 @@ def main():
 
     event.set()
     thread.join()
-    logging.info('done')
+    logging.info("done")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

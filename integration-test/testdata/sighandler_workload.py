@@ -15,7 +15,9 @@ import pyroscope
 
 FAULTHANDLER_BANNER = "Fatal Python error: Segmentation fault"
 TAKEN_OVER = "SIGSEGV/SIGBUS handler was taken over by another component"
-CPU_TIMER_RESTART_REFUSED = "the CPU timer stack profiler cannot be restarted in this process"
+CPU_TIMER_RESTART_REFUSED = (
+    "the CPU timer stack profiler cannot be restarted in this process"
+)
 
 libc = ctypes.CDLL(None)
 
@@ -96,7 +98,9 @@ def stack_offcpu_refused():
 
 
 def pyspy_and_memory_install_nothing():
-    configure(cpu_implementation=pyroscope.ProfilerImplementation.PySpy, mem_enabled=True)
+    configure(
+        cpu_implementation=pyroscope.ProfilerImplementation.PySpy, mem_enabled=True
+    )
     expect(handlers() == (0, 0), f"py-spy + memory installed handlers: {handlers()}")
     shutdown()
 
@@ -116,7 +120,10 @@ def first_cpu_configure_wins():
 def stack_installs_both():
     configure()
     segv, bus = handlers()
-    expect(segv != 0 and segv == bus, f"expected one handler on both signals, got {segv:#x} {bus:#x}")
+    expect(
+        segv != 0 and segv == bus,
+        f"expected one handler on both signals, got {segv:#x} {bus:#x}",
+    )
     shutdown()
 
 
@@ -134,7 +141,9 @@ def reconfigure_keeps_handlers():
     shutdown()
     expect(handlers() == ours, "shutdown changed the handlers")
     configure()
-    expect(handlers() == ours, f"reconfigure changed the handlers: {ours} -> {handlers()}")
+    expect(
+        handlers() == ours, f"reconfigure changed the handlers: {ours} -> {handlers()}"
+    )
     shutdown()
 
 
@@ -146,7 +155,10 @@ def foreign_after_configure_is_not_reclaimed():
     expect(foreign != ours, "take_over() did not replace the handlers")
     shutdown()
     configure()
-    expect(handlers() == foreign, f"reconfigure reinstalled over a foreign handler: {foreign} -> {handlers()}")
+    expect(
+        handlers() == foreign,
+        f"reconfigure reinstalled over a foreign handler: {foreign} -> {handlers()}",
+    )
     shutdown()
 
 
@@ -200,7 +212,10 @@ def takeover_stops_sampling():
 def cpu_timer_restart_refused():
     configure()
     shutdown()
-    expect(not configure_agent(enable_logging=True), "configure() after shutdown() was accepted with the CPU timer on")
+    expect(
+        not configure_agent(enable_logging=True),
+        "configure() after shutdown() was accepted with the CPU timer on",
+    )
 
 
 def cpu_timer_fork_child_refused():
@@ -209,7 +224,10 @@ def cpu_timer_fork_child_refused():
     if pid == 0:
         os._exit(0 if not configure_agent(enable_logging=True) else 1)
     _, status = os.waitpid(pid, 0)
-    expect(os.waitstatus_to_exitcode(status) == 0, "configure() in a fork child was accepted with the CPU timer on")
+    expect(
+        os.waitstatus_to_exitcode(status) == 0,
+        "configure() in a fork child was accepted with the CPU timer on",
+    )
     shutdown()
 
 
@@ -217,7 +235,11 @@ def cpu_timer_unsupported_fallback():
     # On CPython 3.10/3.11, enabling the timer option still selects the wall
     # sampler. It allocates no alternate stack and can restart after shutdown.
     configure()
-    run_worker(lambda _: expect(not altstack_enabled(), "fallback installed a timer alternate stack"))
+    run_worker(
+        lambda _: expect(
+            not altstack_enabled(), "fallback installed a timer alternate stack"
+        )
+    )
     shutdown()
     expect(configure_agent(), "fallback could not restart after shutdown()")
     shutdown()
@@ -247,7 +269,11 @@ class Sigaction(ctypes.Structure):
 
 
 class StackT(ctypes.Structure):
-    _fields_ = [("ss_sp", ctypes.c_void_p), ("ss_flags", ctypes.c_int), ("ss_size", ctypes.c_size_t)]
+    _fields_ = [
+        ("ss_sp", ctypes.c_void_p),
+        ("ss_flags", ctypes.c_int),
+        ("ss_size", ctypes.c_size_t),
+    ]
 
 
 def install_onstack(signo, address):
@@ -347,7 +373,10 @@ def cpu_timer_shutdown_elsewhere_then_fork():
         finally:
             registered.set()
         stopped.wait()
-        expect(altstack_enabled(), "shutdown() disabled the worker's alternate signal stack")
+        expect(
+            altstack_enabled(),
+            "shutdown() disabled the worker's alternate signal stack",
+        )
         result["child"] = fork_raising_onstack_signal()
 
     def shut_down_then_release():
@@ -369,16 +398,29 @@ def cpu_timer_fork_keeps_app_altstack():
     previous = altstack()
     with mmap.mmap(-1, APP_ALTSTACK_SIZE, flags=mmap.MAP_PRIVATE) as buf:
         sp = ctypes.addressof(ctypes.c_char.from_buffer(buf))
-        if libc.sigaltstack(ctypes.byref(StackT(ss_sp=sp, ss_flags=0, ss_size=APP_ALTSTACK_SIZE)), None) != 0:
+        if (
+            libc.sigaltstack(
+                ctypes.byref(StackT(ss_sp=sp, ss_flags=0, ss_size=APP_ALTSTACK_SIZE)),
+                None,
+            )
+            != 0
+        ):
             raise OSError(ctypes.get_errno(), "sigaltstack")
 
         def unchanged():
             current = altstack()
-            return not current.ss_flags & SS_DISABLE and current.ss_sp == sp and current.ss_size == APP_ALTSTACK_SIZE
+            return (
+                not current.ss_flags & SS_DISABLE
+                and current.ss_sp == sp
+                and current.ss_size == APP_ALTSTACK_SIZE
+            )
 
         try:
             configure()
-            expect(unchanged(), "configure() replaced the application's alternate signal stack")
+            expect(
+                unchanged(),
+                "configure() replaced the application's alternate signal stack",
+            )
             pid = os.fork()
             if pid == 0:
                 ok = unchanged()
@@ -388,7 +430,10 @@ def cpu_timer_fork_keeps_app_altstack():
             expect(code == 0, f"fork child exited with {code}")
             expect(unchanged(), "fork changed the parent's alternate signal stack")
             shutdown()
-            expect(unchanged(), "shutdown() changed the application's alternate signal stack")
+            expect(
+                unchanged(),
+                "shutdown() changed the application's alternate signal stack",
+            )
         finally:
             # sigaltstack borrows the mapping. Restore the previous stack before
             # mmap closes, or a pending SA_ONSTACK signal can use unmapped memory.
@@ -409,7 +454,9 @@ def cpu_timer_fork_on_altstack_keeps_mapping():
             pid = os.fork()
             if pid == 0:
                 current = altstack()
-                os._exit(0 if current.ss_flags & SS_ONSTACK and mapped(current.ss_sp) else 1)
+                os._exit(
+                    0 if current.ss_flags & SS_ONSTACK and mapped(current.ss_sp) else 1
+                )
             result["child"] = wait_exitcode(pid)
 
         handler = ctypes.CFUNCTYPE(None, ctypes.c_int)(on_signal)
@@ -438,11 +485,19 @@ SCENARIOS = {
     "faulthandler_unpatched": Scenario(),
     "reconfigure_keeps_handlers": Scenario(),
     "foreign_after_configure_is_not_reclaimed": Scenario(),
-    "crash_with_our_handler": Scenario(-signal.SIGSEGV, forbidden=(FAULTHANDLER_BANNER,)),
+    "crash_with_our_handler": Scenario(
+        -signal.SIGSEGV, forbidden=(FAULTHANDLER_BANNER,)
+    ),
     "sigbus_with_our_handler": Scenario(-signal.SIGBUS),
-    "crash_chains_to_earlier_faulthandler": Scenario(-signal.SIGSEGV, required=(FAULTHANDLER_BANNER,)),
-    "crash_after_faulthandler_takeover": Scenario(-signal.SIGSEGV, required=(FAULTHANDLER_BANNER,)),
-    "faulthandler_enable_after_configure_stops_sampling": Scenario(required=(TAKEN_OVER,)),
+    "crash_chains_to_earlier_faulthandler": Scenario(
+        -signal.SIGSEGV, required=(FAULTHANDLER_BANNER,)
+    ),
+    "crash_after_faulthandler_takeover": Scenario(
+        -signal.SIGSEGV, required=(FAULTHANDLER_BANNER,)
+    ),
+    "faulthandler_enable_after_configure_stops_sampling": Scenario(
+        required=(TAKEN_OVER,)
+    ),
     "takeover_stops_sampling": Scenario(required=(TAKEN_OVER,)),
     "cpu_timer_restart_refused": Scenario(required=(CPU_TIMER_RESTART_REFUSED,)),
     "cpu_timer_fork_child_refused": Scenario(required=(CPU_TIMER_RESTART_REFUSED,)),
@@ -476,7 +531,10 @@ def main(scenario):
         expect(needle in result.stderr, f"{scenario}: stderr lacks {needle!r}")
     for needle in want.forbidden:
         expect(needle not in result.stderr, f"{scenario}: stderr contains {needle!r}")
-    expect("panicked" not in result.stderr, f"{scenario}: child stderr contains a native panic")
+    expect(
+        "panicked" not in result.stderr,
+        f"{scenario}: child stderr contains a native panic",
+    )
     print(f"good {scenario}")
 
 

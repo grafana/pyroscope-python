@@ -29,15 +29,11 @@ def main():
     sys.stderr.write(result.stderr)
 
     if result.returncode != 0:
-        raise AssertionError(
-            f"child exited with {result.returncode} instead of 0"
-        )
+        raise AssertionError(f"child exited with {result.returncode} instead of 0")
     if "panicked" in result.stderr:
         raise AssertionError("child stderr contains a native panic")
     if "Agent Shutdown" not in result.stderr:
-        raise AssertionError(
-            "the atexit hook did not stop the agent before exit"
-        )
+        raise AssertionError("the atexit hook did not stop the agent before exit")
     print("good atexit shutdown")
 
 

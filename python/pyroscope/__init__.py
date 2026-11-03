@@ -11,34 +11,37 @@ LOGGER = logging.getLogger(__name__)
 LineNo = lib.LineNo
 ProfilerImplementation = lib.ProfilerImplementation
 
+
 def configure(
-        app_name=None,
-        application_name=None,
-        server_address="http://localhost:4040",
-        basic_auth_username="",
-        basic_auth_password="",
-        enable_logging=False,
-        sample_rate=100,
-        oncpu=True,
-        native=None,
-        gil_only=True,
-        report_pid=False,
-        report_thread_id=False,
-        report_thread_name=False,
-        tags=None,
-        tenant_id="",
-        http_headers=None,
-        line_no=LineNo.LastInstruction,
-        upload_interval=10,
-        mem_enabled=False,
-        mem_max_nframe=128,
-        mem_heap_sample_size=512 * 1024,
-        mem_enable_mem_domain=True,
-        cpu_enabled=True,
-        cpu_implementation=ProfilerImplementation.PySpy,
+    app_name=None,
+    application_name=None,
+    server_address="http://localhost:4040",
+    basic_auth_username="",
+    basic_auth_password="",
+    enable_logging=False,
+    sample_rate=100,
+    oncpu=True,
+    native=None,
+    gil_only=True,
+    report_pid=False,
+    report_thread_id=False,
+    report_thread_name=False,
+    tags=None,
+    tenant_id="",
+    http_headers=None,
+    line_no=LineNo.LastInstruction,
+    upload_interval=10,
+    mem_enabled=False,
+    mem_max_nframe=128,
+    mem_heap_sample_size=512 * 1024,
+    mem_enable_mem_domain=True,
+    cpu_enabled=True,
+    cpu_implementation=ProfilerImplementation.PySpy,
 ):
     if app_name is not None:
-        warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
+        warnings.warn(
+            "app_name is deprecated, use application_name", DeprecationWarning
+        )
         application_name = app_name
 
     if native is not None:
@@ -75,17 +78,18 @@ def configure(
         cpu_implementation,
     )
 
+
 def configure_experimental_stack_profiler(
-        max_nframe=128,
-        max_threads=25,
-        adaptive_sampling=True,
-        adaptive_target_overhead=0.01,
-        adaptive_max_interval_us=100000,
-        adaptive_baseline=0.0,
-        adaptive_p_stable_window_s=600,
-        adaptive_p_stable_percentile=95.0,
-        cpu_timer_enabled = True,
-        cpu_timer_interval_ms = 10,
+    max_nframe=128,
+    max_threads=25,
+    adaptive_sampling=True,
+    adaptive_target_overhead=0.01,
+    adaptive_max_interval_us=100000,
+    adaptive_baseline=0.0,
+    adaptive_p_stable_window_s=600,
+    adaptive_p_stable_percentile=95.0,
+    cpu_timer_enabled=True,
+    cpu_timer_interval_ms=10,
 ):
     """Set the options of the stack CPU profiler, for the whole process.
 
@@ -128,6 +132,7 @@ def configure_experimental_stack_profiler(
         cpu_timer_interval_ms,
     )
 
+
 def shutdown():
     drop = lib.drop_agent()
 
@@ -137,20 +142,25 @@ def shutdown():
         LOGGER.warning("Pyroscope Agent shutdown failed")
     return drop
 
+
 def add_thread_tag(key, value):
     return lib.add_thread_tag(key, value)
+
 
 def remove_thread_tag(key, value):
     return lib.remove_thread_tag(key, value)
 
+
 def runtime_name():
     return sys.implementation.name
+
 
 def runtime_version():
     vinfo = sys.implementation.version
     if vinfo.releaselevel == "final" and not vinfo.serial:
         vinfo = vinfo[:3]
     return ".".join(map(str, vinfo))
+
 
 @contextmanager
 def tag_wrapper(tags):
@@ -162,18 +172,30 @@ def tag_wrapper(tags):
         for key, value in tags.items():
             lib.remove_thread_tag(key, value)
 
+
 def stop():
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
+
+
 def change_name(name):
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
+
+
 def tag(tags):
     warnings.warn("deprecated, use tag_wrapper function", DeprecationWarning)
+
+
 def remove_tags(*keys):
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
+
+
 def build_summary():
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
+
+
 def test_logger():
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
+
 
 def _install_stack_threads(threading, register, unregister):
     Thread = threading.Thread
