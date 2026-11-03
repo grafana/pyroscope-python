@@ -78,7 +78,17 @@ func TestPythonSignalProfilerCTimerRawFork(t *testing.T) {
 				"CANARY":                     canary,
 			})
 			selector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
-			requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector, "raw_fork_child_burn", 45*time.Second)
+			stack := "<module>;raw_fork;fork_and_profile;raw_fork_child_burn"
+			if scenario == "unregistered" {
+				stack = "raw_fork.<locals>.worker;fork_and_profile;raw_fork_child_burn"
+				if _, minor := pythonVersion(t); minor < 11 {
+					stack = "worker;fork_and_profile;raw_fork_child_burn"
+				}
+			}
+			requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector, profileShape{
+				stacks:   []stackShare{{stack, 0.90, 1}},
+				minTotal: int64(time.Second), minCoverage: 0.90,
+			}, 45*time.Second)
 		})
 	}
 }
@@ -111,6 +121,7 @@ func TestPythonSignalProfilerLifecycle(t *testing.T) {
 }
 
 func TestPythonStackProfilerRestart(t *testing.T) {
+	skipUnlessProfiler(t, "stack")
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -130,11 +141,25 @@ func TestPythonStackProfilerRestart(t *testing.T) {
 	selector := func(canary string) string {
 		return fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
 	}
-	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector(canaryFirst), "burn_first", 4*time.Minute)
-	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector(canarySecond), "burn_second", 3*time.Minute)
+	_, minor := pythonVersion(t)
+	prefix := threadStackPrefix(profileConfig{stack: true}, minor)
+	isSet := "Event.is_set"
+	if minor < 11 {
+		isSet = "is_set"
+	}
+	for _, phase := range []struct{ canary, leaf string }{{canaryFirst, "burn_first"}, {canarySecond, "burn_second"}} {
+		requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector(phase.canary), profileShape{
+			stacks: []stackShare{
+				{prefix + phase.leaf, 0.60, 1},
+				{prefix + phase.leaf + ";" + isSet, 0, 0.40},
+			},
+			minTotal: int64(time.Second), minCoverage: 0.90,
+		}, 3*time.Minute)
+	}
 }
 
 func TestPythonStackProfilerCpuTimerFork(t *testing.T) {
+	skipUnlessProfiler(t, "stack")
 	if !pythonSupportsCPUTimer(t) {
 		t.Skip("CPU timers require CPython 3.12+; older versions use the wall sampler")
 	}
@@ -151,7 +176,16 @@ func TestPythonStackProfilerCpuTimerFork(t *testing.T) {
 	})
 
 	selector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
-	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector, "burn_after_fork", 3*time.Minute)
+	_, minor := pythonVersion(t)
+	prefix := threadStackPrefix(profileConfig{stack: true}, minor) +
+		"run_worker.<locals>.work;cpu_timer_worker_fork_onstack_signal.<locals>.work;burn_after_fork;burn_for"
+	requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector, profileShape{
+		stacks: []stackShare{
+			{prefix, 0, 0.30},
+			{prefix + ";burn_for.<locals>.<genexpr>", 0.60, 1},
+		},
+		minTotal: int64(3 * time.Second), minCoverage: 0.85,
+	}, 3*time.Minute)
 	requireContainerExit(t, workload, 0, 3*time.Minute)
 }
 
@@ -163,6 +197,7 @@ func TestPythonNonCPUIntegrationSuites(t *testing.T) {
 }
 
 func TestPythonSignalHandlerSuites(t *testing.T) {
+	skipUnlessProfiler(t, "stack", "py-spy")
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -191,6 +226,13 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 	}
 	for _, scenario := range scenarios {
 		t.Run(scenario, func(t *testing.T) {
+			switch scenario {
+			case "import_installs_nothing":
+			case "pyspy_and_memory_install_nothing":
+				skipUnlessProfiler(t, "py-spy")
+			default:
+				skipUnlessProfiler(t, "stack")
+			}
 			if scenario == "cpu_timer_unsupported_fallback" {
 				if pythonSupportsCPUTimer(t) {
 					t.Skip("fallback applies to CPython older than 3.12")
@@ -210,6 +252,7 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 
 func skipUnlessPythonSupportsSignal(t *testing.T) {
 	t.Helper()
+	skipUnlessProfiler(t, "signal")
 	major, minor := pythonVersion(t)
 	if major != 3 || minor < 10 || minor > 14 {
 		t.Skip("the Signal profiler supports only CPython 3.10 to 3.14")
@@ -237,6 +280,7 @@ func pythonSupportsCPUTimer(t *testing.T) bool {
 }
 
 func testPythonMemoryProfiler(t *testing.T) {
+	skipUnlessProfiler(t)
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -259,23 +303,17 @@ func testPythonMemoryProfiler(t *testing.T) {
 		{name: "alloc_space", profileTypeID: memoryAllocSpaceProfileTypeID},
 		{name: "inuse_space", profileTypeID: memoryInuseSpaceProfileTypeID},
 	}
+	_, minor := pythonVersion(t)
+	stack := threadStackPrefix(profileConfig{}, minor) + "memhog"
 	for _, profile := range profiles {
-		require.Eventually(t, func() bool {
-			collapsed, err := queryProfile(pyroscopeURL, profile.profileTypeID, labelSelector)
-			if err != nil {
-				t.Logf("query failed for %s: %v", profile.name, err)
-				return false
-			}
-			if collapsed == "" {
-				t.Logf("memory profile %s is empty", profile.name)
-				return false
-			}
-			if !strings.Contains(collapsed, "memhog") {
-				t.Logf("memory profile %s does not contain memhog yet:\n%s", profile.name, collapsed)
-				return false
-			}
-			return true
-		}, 3*time.Minute, 5*time.Second, "expected memhog samples in %s", profile.name)
+		t.Run(profile.name, func(t *testing.T) {
+			// The workload retains 8–16 MiB of bytearrays allocated at memhog.
+			// Allow heap sampling variance but require several MiB and dominance.
+			requireProfileShape(t, workload, pyroscopeURL, profile.profileTypeID, labelSelector, profileShape{
+				stacks:   []stackShare{{stack, 0.90, 1}},
+				minTotal: 4 * 1024 * 1024, minCoverage: 0.90,
+			}, 3*time.Minute)
+		})
 	}
 
 	collapsed, err := queryProfile(pyroscopeURL, cpuProfileTypeID, labelSelector)
@@ -284,6 +322,7 @@ func testPythonMemoryProfiler(t *testing.T) {
 }
 
 func testPythonConcurrentConfigureShutdown(t *testing.T) {
+	skipUnlessProfiler(t, "py-spy")
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -297,6 +336,7 @@ func testPythonConcurrentConfigureShutdown(t *testing.T) {
 }
 
 func testPythonAtexitShutdown(t *testing.T) {
+	skipUnlessProfiler(t, "py-spy")
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -310,6 +350,7 @@ func testPythonAtexitShutdown(t *testing.T) {
 }
 
 func testPythonForkChild(t *testing.T) {
+	skipUnlessProfiler(t, "stack")
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -322,24 +363,17 @@ func testPythonForkChild(t *testing.T) {
 	})
 
 	labelSelector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
-	require.Eventually(t, func() bool {
-		collapsed, err := queryProfile(pyroscopeURL, cpuProfileTypeID, labelSelector)
-		if err != nil {
-			t.Logf("query failed: %v", err)
-			return false
-		}
-		if !strings.Contains(collapsed, "main;fork;fork_child_main;fork_child_burn") {
-			t.Logf("fork child profile does not contain main;fork;fork_child_main;fork_child_burn yet:\n%s", collapsed)
-			return false
-		}
-		return true
-	}, 3*time.Minute, 5*time.Second, "expected fork_child_burn samples from the fork child")
+	requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, labelSelector, profileShape{
+		stacks:   []stackShare{{"<module>;main;fork;fork_child_main;fork_child_burn", 0.90, 1}},
+		minTotal: int64(time.Second), minCoverage: 0.90,
+	}, 3*time.Minute)
 
 	requireContainerExit(t, workload, 0, 3*time.Minute)
 }
 
 func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 	t.Helper()
+	skipUnlessProfiler(t, cfg.profilerName())
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -359,6 +393,8 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 		boolString(cfg.gilOnly),
 	)
 
+	_, minor := pythonVersion(t)
+	collectUntil := time.Now().Add(15 * time.Second)
 	var workloadExited bool
 	var workloadExitCode int
 	require.Eventually(t, func() bool {
@@ -373,6 +409,10 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 			return true
 		}
 
+		if time.Now().Before(collectUntil) {
+			return false
+		}
+
 		collapsed, err := queryProfile(pyroscopeURL, cpuProfileTypeID, labelSelector)
 		if err != nil {
 			t.Logf("query failed for %s: %v", cfg, err)
@@ -382,12 +422,13 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 			t.Logf("profile for %s is empty", cfg)
 			return false
 		}
-		if !strings.Contains(collapsed, "multihash") {
-			t.Logf("profile for %s does not contain multihash yet:\n%s", cfg, collapsed)
+		if err := checkConfigurationProfile(collapsed, cfg, minor); err != nil {
+			t.Logf("profile for %s: %v\n%s", cfg, err, collapsed)
 			return false
 		}
+		t.Logf("profile for %s:\n%s", cfg, collapsed)
 		return true
-	}, 3*time.Minute, 5*time.Second, "expected multihash samples for %s", cfg)
+	}, 3*time.Minute, 5*time.Second, "expected exact stacks and sample proportions for %s", cfg)
 	if workloadExited {
 		t.Fatalf("workload container exited before producing the expected profile (exit code %d)", workloadExitCode)
 	}
@@ -425,7 +466,6 @@ func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string
 		"CANARY":                        canary,
 		"PIP_DISABLE_PIP_VERSION_CHECK": "1",
 	}
-	passFastCopyWarmup(env)
 	return dockertest.StartContainer(t, dockertest.ContainerRequest{
 		Image:    pythonImage(),
 		Platform: wheelDockerPlatform(),
@@ -454,7 +494,6 @@ func startPythonTestContainer(t *testing.T, net *dockertest.Network, wheelDir, s
 	for k, v := range env {
 		mergedEnv[k] = v
 	}
-	passFastCopyWarmup(mergedEnv)
 	return dockertest.StartContainer(t, dockertest.ContainerRequest{
 		Image:    pythonImage(),
 		Platform: wheelDockerPlatform(),
@@ -475,12 +514,6 @@ func startPythonTestContainer(t *testing.T, net *dockertest.Network, wheelDir, s
 	})
 }
 
-func passFastCopyWarmup(env map[string]string) {
-	if v := os.Getenv("PYROSCOPE_FAST_COPY_WARMUP"); v != "" {
-		env["PYROSCOPE_FAST_COPY_WARMUP"] = v
-	}
-}
-
 func requireContainerExit(t *testing.T, container *dockertest.Container, expected int, timeout time.Duration) {
 	t.Helper()
 	code := container.Wait(t, timeout)
@@ -489,15 +522,13 @@ func requireContainerExit(t *testing.T, container *dockertest.Container, expecte
 	}
 }
 
-// The workload is expected to outlive the poll, so its exit means one of its
-// own assertions tripped rather than that the samples went missing.
-func requireProfileContains(
+// Wait for a substantial profile and check exact complete stacks and their weight.
+// A successful finite workload may exit before Pyroscope makes its data queryable.
+func requireProfileShape(
 	t *testing.T,
 	workload *dockertest.Container,
-	pyroscopeURL string,
-	profileTypeID string,
-	labelSelector string,
-	needle string,
+	pyroscopeURL, profileTypeID, labelSelector string,
+	want profileShape,
 	timeout time.Duration,
 ) {
 	t.Helper()
@@ -507,24 +538,22 @@ func requireProfileContains(
 			t.Logf("failed to inspect workload container: %v", err)
 			return false
 		}
-		if !state.Running {
-			t.Fatalf(
-				"workload container exited with %d while waiting for %s\nlogs:\n%s",
-				state.ExitCode, needle, workload.Logs(t),
-			)
+		if !state.Running && state.ExitCode != 0 {
+			t.Fatalf("workload container exited with %d while waiting for profile %s\nlogs:\n%s",
+				state.ExitCode, labelSelector, workload.Logs(t))
 		}
-
 		collapsed, err := queryProfile(pyroscopeURL, profileTypeID, labelSelector)
 		if err != nil {
-			t.Logf("query failed for %s: %v", needle, err)
+			t.Logf("query failed for %s: %v", labelSelector, err)
 			return false
 		}
-		if !strings.Contains(collapsed, needle) {
-			t.Logf("profile %s does not contain %s yet:\n%s", labelSelector, needle, collapsed)
+		if err := checkProfileShape(collapsed, want); err != nil {
+			t.Logf("profile %s: %v\n%s", labelSelector, err, collapsed)
 			return false
 		}
+		t.Logf("profile %s:\n%s", labelSelector, collapsed)
 		return true
-	}, timeout, 5*time.Second, "expected %s samples in %s", needle, labelSelector)
+	}, timeout, 5*time.Second, "expected exact stacks and sample proportions in %s", labelSelector)
 }
 
 func queryProfile(pyroscopeURL string, profileTypeID string, labelSelector string) (string, error) {

@@ -8,12 +8,6 @@ import time
 
 import pyroscope
 
-if "PYROSCOPE_FAST_COPY_WARMUP" in os.environ:
-    pyroscope.configure_experimental_stack_profiler(
-        fast_copy_warmup=float(os.environ["PYROSCOPE_FAST_COPY_WARMUP"]),
-    )
-
-
 logger = logging.getLogger(__name__)
 shutdown_requested = threading.Event()
 stop_workers = threading.Event()
@@ -29,24 +23,25 @@ def env_bool(name):
 
 
 def hash_value(string):
-    return hashlib.sha256(string.encode()).hexdigest()
+    # Keep nearly all active Python time in this leaf, so profiles have a
+    # predictable shape even when interpreter speed or instrumentation changes.
+    deadline = time.monotonic() + 0.1
+    while time.monotonic() < deadline:
+        string = hashlib.sha256(string.encode()).hexdigest()
+    return string
 
 
 def multihash(string):
     while not stop_workers.is_set():
         time.sleep(0.2)
-        end = time.time() + 0.1
-        while time.time() < end:
-            string = hash_value(string)
+        string = hash_value(string)
     return string
 
 
 def multihash2(string):
     while not stop_workers.is_set():
         time.sleep(0.2)
-        end = time.time() + 0.1
-        while time.time() < end:
-            string = hash_value(string)
+        string = hash_value(string)
     return string
 
 

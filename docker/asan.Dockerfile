@@ -52,6 +52,7 @@ COPY pyproject.toml setup.py ./
 COPY rust/ rust/
 COPY python/ python/
 COPY dd-trace-py/ dd-trace-py/
+COPY kindasafe/ kindasafe/
 
 COPY --from=pyspy / /pyspy/
 

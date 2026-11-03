@@ -6,7 +6,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -100,6 +102,22 @@ func StartContainer(t *testing.T, req ContainerRequest) *Container {
 	id := strings.TrimSpace(run(t, "docker", args...))
 	c := &Container{ID: id}
 	t.Cleanup(func() {
+		if dir := os.Getenv("PYROSCOPE_TEST_LOG_DIR"); dir != "" {
+			// Capture every container, including successful runs and reports longer
+			// than the failure excerpt printed below. Include the ID for subtests.
+			path := filepath.Join(dir, t.Name(), c.ID[:12]+".log")
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				t.Errorf("create container log directory: %v", err)
+			} else {
+				logs, err := exec.Command("docker", "logs", c.ID).CombinedOutput()
+				if err != nil {
+					t.Errorf("capture container logs: %v", err)
+				}
+				if err := os.WriteFile(path, logs, 0o644); err != nil {
+					t.Errorf("save container logs: %v", err)
+				}
+			}
+		}
 		if t.Failed() {
 			if out, err := exec.Command("docker", "inspect", c.ID, "--format",
 				"ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Running={{.State.Running}}").CombinedOutput(); err == nil {
