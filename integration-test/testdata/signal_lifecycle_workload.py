@@ -1,3 +1,4 @@
+import ctypes
 import faulthandler
 import hashlib
 import os
@@ -47,12 +48,33 @@ def ctimer_shutdown_fork():
     assert os.waitstatus_to_exitcode(status) == 0, status
 
 
-def fault_handler_takeover():
-    assert configure()
+def recovery_handlers_preserved():
+    libc = ctypes.CDLL(None)
+
+    def handlers():
+        result = []
+        for signum in (signal.SIGSEGV, signal.SIGBUS):
+            action = ctypes.create_string_buffer(256)
+            assert libc.sigaction(signum, None, action) == 0
+            result.append(ctypes.c_void_p.from_buffer(action).value)
+        return tuple(result)
+
+    # Install application handlers before initialization. Recovery handlers must
+    # remain installed for the lifetime of the process, including across stops.
     faulthandler.enable()
+    previous = handlers()
+    assert configure()
+    installed = handlers()
+    assert all(installed)
+    assert all(ours != earlier for ours, earlier in zip(installed, previous))
     signal.raise_signal(signal.SIGPROF)
     assert pyroscope.shutdown()
-    assert not configure(), "restart must not reuse replaced recovery handlers"
+    assert handlers() == installed
+    assert configure()
+    assert handlers() == installed
+    signal.raise_signal(signal.SIGPROF)
+    assert pyroscope.shutdown()
+    assert handlers() == installed
     assert faulthandler.is_enabled()
 
 
