@@ -14,14 +14,22 @@
 //! interrupted thread is paused, active frames retain their code, and other threads must not
 //! mutate that chain. Free-threaded builds and foreign mutation of interpreter internals are
 //! unsupported. This is a runtime assumption, not a proof for every CPython interruption point.
-//! Applications must coordinate SIGSEGV/SIGBUS disposition changes with initialization/reads;
-//! the ownership preflight detects completed takeovers but cannot close a concurrent race.
+//! SDK users must ensure no other code changes SIGSEGV/SIGBUS handlers during
+//! initialization or after kindasafe has installed its recovery handlers, including across
+//! profiler stops/restarts. Install other handlers before initialization; chained callbacks
+//! must remain loaded and support direct chaining. Handler ownership is not checked at runtime:
+//! replacing recovery handlers can turn a failed memory read into a process crash.
+//! Callers must successfully initialize recovery before unwinding and ensure SIGSEGV/SIGBUS
+//! are unblocked on the sampled thread throughout the walk, including when sampling interrupts
+//! another signal handler. Initialization and signal masks are not checked while unwinding;
+//! violating these preconditions can turn a failed memory read into a process crash.
+//! Kindasafe reads use direct memory loads without syscalls on the successful memory-load path.
 
 mod fault_handlers;
 pub mod handler;
 use pyroscope_python_offsets as layout;
 
-pub use fault_handlers::{InitError, init, recovery_active};
+pub use fault_handlers::{InitError, init};
 pub use layout::{OB_TYPE, PY_VERSION};
 
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -47,8 +55,6 @@ const SKIP_OWNERS: u8 =
 pub enum Error {
     /// The calling thread has no Python thread state.
     NoThreadState,
-    /// Fault recovery was not initialized or a foreign handler replaced it.
-    RecoveryUnavailable,
     /// Memory on the chain was unreadable.
     Read,
     /// A Python frame's executable was null or was not a code object.
@@ -90,8 +96,9 @@ static METRICS: Metrics = Metrics {
     read_errors: AtomicUsize::new(0),
 };
 
-/// [`init`] must have succeeded and both fault signals must be deliverable on this thread.
-/// Otherwise the sample is declined with [`Error::RecoveryUnavailable`].
+/// [`init`] must have succeeded and both fault signals must be deliverable on this thread
+/// throughout the walk. These caller preconditions are not checked at runtime; a failed
+/// memory read can crash the process if they are violated.
 ///
 /// An executable whose type is not `PyCode_Type` fails the entire stack.
 /// [`MAX_FRAMES`] bounds the walk, skipped frames included.
@@ -129,9 +136,6 @@ fn current_frame(tstate: usize) -> Result<usize, Error> {
 }
 
 fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
-    if !recovery_active() {
-        return Err(Error::RecoveryUnavailable);
-    }
     let code_type = (&raw mut pyo3_ffi::PyCode_Type) as usize;
     let mut frame = current_frame(tstate)?;
     let mut visited = 0;
@@ -178,14 +182,12 @@ fn read_u8(base: usize, offset: usize) -> Result<u8, Error> {
 fn read_bytes<const N: usize>(base: usize, offset: usize) -> Result<[u8; N], Error> {
     let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
     addr.checked_add(N).ok_or(Error::Invalid)?;
-    if !fault_handlers::signals_unblocked() {
-        return Err(Error::Read);
-    }
     let mut out = [0; N];
     // SAFETY: only current-thread frame fields enter here; the runtime ownership assumptions
     // are stated at crate level. Copy exactly the field width, not adjacent padding. Output
     // is separate initialized stack storage, the range is checked, and N is 1 or 4. Recovery
-    // ownership was checked by walk; the active signal mask was checked above.
+    // initialization, preserved handlers, and unblocked recovery signals are caller
+    // preconditions documented at crate level.
     unsafe { kindasafe::slice(&mut out, addr as u64) }.map_err(|_| Error::Read)?;
     Ok(out)
 }
@@ -193,13 +195,11 @@ fn read_bytes<const N: usize>(base: usize, offset: usize) -> Result<[u8; N], Err
 fn read_usize(base: usize, offset: usize) -> Result<usize, Error> {
     let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
     addr.checked_add(size_of::<usize>()).ok_or(Error::Invalid)?;
-    if !fault_handlers::signals_unblocked() {
-        return Err(Error::Read);
-    }
     // SAFETY: these are pointer-sized fields of the interrupted thread's retained frame
     // chain/code objects, under the runtime ownership assumptions documented at crate level.
-    // No Rust reference to source memory is created. walk checks handler ownership;
-    // the check above verifies that this thread can receive both recovery signals.
+    // No Rust reference to source memory is created. Recovery initialization, preserved
+    // handlers, and unblocked recovery signals are caller preconditions documented at
+    // crate level.
     unsafe { kindasafe::u64(addr as u64) }
         .map(|word| word as usize)
         .map_err(|_| Error::Read)
