@@ -49,6 +49,18 @@ func configurationStacks(cfg profileConfig, minor int) []stackShare {
 			{"<module>;main;" + wait, 0.25, 0.40},
 		}
 	}
+	if cfg.profilerName() == "py-spy" && minor == 10 && cfg.onCPU && !cfg.gilOnly {
+		// CPython 3.10 has no native_thread_id. With py-spy's unwind feature
+		// disabled, its idle heuristic recognizes threading.wait but not
+		// time.sleep. The main thread is excluded; each worker contributes
+		// ~1/6 hashing and ~1/3 sleeping to this onCPU profile.
+		return []stackShare{
+			{prefix + "multihash;hash_value", 0.10, 0.25},
+			{prefix + "multihash2;hash_value", 0.10, 0.25},
+			{prefix + "multihash", 0.25, 0.40},
+			{prefix + "multihash2", 0.25, 0.40},
+		}
+	}
 	return []stackShare{
 		{prefix + "multihash;hash_value", 0.35, 0.65},
 		{prefix + "multihash2;hash_value", 0.35, 0.65},
@@ -125,7 +137,8 @@ func TestConfigurationProfileShape(t *testing.T) {
 		{"cpu", cpu, profileConfig{onCPU: true}, 12, true},
 		{"gil only", cpu, profileConfig{gilOnly: true}, 12, true},
 		{"wall", wall, profileConfig{}, 12, true},
-		{"python 310", strings.ReplaceAll(cpu, "Thread.", ""), profileConfig{onCPU: true}, 10, true},
+		{"python 310 gil only", strings.ReplaceAll(cpu, "Thread.", ""), profileConfig{onCPU: true, gilOnly: true}, 10, true},
+		{"python 310 idle heuristic", strings.ReplaceAll(strings.ReplaceAll(wall, ";<module>;main;Event.wait;Condition.wait 3000000000\n", ""), "Thread.", ""), profileConfig{onCPU: true}, 10, true},
 		{"stack wrapper", strings.ReplaceAll(cpu, "Thread._bootstrap_inner", "_install_stack_threads.<locals>._bootstrap_inner;Thread._bootstrap_inner"), profileConfig{onCPU: true, stack: true}, 12, true},
 		{"ctimer wrapper", strings.ReplaceAll(cpu, "Thread._bootstrap_inner", "_install_stack_threads.<locals>._bootstrap_inner;Thread._bootstrap_inner"), profileConfig{onCPU: true, signalTimer: "CTimer"}, 12, true},
 		{"itimer", cpu, profileConfig{onCPU: true, signalTimer: "ITimer"}, 12, true},
