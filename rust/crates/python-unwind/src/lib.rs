@@ -5,7 +5,8 @@
 //! which must establish object lifetime before native loads, or use OS-mediated byte copies
 //! into owned storage. An address alone does not establish lifetime or object identity.
 //!
-//! [`handler`] has a ready-made `SIGPROF` handler.
+//! Call [`init`], install the ready-made `SIGPROF` [`handler`], and drain with [`consumer`].
+//! Each record contains the interrupted thread's frames, innermost first.
 //!
 //! Supports CPython 3.10 to 3.14, default (GIL) build, 64-bit targets. The offsets come from the
 //! checked-in layouts verified against the target CPython headers by `pyroscope-python-offsets`.
@@ -25,11 +26,12 @@
 //! violating these preconditions can turn a failed memory read into a process crash.
 //! Kindasafe reads use direct memory loads without syscalls on the successful memory-load path.
 
-pub mod handler;
 use pyroscope_python_offsets as layout;
+use pyroscope_ringbuffer::{Consumer, RingBuffer};
 
 pub use layout::{OB_TYPE, PY_VERSION};
 
+use core::ffi::c_void;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Maximum number of frames visited in one stack, including skipped frames.
@@ -88,6 +90,37 @@ pub struct Frame {
     /// Signed `f_lasti` code-unit index on 3.10 (cast to `usize`),
     /// `prev_instr` on 3.11 and 3.12, `instr_ptr` from 3.13.
     pub instr: usize,
+}
+
+const SLOTS: usize = 1 << 16;
+
+pub type Handler = extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut c_void);
+
+static RECORDS: RingBuffer<Frame, SLOTS> = RingBuffer::new();
+static CONTENTIONS: AtomicUsize = AtomicUsize::new(0);
+static DROPPED: AtomicUsize = AtomicUsize::new(0);
+
+/// Reads the records the handler wrote. `None` if another consumer is active.
+pub fn consumer() -> Option<Consumer<'static, Frame, SLOTS>> {
+    RECORDS.consumer()
+}
+
+/// Unwinds the interrupted thread into the ring buffer. Requires [`init`] to have succeeded
+/// and both recovery signals to remain unblocked, as documented by [`unwind`].
+pub extern "C" fn handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut c_void) {
+    // TODO: consider MaybeUninit for frame storage after measuring the initialization cost.
+    let mut frames = [Frame::default(); MAX_FRAMES];
+    // Unwind errors are counted by the unwinder. Never publish a partial stack.
+    let Ok(frames) = unwind(&mut frames) else {
+        return;
+    };
+    let Some(mut producer) = RECORDS.producer() else {
+        CONTENTIONS.fetch_add(1, Ordering::Relaxed);
+        return;
+    };
+    if producer.push_slice(frames).is_err() {
+        DROPPED.fetch_add(1, Ordering::Relaxed);
+    }
 }
 
 fn current_thread_state() -> usize {

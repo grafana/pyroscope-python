@@ -11,7 +11,6 @@ use std::time::Duration;
 use ringbuffer::PopError;
 use timer::Timer;
 use timer::{Mode, SignalHandler};
-use unwind::handler;
 use unwind::{Frame, MAX_FRAMES};
 
 mod memory;
@@ -105,11 +104,11 @@ impl SignalHandlerSession {
 
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];
-        if let Some(mut consumer) = handler::consumer() {
+        if let Some(mut consumer) = unwind::consumer() {
             while consumer.pop_slice(&mut buf).is_ok() {}
         }
 
-        let signal_handler = SignalHandler::install(Timer::SIGNAL, handler::handler)
+        let signal_handler = SignalHandler::install(Timer::SIGNAL, unwind::handler)
             .map_err(|e| format!("failed to install the signal handler: {e}"))?;
         let interval = Duration::from_secs_f64(1.0 / config.sampling_rate as f64);
         let mode = match config.signal_timer {
@@ -138,7 +137,7 @@ impl SignalHandlerSession {
     pub fn drain(&mut self) -> (Vec<Vec<ResolvedFrame>>, Vec<Error>) {
         let mut traces = Vec::new();
         let mut errors = Vec::new();
-        let Some(mut consumer) = handler::consumer() else {
+        let Some(mut consumer) = unwind::consumer() else {
             return (traces, errors);
         };
         for _ in 0..MAX_DRAIN_STACKS {
