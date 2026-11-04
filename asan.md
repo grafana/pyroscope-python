@@ -45,14 +45,18 @@ The image sets `detect_leaks=0:handle_segv=0:handle_sigbus=0`.
 
 ## py-spy reads
 
-py-spy reads through `process_vm_readv`, which ASAN cannot see. The `kk/asan-process-memory` branch of grafana/pyroscope-py-spy reports these reads through `__asan_region_is_poisoned` and `__asan_report_load_n_noabort` when built with ASAN. To build against a local py-spy checkout:
+ASAN builds use the `py-spy` submodule by default, including local edits. Initialize
+it with `git submodule update --init --recursive` before building.
+
+py-spy reads through `process_vm_readv`, which ASAN cannot see. The `kk/asan-process-memory` branch of grafana/pyroscope-py-spy reports these reads through `__asan_region_is_poisoned` and `__asan_report_load_n_noabort` when built with ASAN. To replace the submodule's source with a separate local checkout for an ASAN build:
 
 ```
 rsync -a --exclude target --exclude .git ~/pyroscope-py-spy/ /tmp/pyspy-ctx/
 make asan/wheel ASAN_PYSPY_DIR=/tmp/pyspy-ctx
 ```
 
-The named build context ignores `.dockerignore`, so copy the tree without `target/`. `Cargo.lock` is updated inside the image only.
+The named build context ignores `.dockerignore`, so copy the tree without `target/`.
+If that checkout changes dependencies, update `rust/Cargo.lock` to match before building.
 
 ## Blind spots
 

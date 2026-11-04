@@ -10,6 +10,10 @@ Uses [py-spy](https://github.com/benfred/py-spy) for stack sampling and the [pyr
 pip install pyroscope-io
 ```
 
+For source builds, initialize the native dependency submodules with
+`git submodule update --init --recursive`. Cargo uses the `py-spy` submodule
+as a local path dependency; its version is pinned by the parent repository.
+
 ## Signal handler requirements
 
 The signal-based Python stack unwinder and deferred resolver use kindasafe's
