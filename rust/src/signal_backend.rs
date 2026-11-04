@@ -25,6 +25,7 @@ pub struct Config {
 
 pub struct Signal {
     buffer: Arc<Mutex<StackBuffer>>,
+    backend_config: BackendConfig,
     sampler_thread: Option<JoinHandle<()>>,
     running: Arc<AtomicBool>,
 }
@@ -65,13 +66,14 @@ impl Signal {
 
         Ok(Signal {
             buffer,
+            backend_config,
             sampler_thread: Some(sampler_thread),
             running,
         })
     }
 
     pub fn reporter(&self) -> Reporter {
-        Reporter::new(self.buffer.clone())
+        Reporter::new_signal(self.buffer.clone(), self.backend_config)
     }
 
     pub fn shutdown_thread(&mut self) -> Result<()> {
@@ -89,6 +91,31 @@ impl Drop for Signal {
     fn drop(&mut self) {
         let _ = self.shutdown_thread();
     }
+}
+
+pub(super) fn record_dropped_stacks(
+    buffer: &mut StackBuffer,
+    counts: impl IntoIterator<Item = (&'static str, usize)>,
+    backend_config: &BackendConfig,
+    pid: u32,
+) -> Result<()> {
+    for (reason, count) in counts {
+        if count == 0 {
+            continue;
+        }
+        let trace = StackTrace::new(
+            backend_config,
+            Some(pid),
+            None,
+            None,
+            vec![StackFrame {
+                name: format!("[dropped: {reason}]"),
+                ..StackFrame::default()
+            }],
+        );
+        buffer.record_with_count(trace, count)?;
+    }
+    Ok(())
 }
 
 /// The handler does not record the thread, so there is no thread id or name.
@@ -218,5 +245,145 @@ pub mod threads {
 
     pub(super) fn detach() {
         lock(&TIMER).take();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        encode::{r#gen::google::Profile, pprof},
+        utils::TimeRange,
+    };
+    use prost::Message;
+    use std::time::{Duration, UNIX_EPOCH};
+
+    #[test]
+    fn drop_reasons_are_single_frame_pprof_samples_with_exact_weights() {
+        let config = BackendConfig {
+            report_pid: true,
+            ..BackendConfig::default()
+        };
+        let mut buffer = StackBuffer::default();
+        buffer
+            .record_with_count(
+                StackTrace::new(
+                    &config,
+                    Some(123),
+                    None,
+                    None,
+                    vec![
+                        StackFrame {
+                            name: "work".into(),
+                            filename: "workload.py".into(),
+                            line: 20,
+                        },
+                        StackFrame {
+                            name: "main".into(),
+                            filename: "workload.py".into(),
+                            line: 10,
+                        },
+                    ],
+                ),
+                100,
+            )
+            .unwrap();
+        record_dropped_stacks(&mut buffer, [("resolve_error", 0)], &config, 123).unwrap();
+        assert_eq!(buffer.data.len(), 1, "{buffer:#?}");
+        record_dropped_stacks(
+            &mut buffer,
+            [
+                ("contentions", 1),
+                ("buffer_dropped", 2),
+                ("no_thread_state", 3),
+                ("invalid_code_type", 4),
+                ("read_errors", 5),
+                ("full", 6),
+                ("too_deep", 7),
+                ("invalid", 8),
+                ("resolve_error", 9),
+            ],
+            &config,
+            123,
+        )
+        .unwrap();
+        let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
+        let bytes = pprof::encode(buffer.into(), 100, range).encode_to_vec();
+        let profile = Profile::decode(bytes.as_slice()).unwrap();
+        let mut actual: Vec<_> = profile
+            .sample
+            .iter()
+            .map(|sample| {
+                let frames: Vec<_> = sample
+                    .location_id
+                    .iter()
+                    .rev()
+                    .flat_map(|id| {
+                        let location = profile
+                            .location
+                            .iter()
+                            .find(|location| location.id == *id)
+                            .unwrap();
+                        location.line.iter().map(|line| {
+                            let function = profile
+                                .function
+                                .iter()
+                                .find(|function| function.id == line.function_id)
+                                .unwrap();
+                            (
+                                profile.string_table[function.name as usize].as_str(),
+                                profile.string_table[function.filename as usize].as_str(),
+                                line.line,
+                            )
+                        })
+                    })
+                    .collect();
+                let labels: Vec<_> = sample
+                    .label
+                    .iter()
+                    .map(|label| {
+                        (
+                            profile.string_table[label.key as usize].as_str(),
+                            profile.string_table[label.str as usize].as_str(),
+                        )
+                    })
+                    .collect();
+                assert_eq!(labels, [("pid", "123")], "{profile:#?}");
+                (frames, sample.value.clone())
+            })
+            .collect();
+        actual.sort();
+        let mut expected = vec![
+            (
+                vec![("main", "workload.py", 10), ("work", "workload.py", 20)],
+                vec![1_000_000_000],
+            ),
+            (vec![("[dropped: contentions]", "", 0)], vec![10_000_000]),
+            (vec![("[dropped: buffer_dropped]", "", 0)], vec![20_000_000]),
+            (
+                vec![("[dropped: no_thread_state]", "", 0)],
+                vec![30_000_000],
+            ),
+            (
+                vec![("[dropped: invalid_code_type]", "", 0)],
+                vec![40_000_000],
+            ),
+            (vec![("[dropped: read_errors]", "", 0)], vec![50_000_000]),
+            (vec![("[dropped: full]", "", 0)], vec![60_000_000]),
+            (vec![("[dropped: too_deep]", "", 0)], vec![70_000_000]),
+            (vec![("[dropped: invalid]", "", 0)], vec![80_000_000]),
+            (vec![("[dropped: resolve_error]", "", 0)], vec![90_000_000]),
+        ];
+        expected.sort();
+        assert_eq!(actual, expected, "{profile:#?}");
+        assert_eq!(
+            profile
+                .sample
+                .iter()
+                .map(|sample| sample.value[0])
+                .sum::<i64>(),
+            1_450_000_000,
+            "{profile:#?}"
+        );
     }
 }

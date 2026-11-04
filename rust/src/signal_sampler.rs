@@ -46,6 +46,9 @@ pub type Error = String;
 
 const MAX_DRAIN_STACKS: usize = 64;
 
+#[cfg(test)]
+pub(super) static METRICS_LOCK: Mutex<()> = Mutex::new(());
+
 fn check_version(version: (u8, u8)) -> Result<(), Error> {
     let (major, minor) = version;
     if !matches!(version, (3, 10..=14)) {
@@ -103,6 +106,8 @@ impl SignalHandlerSession {
 
         let signal_handler = SignalHandler::install(Timer::SIGNAL, signal_handler)
             .map_err(|e| format!("failed to install the signal handler: {e}"))?;
+        // Discard drop counts left by the previous session before arming the timer.
+        unwind::METRICS.take_drop_counts();
         let interval = Duration::from_secs_f64(1.0 / config.sampling_rate as f64);
         let mode = match config.signal_timer {
             SignalTimer::ITimer => Mode::ITimer,

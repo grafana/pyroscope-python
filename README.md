@@ -40,6 +40,11 @@ establish this condition. Type and
 length validation cannot prevent all incorrect attribution from reused addresses or
 inconsistent reads.
 
+Signal profiles include a synthetic single-frame stack named `[dropped: REASON]` for
+each nonzero drop reason. These stacks are added once when each pprof is built, weighted
+by the number of dropped samples (converted to CPU time using the sampling period).
+Counters are consumed at that point, so drops are not repeated in later profiles.
+
 ## License
 
 Apache-2.0

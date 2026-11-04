@@ -141,6 +141,7 @@ mod tests {
 
     #[test]
     fn counts_each_failed_stack_once() {
+        let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
         let mut resolver = Resolver::new(
             Types {
                 code: 1,

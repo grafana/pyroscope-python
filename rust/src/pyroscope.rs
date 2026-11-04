@@ -329,7 +329,7 @@ impl PyroscopeAgent {
         }
 
         if let Some(reporter) = reporter {
-            let report = reporter.report()?;
+            let report = reporter.report(config.sample_rate, &time_range)?;
             if !report.is_empty() {
                 batch.push(report);
             }

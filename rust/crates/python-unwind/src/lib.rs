@@ -118,10 +118,13 @@ fn current_thread_state() -> usize {
     unsafe { pyo3_ffi::PyGILState_GetThisThreadState() as usize }
 }
 
+#[derive(Default)]
 pub struct Metrics {
     contentions: AtomicUsize,
     buffer_dropped: AtomicUsize,
-    dropped: AtomicUsize,
+    full: AtomicUsize,
+    too_deep: AtomicUsize,
+    invalid: AtomicUsize,
     no_thread_state: AtomicUsize,
     invalid_code_type: AtomicUsize,
     read_errors: AtomicUsize,
@@ -132,12 +135,33 @@ pub struct Metrics {
 pub static METRICS: Metrics = Metrics {
     contentions: AtomicUsize::new(0),
     buffer_dropped: AtomicUsize::new(0),
-    dropped: AtomicUsize::new(0),
+    full: AtomicUsize::new(0),
+    too_deep: AtomicUsize::new(0),
+    invalid: AtomicUsize::new(0),
     no_thread_state: AtomicUsize::new(0),
     invalid_code_type: AtomicUsize::new(0),
     read_errors: AtomicUsize::new(0),
     resolve_error: AtomicUsize::new(0),
 };
+
+impl Metrics {
+    /// Takes the counts since the previous drain, one reason per lost stack.
+    /// Concurrent increments remain in this batch or the next one.
+    pub fn take_drop_counts(&self) -> [(&'static str, usize); 9] {
+        [
+            ("contentions", &self.contentions),
+            ("buffer_dropped", &self.buffer_dropped),
+            ("no_thread_state", &self.no_thread_state),
+            ("invalid_code_type", &self.invalid_code_type),
+            ("read_errors", &self.read_errors),
+            ("full", &self.full),
+            ("too_deep", &self.too_deep),
+            ("invalid", &self.invalid),
+            ("resolve_error", &self.resolve_error),
+        ]
+        .map(|(reason, count)| (reason, count.swap(0, Ordering::Relaxed)))
+    }
+}
 
 /// Recovery initialization must have succeeded and both fault signals must be deliverable on this thread
 /// throughout the walk. These caller preconditions are not checked at runtime; a failed
@@ -153,21 +177,21 @@ pub fn unwind(frames: &mut [Frame]) -> Result<&[Frame], Error> {
 }
 
 fn unwind_thread(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
-    if tstate == 0 {
-        METRICS.no_thread_state.fetch_add(1, Ordering::Relaxed);
-        return Err(Error::NoThreadState);
-    }
-    walk(tstate, frames).inspect_err(|error| {
-        METRICS.dropped.fetch_add(1, Ordering::Relaxed);
-        match error {
-            Error::InvalidCodeType => {
-                METRICS.invalid_code_type.fetch_add(1, Ordering::Relaxed);
-            }
-            Error::Read => {
-                METRICS.read_errors.fetch_add(1, Ordering::Relaxed);
-            }
-            _ => {}
-        }
+    let result = if tstate == 0 {
+        Err(Error::NoThreadState)
+    } else {
+        walk(tstate, frames)
+    };
+    result.inspect_err(|error| {
+        let counter = match error {
+            Error::NoThreadState => &METRICS.no_thread_state,
+            Error::InvalidCodeType => &METRICS.invalid_code_type,
+            Error::Read => &METRICS.read_errors,
+            Error::Full => &METRICS.full,
+            Error::TooDeep => &METRICS.too_deep,
+            Error::Invalid => &METRICS.invalid,
+        };
+        counter.fetch_add(1, Ordering::Relaxed);
     })
 }
 
@@ -271,9 +295,62 @@ mod tests {
     }
 
     #[test]
+    fn drop_counts_are_consumed_once_per_profile() {
+        let metrics = Metrics::default();
+        for (counter, count) in [
+            (&metrics.contentions, 1),
+            (&metrics.buffer_dropped, 2),
+            (&metrics.no_thread_state, 3),
+            (&metrics.invalid_code_type, 4),
+            (&metrics.read_errors, 5),
+            (&metrics.full, 6),
+            (&metrics.too_deep, 7),
+            (&metrics.invalid, 8),
+            (&metrics.resolve_error, 9),
+        ] {
+            counter.fetch_add(count, Ordering::Relaxed);
+        }
+        let expected = [
+            ("contentions", 1),
+            ("buffer_dropped", 2),
+            ("no_thread_state", 3),
+            ("invalid_code_type", 4),
+            ("read_errors", 5),
+            ("full", 6),
+            ("too_deep", 7),
+            ("invalid", 8),
+            ("resolve_error", 9),
+        ];
+        assert_eq!(metrics.take_drop_counts(), expected);
+        assert_eq!(
+            metrics.take_drop_counts(),
+            expected.map(|(name, _)| (name, 0))
+        );
+        metrics.resolve_error.fetch_add(2, Ordering::Relaxed);
+        assert_eq!(
+            metrics.take_drop_counts(),
+            expected.map(|(name, _)| { (name, if name == "resolve_error" { 2 } else { 0 }) })
+        );
+    }
+
+    #[test]
+    fn missing_thread_and_invalid_address_have_separate_counts() {
+        let _guard = METRICS_LOCK.lock().unwrap();
+        let no_thread_before = METRICS.no_thread_state.load(Ordering::Relaxed);
+        let invalid_before = METRICS.invalid.load(Ordering::Relaxed);
+        let mut output = [Frame::default(); 1];
+        assert_eq!(unwind_thread(0, &mut output), Err(Error::NoThreadState));
+        assert_eq!(unwind_thread(usize::MAX, &mut output), Err(Error::Invalid));
+        assert_eq!(
+            METRICS.no_thread_state.load(Ordering::Relaxed),
+            no_thread_before + 1
+        );
+        assert_eq!(METRICS.invalid.load(Ordering::Relaxed), invalid_before + 1);
+    }
+
+    #[test]
     fn invalid_code_and_read_errors_fail_stack_and_count_failures() {
         let _guard = METRICS_LOCK.lock().unwrap();
-        let dropped_before = METRICS.dropped.load(Ordering::Relaxed);
         init();
         let code_type = (&raw mut pyo3_ffi::PyCode_Type) as usize;
         let mut code = [0usize; 4];
@@ -317,7 +394,6 @@ mod tests {
             METRICS.read_errors.load(Ordering::Relaxed),
             read_errors_before + 1
         );
-        assert_eq!(METRICS.dropped.load(Ordering::Relaxed), dropped_before + 3);
 
         // The output slice can be reused after a failed walk.
         set(&mut outer, layout::EXECUTABLE, code_addr);
@@ -332,13 +408,13 @@ mod tests {
             METRICS.read_errors.load(Ordering::Relaxed),
             read_errors_before + 1
         );
-        assert_eq!(METRICS.dropped.load(Ordering::Relaxed), dropped_before + 3);
     }
 
     #[test]
     fn frame_limit_accepts_256_and_rejects_257() {
         let _guard = METRICS_LOCK.lock().unwrap();
-        let dropped_before = METRICS.dropped.load(Ordering::Relaxed);
+        let full_before = METRICS.full.load(Ordering::Relaxed);
+        let too_deep_before = METRICS.too_deep.load(Ordering::Relaxed);
         init();
         let code_type = (&raw mut pyo3_ffi::PyCode_Type) as usize;
         let mut code = [0usize; 4];
@@ -372,7 +448,7 @@ mod tests {
         let mut output = [Frame::default(); 256];
         assert_eq!(unwind_thread(tstate, &mut []), Err(Error::Full));
         assert_eq!(unwind_thread(tstate, &mut output[..255]), Err(Error::Full));
-        assert_eq!(METRICS.dropped.load(Ordering::Relaxed), dropped_before + 2);
+        assert_eq!(METRICS.full.load(Ordering::Relaxed), full_before + 2);
         let stack = unwind_thread(tstate, &mut output).unwrap();
         assert_eq!(stack.len(), MAX_FRAMES);
         assert!(stack.iter().all(|frame| {
@@ -385,7 +461,10 @@ mod tests {
 
         set(&mut frames[MAX_FRAMES - 1], layout::PREVIOUS, extra_frame);
         assert_eq!(unwind_thread(tstate, &mut output), Err(Error::TooDeep));
-        assert_eq!(METRICS.dropped.load(Ordering::Relaxed), dropped_before + 3);
+        assert_eq!(
+            METRICS.too_deep.load(Ordering::Relaxed),
+            too_deep_before + 1
+        );
     }
 
     #[cfg(not(Py_3_11))]
