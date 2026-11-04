@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 FROM scratch AS pyspy
+COPY py-spy/ /
 
 FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c AS toolchain
 ARG LLVM_VERSION=22
@@ -52,17 +53,20 @@ COPY pyproject.toml setup.py ./
 COPY rust/ rust/
 COPY python/ python/
 COPY dd-trace-py/ dd-trace-py/
+COPY kindasafe/ kindasafe/
 
-COPY --from=pyspy / /pyspy/
+COPY --from=pyspy / py-spy/
 
 RUN --mount=type=cache,target=/opt/cargo/registry \
     --mount=type=cache,target=/opt/cargo/git \
-    if [ -f /pyspy/Cargo.toml ]; then \
-        printf '[patch."https://github.com/grafana/pyroscope-py-spy"]\npy-spy = { path = "/pyspy" }\n' >> ${CARGO_HOME}/config.toml \
-        && cargo update -p py-spy --manifest-path rust/Cargo.toml; \
-    fi \
-    && CARGO_BUILD_TARGET="$(uname -m)-unknown-linux-gnu" \
+    CARGO_BUILD_TARGET="$(uname -m)-unknown-linux-gnu" \
     python -m pip wheel --no-deps --wheel-dir /dist .
+
+# Exercise kindasafe's naked-load ASAN checks.
+RUN --mount=type=cache,target=/opt/cargo/registry \
+    CARGO_TARGET_DIR=/pyroscope-python/rust/target \
+    cargo test --manifest-path kindasafe/Cargo.toml --locked --release \
+        --target "$(uname -m)-unknown-linux-gnu" --workspace
 
 FROM scratch AS wheel
 COPY --from=wheel-build /dist/ /

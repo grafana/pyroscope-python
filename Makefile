@@ -41,6 +41,7 @@ musllinux/arm64:
 ASAN_PYTHON_REF ?= 3.14
 ASAN_IMAGE ?= pyroscope-python-asan:$(ASAN_PYTHON_REF)
 ASAN_WHEEL_DIR := dist/asan
+PROFILER ?= all
 
 .PHONY: asan/image
 asan/image:
@@ -67,9 +68,10 @@ asan/wheel:
 asan/test: asan/image asan/wheel
 	cd integration-test && \
 		PYTHON_IMAGE=$(ASAN_IMAGE) \
+		PYTHON_VERSION=$(ASAN_PYTHON_REF) \
 		PYROSCOPE_WHEEL_DIR=../$(ASAN_WHEEL_DIR) \
 		PYROSCOPE_WHEEL_GLOB='*.whl' \
-		go test -v -timeout 60m -count=1 $(if $(RUN),-run '$(RUN)') .
+		go test -v -timeout 60m -count=1 $(if $(RUN),-run '$(RUN)') . -profiler='$(PROFILER)'
 
 PYTHON ?= python3
 

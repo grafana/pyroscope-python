@@ -11,7 +11,6 @@ os.register_at_fork(after_in_child=lambda: time.sleep(0.5))
 
 import pyroscope  # noqa: E402
 
-
 logger = logging.getLogger(__name__)
 stop_burning = threading.Event()
 
