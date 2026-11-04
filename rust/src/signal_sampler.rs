@@ -18,6 +18,7 @@ pub use py_spy::{Frame as ResolvedFrame, config::LineNo as Lines};
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
+pub use resolve::Error as ResolveError;
 
 #[derive(Debug, Clone)]
 pub enum InitError {
@@ -140,7 +141,7 @@ impl SignalHandlerSession {
 
     /// Resolves a bounded batch of recorded stacks, each innermost frame first.
     /// Returning even while producers are busy lets the sampling thread upload and stop.
-    pub fn drain(&mut self) -> (Vec<Vec<ResolvedFrame>>, Vec<Error>) {
+    pub fn drain(&mut self) -> (Vec<Vec<ResolvedFrame>>, Vec<ResolveError>) {
         let mut traces = Vec::new();
         let mut errors = Vec::new();
         let Some(mut consumer) = unwind::consumer() else {

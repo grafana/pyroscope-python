@@ -23,6 +23,7 @@ crate-type = ["cdylib"]
 name = "_native"
 
 [dependencies]
+anyhow = "1"
 kindasafe.workspace = true
 kindasafe_init.workspace = true
 pyroscope-python-unwind = { path = "crates/python-unwind" }

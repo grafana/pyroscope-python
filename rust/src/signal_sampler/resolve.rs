@@ -13,7 +13,7 @@ use py_spy::{
     python_process_info::{TypeChecks, Types},
     stack_trace::{RawFrame, resolve_frames},
 };
-use remoteprocess::{Error, ProcessMemory};
+use remoteprocess::ProcessMemory;
 
 use super::unwind::Frame;
 use super::{Lines, ResolvedFrame};
@@ -31,6 +31,25 @@ use bindings::v3_14_0::_PyInterpreterFrame as PythonFrame;
 #[cfg(Py_3_15)]
 use bindings::v3_15_0::_PyInterpreterFrame as PythonFrame;
 
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[cfg(Py_3_11)]
+    #[error("instruction {instr:#x} precedes code object {code:#x}")]
+    InstructionBeforeCode { instr: usize, code: usize },
+    #[error("instruction offset is out of range")]
+    InstructionOffset(#[from] std::num::TryFromIntError),
+    #[error("{0:#}")]
+    PySpy(#[from] anyhow::Error),
+    #[error("memory address range overflows: {len} bytes at {addr:#x}")]
+    AddressRangeOverflow { addr: usize, len: usize },
+    #[error("failed to read {len} bytes at {addr:#x}: {fault:?}")]
+    ReadMemory {
+        addr: usize,
+        len: usize,
+        fault: kindasafe::ReadMemError,
+    },
+}
+
 pub struct Resolver {
     types: TypeChecks,
     lines: Lines,
@@ -46,7 +65,7 @@ impl Resolver {
         }
     }
 
-    pub fn resolve_stack(&mut self, frames: &[Frame]) -> Result<Vec<ResolvedFrame>, String> {
+    pub fn resolve_stack(&mut self, frames: &[Frame]) -> Result<Vec<ResolvedFrame>, Error> {
         self.raw.clear();
         for frame in frames {
             let lasti = match self.lines {
@@ -56,43 +75,49 @@ impl Resolver {
             self.raw.push(RawFrame::from_code(frame.code, lasti));
         }
         resolve_frames::<PythonFrame, _>(&self.raw, &Memory, false, self.lines, &self.types)
-            .map_err(|error| format!("{error:#}"))
+            .map_err(Error::PySpy)
     }
 }
 
-fn instruction_offset(frame: &Frame) -> Result<i32, String> {
+fn instruction_offset(frame: &Frame) -> Result<i32, Error> {
     // py-spy expects f_lasti code units on 3.10 and a byte offset from the
     // beginning of the code object on 3.11+, including its header.
     #[cfg(not(Py_3_11))]
     let offset = i32::try_from(frame.instr as isize);
     #[cfg(Py_3_11)]
-    let offset = i32::try_from(
-        frame
-            .instr
-            .checked_sub(frame.code)
-            .ok_or("instruction precedes code object")?,
-    );
-    offset.map_err(|_| "instruction offset is out of range".to_string())
+    let offset = i32::try_from(frame.instr.checked_sub(frame.code).ok_or(
+        Error::InstructionBeforeCode {
+            instr: frame.instr,
+            code: frame.code,
+        },
+    )?);
+    offset.map_err(Error::InstructionOffset)
 }
 
 /// Supplies py-spy's decoder with fault-recovering reads of this process.
 struct Memory;
 
 impl ProcessMemory for Memory {
-    fn read(&self, addr: usize, out: &mut [u8]) -> Result<(), Error> {
-        addr.checked_add(out.len())
-            .ok_or_else(|| Error::Other("memory address range overflow".to_string()))?;
+    fn read(&self, addr: usize, out: &mut [u8]) -> Result<(), remoteprocess::Error> {
+        addr.checked_add(out.len()).ok_or_else(|| {
+            std::io::Error::other(Error::AddressRangeOverflow {
+                addr,
+                len: out.len(),
+            })
+        })?;
         if out.is_empty() {
             return Ok(());
         }
         // SAFETY: recovery and source-borrow assumptions are documented at module level.
         // The destination is separate, initialized, exclusively borrowed storage. The source
         // range is checked for overflow and copied without constructing a source reference.
-        unsafe { kindasafe::slice(out, addr as u64) }.map_err(|error| {
-            Error::Other(format!(
-                "failed to read {} bytes at {addr:#x}: {error:?}",
-                out.len()
-            ))
+        unsafe { kindasafe::slice(out, addr as u64) }.map_err(|fault| {
+            std::io::Error::other(Error::ReadMemory {
+                addr,
+                len: out.len(),
+                fault,
+            })
+            .into()
         })
     }
 }
