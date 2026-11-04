@@ -744,6 +744,9 @@ dependencies = [
 [[package]]
 name = "kindasafe"
 version = "0.1.1"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "kindasafe_init"
