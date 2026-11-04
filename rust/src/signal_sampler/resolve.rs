@@ -72,7 +72,13 @@ impl Resolver {
                 Lines::LastInstruction => instruction_offset(frame)?,
                 Lines::First | Lines::NoLine => 0,
             };
-            self.raw.push(RawFrame::from_code(frame.code, lasti));
+            self.raw.push(RawFrame {
+                frame: 0,
+                code: frame.code,
+                lasti,
+                is_entry: false,
+                is_shim_entry: false,
+            });
         }
         resolve_frames::<PythonFrame, _>(&self.raw, &Memory, false, self.lines, &self.types)
             .map_err(Error::PySpy)
