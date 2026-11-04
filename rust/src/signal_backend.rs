@@ -92,7 +92,11 @@ impl Drop for Signal {
 }
 
 /// The handler does not record the thread, so there is no thread id or name.
-fn to_stack_trace(frames: Vec<ResolvedFrame>, backend_config: &BackendConfig, pid: u32) -> StackTrace {
+fn to_stack_trace(
+    frames: Vec<ResolvedFrame>,
+    backend_config: &BackendConfig,
+    pid: u32,
+) -> StackTrace {
     let frames = frames
         .into_iter()
         .map(|frame| StackFrame {
