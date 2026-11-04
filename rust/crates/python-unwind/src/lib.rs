@@ -27,6 +27,8 @@
 //! another signal handler. Initialization and signal masks are not checked while unwinding;
 //! violating these preconditions can turn a failed memory read into a process crash.
 //! Kindasafe reads use direct memory loads without syscalls on the successful memory-load path.
+//! In ASAN builds, a fault recovered during an ordinary read is reported to ASAN after recovery;
+//! the deliberate protected-page check during initialization uses a separate recovery probe.
 
 #[cfg(test)]
 extern crate std;

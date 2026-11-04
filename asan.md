@@ -30,6 +30,20 @@ Memory-only tests run in the `stack` suite and with `all`, so the ASAN matrix
 covers the memory profiler. Lifecycle tests run with their existing implementation.
 Signal supports CPython 3.10–3.14 and is skipped on other versions.
 
+`TestPythonProfilerCallbacks` runs a 20-second C-to-Python callback loop for
+py-spy, both Signal timers, and Stack (both its default sampler and explicit wall
+sampler). It runs in the regular integration suite and each matching ASAN job.
+Unlike the hashing workload's ordinary Python calls, `map` callbacks repeatedly
+enter and return from the C evaluator, exposing stale reads of its stack-local
+`_PyCFrame` and `entry_frame` on applicable Python versions. The test requires a
+successful exit, no ASAN error reports (including recoverable reports), and a
+substantial profile dominated by the complete main/callback stacks. Existing
+asynchronous lifetime bugs can therefore make this test fail under ASAN.
+
+```
+make asan/test RUN='^TestPythonProfilerCallbacks$'
+```
+
 CI runs a separate job for each implementation at each Python version and
 architecture, with `fail-fast: false`. Each job saves the test output and full
 container logs as an artifact, including failed runs, for comparing ASAN reports.
@@ -64,12 +78,15 @@ If that checkout changes dependencies, update `rust/Cargo.lock` to match before 
 The unwinder and deferred resolver both read through `kindasafe`. Its naked
 assembly bypasses compiler instrumentation, so ASAN builds check every successful
 `u64` and `slice` read with `__asan_region_is_poisoned` and report the first poisoned
-byte through `__asan_report_load_n_noabort`. Failed reads still use signal recovery.
+byte through `__asan_report_load_n_noabort`. Faulting reads use signal recovery,
+then report the attempted read through `__asan_report_load_n_noabort`; an unmapped
+address generally appears as an ASAN `unknown-crash` report.
 Normal builds have no additional checks.
 
 The ASAN wheel build runs kindasafe's tests, including subprocess regressions for
-poisoned aligned/unaligned words, a poisoned region inside a slice, and a read from
-a `SIGPROF` handler. Valid, empty, and faulting reads must not emit poison reports.
+poisoned aligned/unaligned words, a poisoned region inside a slice, a read from
+a `SIGPROF` handler, and faulting words and slices. Valid and empty reads must
+not emit reports.
 
 ## Blind spots
 
