@@ -1,5 +1,5 @@
 use crate::{
-    backend::{BackendConfig, StackBuffer, StackFrame, StackTrace, ThreadTagsSet},
+    backend::{BackendConfig, StackBuffer, StackFrame, StackTrace},
     error::{PyroscopeError, Result},
     pyspy_backend::Reporter,
     signal_sampler::{self, ResolvedFrame, SharedTimer, SignalHandlerSession, SignalTimer},
@@ -30,11 +30,7 @@ pub struct Signal {
 }
 
 impl Signal {
-    pub fn new(
-        config: Config,
-        backend_config: BackendConfig,
-        ruleset: ThreadTagsSet,
-    ) -> Result<Self> {
+    pub fn new(config: Config, backend_config: BackendConfig) -> Result<Self> {
         let mut session = SignalHandlerSession::start(&config.sampler)
             .map_err(|e| PyroscopeError::new(&format!("Signal: {e}")))?;
         if config.sampler.signal_timer == SignalTimer::CTimer {
@@ -47,22 +43,17 @@ impl Signal {
             let buffer = buffer.clone();
             let running = running.clone();
             std::thread::spawn(move || {
-                let mut reported_errors = 0;
+                let pid = std::process::id();
                 while running.load(Ordering::Relaxed) {
                     std::thread::sleep(Duration::from_millis(10)); //todo do not wake up on every 10ms, notify from producer when buf is half full
-                    let (traces, errors) = session.drain();
-                    for e in errors {
-                        if reported_errors < 239 {
-                            reported_errors += 1;
-                            log::debug!(target: LOG_TAG, "dropped a stack: {e}");
-                        }
-                    }
+                    let traces = session.drain();
                     let Ok(mut buffer) = buffer.lock() else {
                         break;
                     };
                     for frames in traces {
-                        let trace = to_stack_trace(frames, &backend_config);
-                        let _ = buffer.record(trace.add_tag_rules(&ruleset));
+                        let trace = to_stack_trace(frames, &backend_config, pid);
+                        // TODO: Apply thread tags once samples include the thread ID.
+                        let _ = buffer.record(trace);
                     }
                 }
                 if config.sampler.signal_timer == SignalTimer::CTimer {
@@ -101,7 +92,7 @@ impl Drop for Signal {
 }
 
 /// The handler does not record the thread, so there is no thread id or name.
-fn to_stack_trace(frames: Vec<ResolvedFrame>, backend_config: &BackendConfig) -> StackTrace {
+fn to_stack_trace(frames: Vec<ResolvedFrame>, backend_config: &BackendConfig, pid: u32) -> StackTrace {
     let frames = frames
         .into_iter()
         .map(|frame| StackFrame {
@@ -110,7 +101,7 @@ fn to_stack_trace(frames: Vec<ResolvedFrame>, backend_config: &BackendConfig) ->
             line: frame.line.max(0) as u32,
         })
         .collect();
-    StackTrace::new(backend_config, Some(std::process::id()), None, None, frames)
+    StackTrace::new(backend_config, Some(pid), None, None, frames)
 }
 
 /// Feeds the OS thread ids of python threads to a `CTimer` session. The hooks stay installed

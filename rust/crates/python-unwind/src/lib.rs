@@ -118,22 +118,25 @@ fn current_thread_state() -> usize {
     unsafe { pyo3_ffi::PyGILState_GetThisThreadState() as usize }
 }
 
-struct Metrics {
+pub struct Metrics {
     contentions: AtomicUsize,
     buffer_dropped: AtomicUsize,
     dropped: AtomicUsize,
     no_thread_state: AtomicUsize,
     invalid_code_type: AtomicUsize,
     read_errors: AtomicUsize,
+    /// Stacks dropped because deferred name or line resolution failed.
+    pub resolve_error: AtomicUsize,
 }
 
-static METRICS: Metrics = Metrics {
+pub static METRICS: Metrics = Metrics {
     contentions: AtomicUsize::new(0),
     buffer_dropped: AtomicUsize::new(0),
     dropped: AtomicUsize::new(0),
     no_thread_state: AtomicUsize::new(0),
     invalid_code_type: AtomicUsize::new(0),
     read_errors: AtomicUsize::new(0),
+    resolve_error: AtomicUsize::new(0),
 };
 
 /// Recovery initialization must have succeeded and both fault signals must be deliverable on this thread

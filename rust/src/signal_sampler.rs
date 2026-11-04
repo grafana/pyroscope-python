@@ -18,7 +18,6 @@ pub use py_spy::{Frame as ResolvedFrame, config::LineNo as Lines};
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
-pub use resolve::Error as ResolveError;
 
 extern "C" fn signal_handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut libc::c_void) {
     unwind::handler();
@@ -128,11 +127,10 @@ impl SignalHandlerSession {
 
     /// Resolves a bounded batch of recorded stacks, each innermost frame first.
     /// Returning even while producers are busy lets the sampling thread upload and stop.
-    pub fn drain(&mut self) -> (Vec<Vec<ResolvedFrame>>, Vec<ResolveError>) {
+    pub fn drain(&mut self) -> Vec<Vec<ResolvedFrame>> {
         let mut traces = Vec::new();
-        let mut errors = Vec::new();
         let Some(mut consumer) = unwind::consumer() else {
-            return (traces, errors);
+            return traces;
         };
         for _ in 0..MAX_DRAIN_STACKS {
             let n = match consumer.pop_slice(&mut self.buf) {
@@ -140,12 +138,11 @@ impl SignalHandlerSession {
                 Err(PopError::Empty) => break,
                 Err(PopError::TooSmall { .. }) => unreachable!("buffer fits MAX_FRAMES"),
             };
-            match self.resolver.resolve_stack(&self.buf[..n]) {
-                Ok(trace) => traces.push(trace),
-                Err(e) => errors.push(e),
+            if let Ok(trace) = self.resolver.resolve_stack(&self.buf[..n]) {
+                traces.push(trace);
             }
         }
-        (traces, errors)
+        traces
     }
 }
 

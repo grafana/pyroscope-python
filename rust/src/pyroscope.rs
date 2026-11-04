@@ -193,8 +193,7 @@ impl PyroscopeAgentBuilder {
                         .map(Backend::PySpy)
                 }
                 CpuConfig::Signal(config) => {
-                    Signal::new(config, self.backend_config, self.ruleset.clone())
-                        .map(Backend::Signal)
+                    Signal::new(config, self.backend_config).map(Backend::Signal)
                 }
             })
             .transpose()?;

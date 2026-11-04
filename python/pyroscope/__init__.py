@@ -210,6 +210,8 @@ def _install_stack_threads(threading, register, unregister):
             register(self.ident, self.native_id)
 
     def _bootstrap_inner(self, *args, **kwargs):
+        # TODO: Threads already running when this wrapper is installed never call
+        # unregister. Hook Thread._delete on Python 3.11+ to handle their exit too.
         orig_bootstrap_inner(self, *args, **kwargs)
         if self.ident is not None:
             unregister(self.ident)
