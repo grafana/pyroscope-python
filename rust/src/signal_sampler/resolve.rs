@@ -135,7 +135,8 @@ mod tests {
     #[cfg(not(miri))]
     #[test]
     fn reads_with_kindasafe_and_recovers_after_faults() {
-        super::super::init().unwrap();
+        // SAFETY: tests preserve kindasafe's handlers and do not install other handlers.
+        unsafe { kindasafe_init::init() }.unwrap();
         let memory = Memory;
         assert!(memory.copy_struct::<usize>(0).is_err());
         assert!(memory.copy(0, 4).is_err());

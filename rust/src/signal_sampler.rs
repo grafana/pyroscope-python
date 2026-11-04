@@ -20,22 +20,6 @@ use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
 pub use resolve::Error as ResolveError;
 
-#[derive(Debug, Clone)]
-pub enum InitError {
-    Install(kindasafe_init::InitError),
-}
-
-/// Installs recovery once; kindasafe caches the result, including failures.
-/// SDK users must prevent concurrent SIGSEGV/SIGBUS changes during installation and
-/// keep the installed handlers unchanged afterward, including across profiler restarts.
-/// Previously installed handlers must support chaining and remain loaded.
-pub fn init() -> Result<(), InitError> {
-    // SAFETY: kindasafe serializes its installation. SDK users must coordinate other
-    // signal users and keep chained callbacks loaded as documented above and in the
-    // unwinder's crate-level contract.
-    unsafe { kindasafe_init::init() }.map_err(InitError::Install)
-}
-
 extern "C" fn signal_handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut libc::c_void) {
     unwind::handler();
 }
@@ -98,9 +82,12 @@ impl SignalHandlerSession {
         if config.sampling_rate == 0 {
             return Err("the sampling rate must be greater than zero".to_string());
         }
-        init().map_err(|InitError::Install(error)| {
-            format!("failed to install memory fault handlers: {error:?}")
-        })?;
+        // SAFETY: kindasafe serializes and caches initialization, including failures.
+        // SDK users must coordinate other SIGSEGV/SIGBUS users during installation,
+        // preserve the installed handlers across profiler restarts, and keep chained
+        // callbacks compatible and loaded, as documented in README.md and the unwinder.
+        unsafe { kindasafe_init::init() }
+            .map_err(|error| format!("failed to install memory fault handlers: {error:?}"))?;
         let types = py_spy::python_process_info::Types {
             code: (&raw mut pyo3::ffi::PyCode_Type) as usize,
             string: (&raw mut pyo3::ffi::PyUnicode_Type) as usize,
