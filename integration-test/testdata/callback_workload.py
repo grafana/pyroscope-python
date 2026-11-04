@@ -6,7 +6,11 @@ import pyroscope
 
 
 def callback(value):
-    return value + 1
+    # Keep enough work in Python for the complete callback stack to receive a
+    # measurable share even with faster 3.14+ evaluators and asynchronous sampling.
+    for _ in range(4):
+        value = (value * 1664525 + 1013904223) & 0xFFFFFFFF
+    return value
 
 
 def main():
@@ -33,11 +37,11 @@ def main():
         # calls on 3.11+, these calls repeatedly return from the C evaluator.
         # On 3.12+ this retires its stack-local entry_frame as well as any
         # _PyCFrame: an asynchronous unwinder can retain either pointer.
-        # Keep callbacks short to maximize the number of lifetime transitions.
+        # Each batch still crosses the C/Python boundary 10,000 times.
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
             result = sum(map(callback, range(10000)))
-            if result != 50005000:
+            if result != 21_508_692_185_016:
                 raise AssertionError(f"unexpected callback sum: {result}")
     finally:
         if not pyroscope.shutdown():
