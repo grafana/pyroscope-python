@@ -11,7 +11,7 @@
 make asan/test                                  # image + wheel + full integration suite
 make asan/test PROFILER=py-spy                   # only py-spy
 make asan/test PROFILER=signal                   # only Signal (ITimer and CTimer)
-make asan/test PROFILER=stack                    # only Stack (vendored dd-trace-py)
+make asan/test PROFILER=stack                    # Stack and memory (vendored dd-trace-py)
 make asan/test PROFILER=signal RUN='ITimer$'      # subset
 make asan/image                                 # pyroscope-python-asan:3.14
 make asan/wheel                                 # dist/asan/*.whl
@@ -25,8 +25,9 @@ Tested with CPython 3.10 to 3.15. 3.10 and 3.11 still find system libraries thro
 `PROFILER` defaults to `all`. The same selector works directly with Go:
 `cd integration-test && go test -v -timeout 60m . -profiler=signal`.
 Accepted values are `all`, `py-spy`, `signal`, and `stack`; `dd-trace-py`
-is an alias for `stack`. A selected implementation skips unrelated CPU tests
-and memory-only tests. Lifecycle tests run with their existing implementation.
+is an alias for `stack`. A selected implementation skips unrelated CPU tests.
+Memory-only tests run in the `stack` suite and with `all`, so the ASAN matrix
+covers the memory profiler. Lifecycle tests run with their existing implementation.
 Signal supports CPython 3.10–3.14 and is skipped on other versions.
 
 CI runs a separate job for each implementation at each Python version and
@@ -38,7 +39,7 @@ Set `PYROSCOPE_TEST_LOG_DIR` to an output directory to save container logs local
 
 The image sets `detect_leaks=0:handle_segv=0:handle_sigbus=0`.
 
-- `handle_segv=0:handle_sigbus=0`: the profiler installs and chains its own SIGSEGV/SIGBUS handlers, and the signal handler tests assert on them. Bad reads are still reported by the instrumentation before they fault.
+- `handle_segv=0:handle_sigbus=0`: the profiler installs and chains its own SIGSEGV/SIGBUS handlers, and the signal handler tests assert on them. Instrumented loads and explicit read checks still report poisoned memory.
 - Stack-use-after-return detection stays on (the default). It catches reads of returned C stack frames such as `_PyEval_EvalFrameDefault`'s `entry` frame.
 - Add `halt_on_error=0` to keep running after a report.
 - Add `suppress_equal_pcs=0` too. With `halt_on_error=0`, ASAN reports each faulting pc once, and every stack profiler read goes through the single `memcpy` in `safe_memcpy`. So the first report, usually the short-string over-read in `pyunicode_to_utf8`, hides every later bad read from any caller, including freed frames and wrong code objects. The same applies to the py-spy wrapper, whose reports all come from one call site.
@@ -57,6 +58,18 @@ make asan/wheel ASAN_PYSPY_DIR=/tmp/pyspy-ctx
 
 The named build context ignores `.dockerignore`, so copy the tree without `target/`.
 If that checkout changes dependencies, update `rust/Cargo.lock` to match before building.
+
+## Signal reads
+
+The unwinder and deferred resolver both read through `kindasafe`. Its naked
+assembly bypasses compiler instrumentation, so ASAN builds check every successful
+`u64` and `slice` read with `__asan_region_is_poisoned` and report the first poisoned
+byte through `__asan_report_load_n_noabort`. Failed reads still use signal recovery.
+Normal builds have no additional checks.
+
+The ASAN wheel build runs kindasafe's tests, including subprocess regressions for
+poisoned aligned/unaligned words, a poisoned region inside a slice, and a read from
+a `SIGPROF` handler. Valid, empty, and faulting reads must not emit poison reports.
 
 ## Blind spots
 

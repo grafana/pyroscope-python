@@ -62,5 +62,11 @@ RUN --mount=type=cache,target=/opt/cargo/registry \
     CARGO_BUILD_TARGET="$(uname -m)-unknown-linux-gnu" \
     python -m pip wheel --no-deps --wheel-dir /dist .
 
+# Exercise the naked-load ASAN checks used by both Signal read paths.
+RUN --mount=type=cache,target=/opt/cargo/registry \
+    CARGO_TARGET_DIR=/pyroscope-python/rust/target \
+    cargo test --manifest-path kindasafe/Cargo.toml --locked --release \
+        --target "$(uname -m)-unknown-linux-gnu" --workspace
+
 FROM scratch AS wheel
 COPY --from=wheel-build /dist/ /

@@ -282,7 +282,7 @@ func pythonSupportsCPUTimer(t *testing.T) bool {
 }
 
 func testPythonMemoryProfiler(t *testing.T) {
-	skipUnlessProfiler(t)
+	skipUnlessProfiler(t, "stack")
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
