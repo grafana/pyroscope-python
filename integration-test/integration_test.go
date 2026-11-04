@@ -282,7 +282,7 @@ func pythonSupportsCPUTimer(t *testing.T) bool {
 }
 
 func testPythonMemoryProfiler(t *testing.T) {
-	skipUnlessProfiler(t, "stack")
+	// Memory profiling is independent of the CPU implementation; run it in every suite.
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
