@@ -68,10 +68,8 @@ pub enum Error {
     Read,
     /// A Python frame's executable was null or was not a code object.
     InvalidCodeType,
-    /// The output slice has no room for the stack.
+    /// The output slice has no room, or the chain exceeds [`MAX_FRAMES`] (including loops).
     Truncated,
-    /// The chain is longer than [`MAX_FRAMES`], or loops.
-    TooDeep,
     /// A pointer on the chain overflows the address space.
     Invalid,
 }
@@ -123,7 +121,6 @@ pub struct Metrics {
     contentions: AtomicUsize,
     buffer_dropped: AtomicUsize,
     truncated: AtomicUsize,
-    too_deep: AtomicUsize,
     invalid: AtomicUsize,
     no_thread_state: AtomicUsize,
     invalid_code_type: AtomicUsize,
@@ -136,7 +133,6 @@ pub static METRICS: Metrics = Metrics {
     contentions: AtomicUsize::new(0),
     buffer_dropped: AtomicUsize::new(0),
     truncated: AtomicUsize::new(0),
-    too_deep: AtomicUsize::new(0),
     invalid: AtomicUsize::new(0),
     no_thread_state: AtomicUsize::new(0),
     invalid_code_type: AtomicUsize::new(0),
@@ -147,7 +143,7 @@ pub static METRICS: Metrics = Metrics {
 impl Metrics {
     /// Takes the counts since the previous drain, one reason per lost stack.
     /// Concurrent increments remain in this batch or the next one.
-    pub fn take_drop_counts(&self) -> [(&'static str, usize); 9] {
+    pub fn take_drop_counts(&self) -> [(&'static str, usize); 8] {
         [
             ("contentions", &self.contentions),
             ("buffer_dropped", &self.buffer_dropped),
@@ -155,7 +151,6 @@ impl Metrics {
             ("invalid_code_type", &self.invalid_code_type),
             ("read_errors", &self.read_errors),
             ("truncated", &self.truncated),
-            ("too_deep", &self.too_deep),
             ("invalid", &self.invalid),
             ("resolve_error", &self.resolve_error),
         ]
@@ -188,7 +183,6 @@ fn unwind_thread(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error>
             Error::InvalidCodeType => &METRICS.invalid_code_type,
             Error::Read => &METRICS.read_errors,
             Error::Truncated => &METRICS.truncated,
-            Error::TooDeep => &METRICS.too_deep,
             Error::Invalid => &METRICS.invalid,
         };
         counter.fetch_add(1, Ordering::Relaxed);
@@ -209,7 +203,7 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
     let mut pushed = 0;
     while frame != 0 {
         if visited == MAX_FRAMES {
-            return Err(Error::TooDeep);
+            return Err(Error::Truncated);
         }
         visited += 1;
         let previous = read_usize(frame, layout::PREVIOUS)?;
@@ -303,8 +297,7 @@ mod tests {
             (&metrics.no_thread_state, 3),
             (&metrics.invalid_code_type, 4),
             (&metrics.read_errors, 5),
-            (&metrics.truncated, 6),
-            (&metrics.too_deep, 7),
+            (&metrics.truncated, 13),
             (&metrics.invalid, 8),
             (&metrics.resolve_error, 9),
         ] {
@@ -316,8 +309,7 @@ mod tests {
             ("no_thread_state", 3),
             ("invalid_code_type", 4),
             ("read_errors", 5),
-            ("truncated", 6),
-            ("too_deep", 7),
+            ("truncated", 13),
             ("invalid", 8),
             ("resolve_error", 9),
         ];
@@ -414,7 +406,6 @@ mod tests {
     fn frame_limit_accepts_256_and_rejects_257() {
         let _guard = METRICS_LOCK.lock().unwrap();
         let truncated_before = METRICS.truncated.load(Ordering::Relaxed);
-        let too_deep_before = METRICS.too_deep.load(Ordering::Relaxed);
         init();
         let code_type = (&raw mut pyo3_ffi::PyCode_Type) as usize;
         let mut code = [0usize; 4];
@@ -466,10 +457,10 @@ mod tests {
         }));
 
         set(&mut frames[MAX_FRAMES - 1], layout::PREVIOUS, extra_frame);
-        assert_eq!(unwind_thread(tstate, &mut output), Err(Error::TooDeep));
+        assert_eq!(unwind_thread(tstate, &mut output), Err(Error::Truncated));
         assert_eq!(
-            METRICS.too_deep.load(Ordering::Relaxed),
-            too_deep_before + 1
+            METRICS.truncated.load(Ordering::Relaxed),
+            truncated_before + 3
         );
     }
 
