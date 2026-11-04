@@ -46,6 +46,9 @@ fn at_fork_after_in_parent(py: Python<'_>) -> PyResult<()> {
 
 #[pyfunction]
 fn at_fork_after_in_child(py: Python<'_>) -> PyResult<()> {
+    // TODO: Make the signal profiler fork-safe: disarm ITIMER_PROF and SIGPROF
+    // handling in the child and reset ACTIVE/HANDLED_SIGNALS without acquiring
+    // mutexes that may have been held by threads that did not survive the fork.
     memory::postfork_child();
     stack::postfork_child();
     encode::interner::postfork_child();
