@@ -69,7 +69,7 @@ pub enum Error {
     /// A Python frame's executable was null or was not a code object.
     InvalidCodeType,
     /// The output slice has no room for the stack.
-    Full,
+    Truncated,
     /// The chain is longer than [`MAX_FRAMES`], or loops.
     TooDeep,
     /// A pointer on the chain overflows the address space.
@@ -122,7 +122,7 @@ fn current_thread_state() -> usize {
 pub struct Metrics {
     contentions: AtomicUsize,
     buffer_dropped: AtomicUsize,
-    full: AtomicUsize,
+    truncated: AtomicUsize,
     too_deep: AtomicUsize,
     invalid: AtomicUsize,
     no_thread_state: AtomicUsize,
@@ -135,7 +135,7 @@ pub struct Metrics {
 pub static METRICS: Metrics = Metrics {
     contentions: AtomicUsize::new(0),
     buffer_dropped: AtomicUsize::new(0),
-    full: AtomicUsize::new(0),
+    truncated: AtomicUsize::new(0),
     too_deep: AtomicUsize::new(0),
     invalid: AtomicUsize::new(0),
     no_thread_state: AtomicUsize::new(0),
@@ -154,7 +154,7 @@ impl Metrics {
             ("no_thread_state", &self.no_thread_state),
             ("invalid_code_type", &self.invalid_code_type),
             ("read_errors", &self.read_errors),
-            ("full", &self.full),
+            ("truncated", &self.truncated),
             ("too_deep", &self.too_deep),
             ("invalid", &self.invalid),
             ("resolve_error", &self.resolve_error),
@@ -187,7 +187,7 @@ fn unwind_thread(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error>
             Error::NoThreadState => &METRICS.no_thread_state,
             Error::InvalidCodeType => &METRICS.invalid_code_type,
             Error::Read => &METRICS.read_errors,
-            Error::Full => &METRICS.full,
+            Error::Truncated => &METRICS.truncated,
             Error::TooDeep => &METRICS.too_deep,
             Error::Invalid => &METRICS.invalid,
         };
@@ -230,7 +230,7 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
         if executable == 0 || read_usize(executable, OB_TYPE)? != code_type {
             return Err(Error::InvalidCodeType);
         }
-        *frames.get_mut(pushed).ok_or(Error::Full)? = Frame {
+        *frames.get_mut(pushed).ok_or(Error::Truncated)? = Frame {
             code: executable,
             instr,
         };
@@ -303,7 +303,7 @@ mod tests {
             (&metrics.no_thread_state, 3),
             (&metrics.invalid_code_type, 4),
             (&metrics.read_errors, 5),
-            (&metrics.full, 6),
+            (&metrics.truncated, 6),
             (&metrics.too_deep, 7),
             (&metrics.invalid, 8),
             (&metrics.resolve_error, 9),
@@ -316,7 +316,7 @@ mod tests {
             ("no_thread_state", 3),
             ("invalid_code_type", 4),
             ("read_errors", 5),
-            ("full", 6),
+            ("truncated", 6),
             ("too_deep", 7),
             ("invalid", 8),
             ("resolve_error", 9),
@@ -413,7 +413,7 @@ mod tests {
     #[test]
     fn frame_limit_accepts_256_and_rejects_257() {
         let _guard = METRICS_LOCK.lock().unwrap();
-        let full_before = METRICS.full.load(Ordering::Relaxed);
+        let truncated_before = METRICS.truncated.load(Ordering::Relaxed);
         let too_deep_before = METRICS.too_deep.load(Ordering::Relaxed);
         init();
         let code_type = (&raw mut pyo3_ffi::PyCode_Type) as usize;
@@ -446,9 +446,15 @@ mod tests {
         let tstate = tstate.as_ptr() as usize;
 
         let mut output = [Frame::default(); 256];
-        assert_eq!(unwind_thread(tstate, &mut []), Err(Error::Full));
-        assert_eq!(unwind_thread(tstate, &mut output[..255]), Err(Error::Full));
-        assert_eq!(METRICS.full.load(Ordering::Relaxed), full_before + 2);
+        assert_eq!(unwind_thread(tstate, &mut []), Err(Error::Truncated));
+        assert_eq!(
+            unwind_thread(tstate, &mut output[..255]),
+            Err(Error::Truncated)
+        );
+        assert_eq!(
+            METRICS.truncated.load(Ordering::Relaxed),
+            truncated_before + 2
+        );
         let stack = unwind_thread(tstate, &mut output).unwrap();
         assert_eq!(stack.len(), MAX_FRAMES);
         assert!(stack.iter().all(|frame| {
