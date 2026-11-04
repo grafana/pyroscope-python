@@ -254,7 +254,6 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 
 func skipUnlessPythonSupportsSignal(t *testing.T) {
 	t.Helper()
-	t.Skip("the Signal profiler is introduced in the follow-up PR")
 	skipUnlessProfiler(t, "signal")
 	major, minor := pythonVersion(t)
 	if major != 3 || minor < 10 || minor > 14 {
