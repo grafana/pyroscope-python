@@ -2,11 +2,10 @@ use crate::{
     backend::{BackendConfig, StackBuffer, StackFrame, StackTrace},
     error::{PyroscopeError, Result},
     pyspy_backend::Reporter,
-    signal_sampler::{self, ResolvedFrame, SignalHandlerSession, SignalTimer},
+    signal_sampler::{self, ResolvedFrame, SharedTimer, SignalHandlerSession, SignalTimer},
 };
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
-use pyroscope_signal_timer::{Mode, SignalHandler, Timer};
 use std::{
     collections::HashMap,
     sync::{
@@ -24,12 +23,7 @@ pub struct Config {
     pub sampler: signal_sampler::Config,
 }
 
-/// Shared with thread hooks; cleared by `Signal` before its handler is released.
-type SharedTimer = Arc<Mutex<Option<Timer>>>;
-
 pub struct Signal {
-    timer: SharedTimer,
-    handler: Option<SignalHandler>,
     buffer: Arc<Mutex<StackBuffer>>,
     backend_config: BackendConfig,
     sampler_thread: Option<JoinHandle<()>>,
@@ -38,58 +32,44 @@ pub struct Signal {
 
 impl Signal {
     pub fn new(config: Config, backend_config: BackendConfig) -> Result<Self> {
-        let (mut session, handler) = SignalHandlerSession::start(&config.sampler)
+        let mut session = SignalHandlerSession::start(&config.sampler)
             .map_err(|e| PyroscopeError::new(&format!("Signal: {e}")))?;
-        let mode = match config.sampler.signal_timer {
-            SignalTimer::ITimer => Mode::ITimer,
-            #[cfg(target_os = "linux")]
-            SignalTimer::CTimer => Mode::CTimer,
-            #[cfg(not(target_os = "linux"))]
-            SignalTimer::CTimer => {
-                return Err(PyroscopeError::new("Signal: CTimer works only on Linux"));
-            }
-        };
-        let interval = Duration::from_secs_f64(1.0 / config.sampler.sampling_rate as f64);
-        let timer = Timer::start(mode, interval)
-            .map_err(|e| PyroscopeError::new(&format!("Signal: failed to start the timer: {e}")))?;
-        let mut signal = Signal {
-            timer: Arc::new(Mutex::new(Some(timer))),
-            handler: Some(handler),
-            buffer: Arc::new(Mutex::new(StackBuffer::default())),
-            backend_config,
-            sampler_thread: None,
-            running: Arc::new(AtomicBool::new(true)),
-        };
-        // From here, any startup error uses Signal's shutdown ordering.
         if config.sampler.signal_timer == SignalTimer::CTimer {
-            threads::attach(signal.timer.clone())?;
+            threads::attach(session.timer())?;
         }
 
-        let buffer = signal.buffer.clone();
-        let running = signal.running.clone();
-        signal.sampler_thread = Some(
-            std::thread::Builder::new()
-                .spawn(move || {
-                    let pid = std::process::id();
-                    while running.load(Ordering::Relaxed) {
-                        std::thread::sleep(Duration::from_millis(10)); //todo do not wake up on every 10ms, notify from producer when buf is half full
-                        let traces = session.drain();
-                        let Ok(mut buffer) = buffer.lock() else {
-                            break;
-                        };
-                        for frames in traces {
-                            let trace = to_stack_trace(frames, &backend_config, pid);
-                            // TODO: Apply thread tags once samples include the thread ID.
-                            let _ = buffer.record(trace);
-                        }
+        let buffer = Arc::new(Mutex::new(StackBuffer::default()));
+        let running = Arc::new(AtomicBool::new(true));
+        let sampler_thread = {
+            let buffer = buffer.clone();
+            let running = running.clone();
+            std::thread::spawn(move || {
+                let pid = std::process::id();
+                while running.load(Ordering::Relaxed) {
+                    std::thread::sleep(Duration::from_millis(10)); //todo do not wake up on every 10ms, notify from producer when buf is half full
+                    let traces = session.drain();
+                    let Ok(mut buffer) = buffer.lock() else {
+                        break;
+                    };
+                    for frames in traces {
+                        let trace = to_stack_trace(frames, &backend_config, pid);
+                        // TODO: Apply thread tags once samples include the thread ID.
+                        let _ = buffer.record(trace);
                     }
-                })
-                .map_err(|e| {
-                    PyroscopeError::new(&format!("Signal: failed to start sampler thread: {e}"))
-                })?,
-        );
+                }
+                if config.sampler.signal_timer == SignalTimer::CTimer {
+                    threads::detach();
+                }
+                drop(session);
+            })
+        };
 
-        Ok(signal)
+        Ok(Signal {
+            buffer,
+            backend_config,
+            sampler_thread: Some(sampler_thread),
+            running,
+        })
     }
 
     pub fn reporter(&self) -> Reporter {
@@ -97,20 +77,12 @@ impl Signal {
     }
 
     pub fn shutdown_thread(&mut self) -> Result<()> {
-        let Some(handler) = self.handler.take() else {
-            return Ok(());
-        };
-        threads::detach();
-        // Stop all timers under the shared lock before joining the resolver or releasing
-        // the handler. A hook already using the timer must finish first.
-        *self.timer.lock().unwrap_or_else(|e| e.into_inner()) = None;
         self.running.store(false, Ordering::Relaxed);
         if let Some(handle) = self.sampler_thread.take() {
             handle
                 .join()
                 .map_err(|_| PyroscopeError::new("Signal: Failed to join sampler thread"))?;
         }
-        drop(handler);
         Ok(())
     }
 }
@@ -163,22 +135,6 @@ fn to_stack_trace(
     StackTrace::new(backend_config, Some(pid), None, None, frames)
 }
 
-/// Starts a thread timer while preventing concurrent shutdown from dropping it.
-fn thread_created(timer: &SharedTimer, tid: libc::pid_t) -> std::result::Result<(), String> {
-    match timer.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-        Some(timer) => timer
-            .thread_created(tid)
-            .map_err(|e| format!("failed to start the timer of thread {tid}: {e}")),
-        None => Ok(()),
-    }
-}
-
-fn thread_removed(timer: &SharedTimer, tid: libc::pid_t) {
-    if let Some(timer) = timer.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-        timer.thread_removed(tid);
-    }
-}
-
 /// Feeds the OS thread ids of python threads to a `CTimer` session. The hooks stay installed
 /// for the life of the process and keep the live threads in `LIVE`, so a session that starts
 /// later still learns about the threads that started before it.
@@ -200,9 +156,9 @@ pub mod threads {
         let previous = lock(&LIVE).get_or_insert_default().insert(id, tid);
         if let Some(timer) = lock(&TIMER).as_ref() {
             if let Some(previous) = previous.filter(|&previous| previous != tid) {
-                thread_removed(timer, previous);
+                signal_sampler::thread_removed(timer, previous);
             }
-            if let Err(e) = thread_created(timer, tid) {
+            if let Err(e) = signal_sampler::thread_created(timer, tid) {
                 log::warn!(target: LOG_TAG, "{e}");
             }
         }
@@ -214,7 +170,7 @@ pub mod threads {
             return;
         };
         if let Some(timer) = lock(&TIMER).as_ref() {
-            thread_removed(timer, tid);
+            signal_sampler::thread_removed(timer, tid);
         }
     }
 
@@ -266,14 +222,14 @@ pub mod threads {
                  (for example uWSGI without --py-call-uwsgi-fork-hooks)"
             );
         }
-        thread_created(&timer, caller_tid).map_err(|e| {
+        signal_sampler::thread_created(&timer, caller_tid).map_err(|e| {
             PyroscopeError::new(&format!(
                 "Signal: failed to arm the configure caller's CPU timer: {e}"
             ))
         })?;
         for &tid in live.values() {
             if tid != caller_tid
-                && let Err(e) = thread_created(&timer, tid)
+                && let Err(e) = signal_sampler::thread_created(&timer, tid)
             {
                 log::warn!(target: LOG_TAG, "{e}");
             }
@@ -301,61 +257,6 @@ mod tests {
     };
     use prost::Message;
     use std::time::{Duration, UNIX_EPOCH};
-
-    #[cfg(not(miri))]
-    #[test]
-    fn shutdown_stops_timer_before_join_and_keeps_handler_until_thread_exits() {
-        extern "C" fn noop(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut libc::c_void) {}
-
-        let modes = [
-            Mode::ITimer,
-            #[cfg(target_os = "linux")]
-            Mode::CTimer,
-        ];
-        for mode in modes {
-            for panic_on_exit in [false, true] {
-                let handler = SignalHandler::install(Timer::SIGNAL, noop).unwrap();
-                // No sampling is needed to exercise ownership and shutdown.
-                let timer = Timer::start(mode, Duration::from_secs(3600)).unwrap();
-                let timer = Arc::new(Mutex::new(Some(timer)));
-                let running = Arc::new(AtomicBool::new(true));
-                let worker_timer = timer.clone();
-                let worker_running = running.clone();
-                let worker = std::thread::spawn(move || {
-                    while worker_running.load(Ordering::Relaxed) {
-                        std::thread::yield_now();
-                    }
-                    assert!(worker_timer.lock().unwrap().is_none());
-                    let error = SignalHandler::install(Timer::SIGNAL, noop).err().unwrap();
-                    assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
-                    assert!(!panic_on_exit, "simulate sampler panic during shutdown");
-                });
-                let mut signal = Signal {
-                    timer: timer.clone(),
-                    handler: Some(handler),
-                    buffer: Arc::new(Mutex::new(StackBuffer::default())),
-                    backend_config: BackendConfig::default(),
-                    sampler_thread: Some(worker),
-                    running,
-                };
-                assert_eq!(signal.shutdown_thread().is_err(), panic_on_exit);
-                assert!(timer.lock().unwrap().is_none());
-                assert!(signal.sampler_thread.is_none());
-                assert!(signal.handler.is_none());
-
-                // Resources are reusable even after a sampler panic, and repeated shutdown
-                // must not interfere with a replacement owner.
-                let replacement_handler = SignalHandler::install(Timer::SIGNAL, noop).unwrap();
-                let replacement_timer = Timer::start(mode, Duration::from_secs(3600)).unwrap();
-                signal.shutdown_thread().unwrap();
-                drop(signal);
-                assert!(SignalHandler::install(Timer::SIGNAL, noop).is_err());
-                assert!(Timer::start(mode, Duration::from_secs(3600)).is_err());
-                drop(replacement_timer);
-                drop(replacement_handler);
-            }
-        }
-    }
 
     #[test]
     fn drop_reasons_are_single_frame_pprof_samples_with_exact_weights() {

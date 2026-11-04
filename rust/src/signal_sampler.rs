@@ -5,8 +5,12 @@
 //! freed in the meantime. A tick interrupts one running thread, so only threads on the CPU are
 //! sampled.
 
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
 use ringbuffer::PopError;
-use timer::{SignalHandler, Timer};
+use timer::Timer;
+use timer::{Mode, SignalHandler};
 use unwind::{Frame, MAX_FRAMES};
 
 mod resolve;
@@ -25,8 +29,8 @@ pub enum SignalTimer {
     /// running thread.
     ITimer,
     /// Linux only. One timer per thread on its CPU clock: every thread gets ticks in proportion to
-    /// the CPU time it uses. A thread is sampled only after its OS thread id is registered
-    /// by the signal backend's thread hooks.
+    /// the CPU time it uses. A thread is sampled only after [`thread_created`] was called
+    /// for its OS thread id.
     CTimer,
 }
 
@@ -43,7 +47,7 @@ pub type Error = String;
 const MAX_DRAIN_STACKS: usize = 64;
 
 #[cfg(test)]
-pub(super) static METRICS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(super) static METRICS_LOCK: Mutex<()> = Mutex::new(());
 
 fn check_version(version: (u8, u8)) -> Result<(), Error> {
     let (major, minor) = version;
@@ -61,16 +65,21 @@ fn check_version(version: (u8, u8)) -> Result<(), Error> {
     Ok(())
 }
 
-/// Drains and resolves signal samples. The caller owns the handler and timer lifetimes.
+/// The timer of a running [`SignalHandlerSession`], shared with the callers of
+/// [`thread_created`] and [`thread_removed`]. `None` once the session ended.
+pub type SharedTimer = Arc<Mutex<Option<Timer>>>;
+
+/// Running signal sampling. Only one can exist at a time.
 pub struct SignalHandlerSession {
+    timer: SharedTimer,
+    // Dropped after the timer, see the `Drop` impl.
+    _handler: SignalHandler,
     buf: Vec<Frame>,
     resolver: resolve::Resolver,
 }
 
 impl SignalHandlerSession {
-    /// Initializes sampling state and installs the handler. The caller must keep the
-    /// returned guard alive until its timers have stopped and its resolver has exited.
-    pub fn start(config: &Config) -> Result<(Self, SignalHandler), Error> {
+    pub fn start(config: &Config) -> Result<SignalHandlerSession, Error> {
         check_version(config.python_version)?;
         if config.sampling_rate == 0 {
             return Err("the sampling rate must be greater than zero".to_string());
@@ -99,7 +108,26 @@ impl SignalHandlerSession {
             .map_err(|e| format!("failed to install the signal handler: {e}"))?;
         // Discard drop counts left by the previous session before arming the timer.
         unwind::METRICS.take_drop_counts();
-        Ok((Self { buf, resolver }, signal_handler))
+        let interval = Duration::from_secs_f64(1.0 / config.sampling_rate as f64);
+        let mode = match config.signal_timer {
+            SignalTimer::ITimer => Mode::ITimer,
+            #[cfg(target_os = "linux")]
+            SignalTimer::CTimer => Mode::CTimer,
+            #[cfg(not(target_os = "linux"))]
+            SignalTimer::CTimer => return Err("CTimer works only on Linux".to_string()),
+        };
+        let timer =
+            Timer::start(mode, interval).map_err(|e| format!("failed to start the timer: {e}"))?;
+        Ok(SignalHandlerSession {
+            timer: Arc::new(Mutex::new(Some(timer))),
+            _handler: signal_handler,
+            buf,
+            resolver,
+        })
+    }
+
+    pub fn timer(&self) -> SharedTimer {
+        self.timer.clone()
     }
 
     /// Resolves a bounded batch of recorded stacks, each innermost frame first.
@@ -120,5 +148,30 @@ impl SignalHandlerSession {
             }
         }
         traces
+    }
+}
+
+impl Drop for SignalHandlerSession {
+    /// Stops the timers before the handler is removed. Holding the lock keeps a concurrent hook
+    /// from using a dead timer.
+    fn drop(&mut self) {
+        *self.timer.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+}
+
+/// Starts sampling `tid` if the session runs in [`timer::Mode::CTimer`]. Does nothing otherwise.
+pub fn thread_created(timer: &SharedTimer, tid: timer::pid_t) -> Result<(), Error> {
+    match timer.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        Some(timer) => timer
+            .thread_created(tid)
+            .map_err(|e| format!("failed to start the timer of thread {tid}: {e}")),
+        None => Ok(()),
+    }
+}
+
+/// Stops sampling `tid`. Does nothing if the session ended or runs in [`timer::Mode::ITimer`].
+pub fn thread_removed(timer: &SharedTimer, tid: timer::pid_t) {
+    if let Some(timer) = timer.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        timer.thread_removed(tid);
     }
 }
