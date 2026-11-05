@@ -64,7 +64,11 @@ $(ASAN_BUILD_DIR)/install/.built: $(ASAN_BUILD_DIR)/src/.cloned
 
 .PHONY: asan/test
 asan/test: asan/python
-	CC="$(ASAN_CC)" CXX="$(ASAN_CXX)" PROFILER='$(PROFILER)' RUN='$(RUN)' bash scripts/asan-test.sh "$(ASAN_BUILD_DIR)"
+	CC="$(ASAN_CC)" \
+		CXX="$(ASAN_CXX)" \
+		PROFILER='$(PROFILER)' \
+		RUN='$(RUN)' \
+		bash scripts/asan-test.sh "$(ASAN_BUILD_DIR)"
 
 PYTHON ?= python3
 
