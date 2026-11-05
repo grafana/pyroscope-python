@@ -59,6 +59,49 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang-18 llvm-18 libclang-rt-18-dev g++ make cmake pkg-config libssl-dev libffi-dev zlib1g-dev libbz2-dev liblzma-dev libsqlite3-dev libreadline-dev libncurses-dev libgdbm-dev uuid-dev
+      - name: Identify CPython source and build environment
+        id: cpython
+        env:
+          PYTHON_VERSION: ${{ matrix.PYTHON_VERSION }}
+        run: |
+          commit=$(git ls-remote https://github.com/python/cpython.git "refs/heads/$PYTHON_VERSION" | cut -f1)
+          test -n "$commit"
+          {
+            echo "commit=$commit"
+            echo "directory=.tmp/cpython-asan/${PYTHON_VERSION//./}"
+            echo "image=${ImageOS}-${ImageVersion}"
+          } >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: cpython-cache
+        with:
+          path: |
+            ${{ steps.cpython.outputs.directory }}/src
+            ${{ steps.cpython.outputs.directory }}/install
+          key: cpython-asan-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cpython.outputs.image }}-${{ matrix.PYTHON_VERSION }}-${{ steps.cpython.outputs.commit }}-${{ hashFiles('Makefile', '.github/workflows/asan.yml') }}
+      - name: Build ASAN CPython
+        if: steps.cpython-cache.outputs.cache-hit != 'true'
+        env:
+          ASAN_PYTHON_REF: ${{ matrix.PYTHON_VERSION }}
+          CPYTHON_DIR: ${{ steps.cpython.outputs.directory }}
+          CPYTHON_COMMIT: ${{ steps.cpython.outputs.commit }}
+        run: |
+          make asan/clone
+          git -C "$CPYTHON_DIR/src" fetch --depth 1 origin "$CPYTHON_COMMIT"
+          git -C "$CPYTHON_DIR/src" checkout --detach FETCH_HEAD
+          make asan/python
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: steps.cpython-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ${{ steps.cpython.outputs.directory }}/src
+            ${{ steps.cpython.outputs.directory }}/install
+          key: ${{ steps.cpython-cache.outputs.cache-primary-key }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: rust -> ../${{ steps.cpython.outputs.directory }}/target
+          key: asan-${{ matrix.arch }}-${{ matrix.PYTHON_VERSION }}-${{ steps.cpython.outputs.image }}-${{ steps.cpython.outputs.commit }}-${{ hashFiles('scripts/asan-test.sh') }}
+          cache-workspace-crates: true
+          cache-on-failure: true
       - name: Run ASAN tests
         env:
           PYROSCOPE_TEST_LOG_DIR: ${{ github.workspace }}/asan-results/processes

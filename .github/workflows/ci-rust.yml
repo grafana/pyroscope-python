@@ -48,6 +48,16 @@ jobs:
           toolchain: 1.99.1
           components: clippy
 
+      - name: Identify build environment
+        run: echo "CI_CACHE_ENV=${ImageOS}-${ImageVersion}-$(python3 --version)" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: |
+            rust -> target
+            kindasafe -> target
+          key: clippy-${{ env.CI_CACHE_ENV }}
+          cache-workspace-crates: true
+
       - name: Run clippy
         run: |
           export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
@@ -85,6 +95,16 @@ jobs:
         if: runner.os == 'macOS'
         with:
           python-version: "3.12"
+
+      - name: Identify build environment
+        run: echo "CI_CACHE_ENV=${ImageOS}-${ImageVersion}-$(python3 --version)" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: |
+            rust -> target
+            kindasafe -> target
+          key: test-${{ matrix.arch.name }}-${{ env.CI_CACHE_ENV }}
+          cache-workspace-crates: true
 
       - name: Run tests
         run: |

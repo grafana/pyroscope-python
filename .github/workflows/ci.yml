@@ -77,12 +77,20 @@ jobs:
         with:
           toolchain: 1.99.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: python
         with:
           python-version: ${{ matrix.python-version }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: stable
           cache-dependency-path: integration-test/go.mod
+      - name: Identify runner image
+        run: echo "CI_RUNNER_IMAGE=${ImageOS}-${ImageVersion}" >> "$GITHUB_ENV"
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: rust -> target
+          key: native-${{ matrix.platform.name }}-${{ steps.python.outputs.python-version }}-${{ env.CI_RUNNER_IMAGE }}
+          cache-workspace-crates: true
       - name: Build and install native wheel
         run: |
           python -m pip wheel --no-deps --wheel-dir dist .
