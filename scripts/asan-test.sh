@@ -3,10 +3,7 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "$0")/.." && pwd)
-python_ref=${ASAN_PYTHON_REF:-3.14}
-asan_dir=${ASAN_BUILD_DIR:-"$repo_dir/.tmp/cpython-asan/${python_ref//./}"}
-mkdir -p "$asan_dir"
-asan_dir=$(cd "$asan_dir" && pwd)
+asan_dir=$(cd "${1:?Usage: asan-test.sh <cpython-asan-directory>}" && pwd)
 export CC=${CC:-clang-18}
 export CXX=${CXX:-clang++-18}
 export ASAN_SYMBOLIZER_PATH=${ASAN_SYMBOLIZER_PATH:-/usr/bin/llvm-symbolizer-18}

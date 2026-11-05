@@ -86,3 +86,6 @@ CPython sources and builds are cached separately for each version under
 `make asan/python ASAN_PYTHON_REF=3.15` to build and install the interpreter.
 These targets use completion files to skip successful clones and builds on later
 runs. `ASAN_PYTHON_REF` supports each version from 3.10 through 3.15.
+The test script accepts an existing build directory directly, for example
+`bash scripts/asan-test.sh .tmp/cpython-asan/315`. It uses the interpreter at
+`<directory>/install/bin/python3` without cloning or rebuilding CPython.
