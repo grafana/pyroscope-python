@@ -153,6 +153,7 @@ func startPyroscope(t *testing.T) string {
 		"-memberlist.advertise-addr=127.0.0.1",
 		"-memberlist.advertise-port=" + gossipPort,
 		"-metastore.address=" + grpcAddr,
+		"-query-backend.address=" + grpcAddr,
 		"-metastore.raft.bind-address=" + raftAddr,
 		"-metastore.raft.advertise-address=" + raftAddr,
 		"-metastore.raft.server-id=" + raftAddr,
