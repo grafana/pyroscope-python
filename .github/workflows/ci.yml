@@ -179,8 +179,8 @@ jobs:
           path: dist/*
 
   python-macos-build:
-    name: Python macOS
-    runs-on: macos-14
+    name: Python macOS Build
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -252,3 +252,38 @@ jobs:
         with:
           name: ${{ github.sha }}-python-macos
           path: dist/*
+
+  python-macos-test:
+    name: Python macOS Test - ${{ matrix.arch.name }} - ${{ matrix.python-version }}
+    needs: ["python-macos-build"]
+    runs-on: ${{ matrix.arch.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        arch:
+          - name: amd64
+            runner: macos-15-intel
+          - name: arm64
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ github.sha }}-python-macos
+          path: dist
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install matching wheel
+        run: |
+          python -m pip install --no-index --only-binary=:all: --find-links dist pyroscope-io
+      # These tests exercise native profiler lifecycle behavior without a server.
+      # The profile-query integration suite requires Linux containers.
+      - name: Test concurrent configure and shutdown
+        run: python scripts/tests/test_concurrency.py
+      - name: Test interpreter shutdown
+        run: python scripts/tests/test_atexit.py
