@@ -40,7 +40,7 @@ cd "$repo_dir"
 cargo test --manifest-path kindasafe/Cargo.toml --locked --release --target "$CARGO_BUILD_TARGET" --workspace
 "$PYTHON" -m pip wheel --no-deps --wheel-dir "$asan_dir/wheels" .
 "$PYTHON" -m pip install --force-reinstall --no-index --only-binary=:all: --find-links "$asan_dir/wheels" pyroscope-io
-python3 integration-test/download_pyroscope.py "$asan_dir/backend"
 export PYROSCOPE_BINARY="$asan_dir/backend/pyroscope"
+make -C integration-test download-pyroscope
 cd integration-test
 go test -v -timeout 60m -count=1 -run "${RUN:-.}" ./... -profiler="${PROFILER:-all}"

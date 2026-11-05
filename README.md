@@ -67,8 +67,10 @@ make -C integration-test test PYTHON=python
 make -C integration-test test/TestPythonSignalHandlerSuites PYTHON=python
 ```
 
-`setup` builds and installs the native wheel and downloads checksum-verified
-Pyroscope 2.3.1. Set `PYROSCOPE_BINARY` to use an existing backend executable.
+`setup` builds and installs the native wheel and downloads Pyroscope 2.3.1 using
+`wget` and `tar`. To download only the backend, run
+`make -C integration-test download-pyroscope`. Set `PYROSCOPE_BINARY` to use an
+existing backend executable when running tests.
 CPU timer tests require Linux and CPython 3.12+; macOS and older Python versions
 run the fallback tests instead. CI covers Python 3.10–3.15 on both architectures
 of Linux and macOS. Release manylinux/musllinux packaging remains separate from
