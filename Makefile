@@ -40,10 +40,31 @@ musllinux/arm64:
 
 ASAN_PYTHON_REF ?= 3.14
 PROFILER ?= all
+ASAN_BUILD_DIR ?= $(CURDIR)/.tmp/cpython-asan/$(subst .,,$(ASAN_PYTHON_REF))
+ASAN_CC ?= clang-18
+ASAN_CXX ?= clang++-18
+
+asan/clone: $(ASAN_BUILD_DIR)/src/.cloned
+
+$(ASAN_BUILD_DIR)/src/.cloned:
+	mkdir -p "$(ASAN_BUILD_DIR)"
+	git clone --depth 1 --branch "$(ASAN_PYTHON_REF)" https://github.com/python/cpython.git "$(ASAN_BUILD_DIR)/src"
+	touch "$@"
+
+asan/python: $(ASAN_BUILD_DIR)/install/.built
+
+$(ASAN_BUILD_DIR)/install/.built: $(ASAN_BUILD_DIR)/src/.cloned
+	export CC="$(ASAN_CC)" CXX="$(ASAN_CXX)" ASAN_OPTIONS=detect_leaks=0; \
+	export LD_LIBRARY_PATH="$(ASAN_BUILD_DIR)/install/lib$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"; \
+	cd "$(ASAN_BUILD_DIR)/src" && \
+	./configure --prefix="$(ASAN_BUILD_DIR)/install" --enable-shared --with-address-sanitizer --without-pymalloc --with-ensurepip=install && \
+	$(MAKE) -j"$$(getconf _NPROCESSORS_ONLN)" && \
+	$(MAKE) install
+	touch "$@"
 
 .PHONY: asan/test
-asan/test:
-	ASAN_PYTHON_REF=$(ASAN_PYTHON_REF) PROFILER='$(PROFILER)' RUN='$(RUN)' bash scripts/asan-test.sh
+asan/test: asan/python
+	ASAN_PYTHON_REF=$(ASAN_PYTHON_REF) ASAN_BUILD_DIR="$(ASAN_BUILD_DIR)" CC="$(ASAN_CC)" CXX="$(ASAN_CXX)" PROFILER='$(PROFILER)' RUN='$(RUN)' bash scripts/asan-test.sh
 
 PYTHON ?= python3
 

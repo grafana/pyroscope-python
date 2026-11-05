@@ -80,3 +80,9 @@ these native tests; the native Linux jobs exercise glibc, not musl.
 The Linux ASAN job also uses this native harness. `make asan/test
 ASAN_PYTHON_REF=3.12` builds an instrumented CPython and SDK, requiring Clang/LLVM
 18, CPython build dependencies, and Rust nightly-2026-10-25 with rust-src.
+CPython sources and builds are cached separately for each version under
+`.tmp/cpython-asan/310/` through `.tmp/cpython-asan/315/`. Run
+`make asan/clone ASAN_PYTHON_REF=3.15` to clone only, or
+`make asan/python ASAN_PYTHON_REF=3.15` to build and install the interpreter.
+These targets use completion files to skip successful clones and builds on later
+runs. `ASAN_PYTHON_REF` supports each version from 3.10 through 3.15.

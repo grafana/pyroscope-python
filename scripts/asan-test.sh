@@ -1,29 +1,16 @@
 #!/usr/bin/env bash
-# Build an instrumented interpreter and SDK, then use the native integration harness.
+# Build the SDK with the instrumented interpreter prepared by make asan/python.
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "$0")/.." && pwd)
 python_ref=${ASAN_PYTHON_REF:-3.14}
-asan_dir=${ASAN_BUILD_DIR:-"$repo_dir/.cache/asan/$python_ref"}
+asan_dir=${ASAN_BUILD_DIR:-"$repo_dir/.tmp/cpython-asan/${python_ref//./}"}
 mkdir -p "$asan_dir"
 asan_dir=$(cd "$asan_dir" && pwd)
 export CC=${CC:-clang-18}
 export CXX=${CXX:-clang++-18}
 export ASAN_SYMBOLIZER_PATH=${ASAN_SYMBOLIZER_PATH:-/usr/bin/llvm-symbolizer-18}
-export ASAN_OPTIONS=detect_leaks=0
 export LD_LIBRARY_PATH="$asan_dir/install/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-
-if [ ! -x "$asan_dir/install/bin/python3" ]; then
-    if [ ! -d "$asan_dir/cpython" ]; then
-        git clone --depth 1 --branch "$python_ref" https://github.com/python/cpython.git "$asan_dir/cpython"
-    fi
-    (
-        cd "$asan_dir/cpython"
-        ./configure --prefix="$asan_dir/install" --enable-shared --with-address-sanitizer --without-pymalloc --with-ensurepip=install
-        make -j"$(getconf _NPROCESSORS_ONLN)"
-        make install
-    )
-fi
 
 export ASAN_OPTIONS=detect_leaks=0:handle_segv=0:handle_sigbus=0
 export PYTHON="$asan_dir/install/bin/python3"
