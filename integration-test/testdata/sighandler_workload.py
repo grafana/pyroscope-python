@@ -321,7 +321,11 @@ def fork_raising_onstack_signal():
 def burn_for(seconds):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        sum(i * i for i in range(10000))
+        # Keep the work in one frame: sum(generator) splits samples between
+        # the caller and generator differently across interpreter builds.
+        total = 0
+        for i in range(10000):
+            total += i * i
 
 
 def burn_after_fork():
