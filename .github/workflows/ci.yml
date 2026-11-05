@@ -89,8 +89,8 @@ jobs:
           python -m pip install --no-index --only-binary=:all: --find-links dist pyroscope-io
       - name: Install Pyroscope
         run: |
-          make -C integration-test download-pyroscope PYROSCOPE_BINARY="$RUNNER_TEMP/pyroscope-bin/pyroscope"
-          echo "$RUNNER_TEMP/pyroscope-bin" >> "$GITHUB_PATH"
+          make -C integration-test download-pyroscope
+          echo "$GITHUB_WORKSPACE/integration-test/.tmp" >> "$GITHUB_PATH"
       - name: Run integration tests
         run: go test -v -timeout 45m -count=1 ./...
         working-directory: integration-test
