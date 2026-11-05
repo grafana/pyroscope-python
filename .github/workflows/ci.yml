@@ -51,107 +51,55 @@ jobs:
           version: "0.17.3"
           args: "check --select I --diff"
 
-  python-linux-build:
+  python-test:
+    name: Python Test - ${{ matrix.platform.name }} - ${{ matrix.python-version }}
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: manylinux-amd64
-            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
-            make-target: linux/amd64
-          - name: manylinux-arm64
-            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
-            make-target: linux/arm64
-          - name: musllinux-amd64
-            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
-            make-target: musllinux/amd64
-          - name: musllinux-arm64
-            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
-            make-target: musllinux/arm64
-    name: Python Linux Build - ${{ matrix.name }}
-    runs-on: ${{ matrix.runs-on }}
-
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
+        platform:
+          - name: linux-amd64
+            runner: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
+          - name: linux-arm64
+            runner: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
+          - name: macos-amd64
+            runner: macos-15-intel
+          - name: macos-arm64
+            runner: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           submodules: recursive
-
-      - run: make ${{ matrix.make-target }}
-
-      - name: Check wheel tags
-        run: |
-          set -euxo pipefail
-          for whl in dist/*.whl; do
-              echo "Wheel: $whl"
-              unzip -p "$whl" '*.dist-info/WHEEL'
-              unzip -p "$whl" '*.dist-info/WHEEL' | grep -qE 'Tag:.*(manylinux|musllinux)' || { echo "ERROR: expected manylinux or musllinux tag not found"; exit 1; }
-          done
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
-          name: "${{ matrix.name }}.whl"
-          path: dist/*
-
-  python-linux-test:
-    strategy:
-      fail-fast: false
-      max-parallel: 5
-      matrix:
-        PYTHON_VERSION: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
-        variant:
-          [
-            "manylinux-amd64",
-            "manylinux-arm64",
-            "musllinux-amd64",
-            "musllinux-arm64",
-          ]
-        include:
-          - variant: manylinux-amd64
-            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
-            image-suffix: slim
-            wheel-target: linux/amd64
-          - variant: manylinux-arm64
-            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
-            image-suffix: slim
-            wheel-target: linux/arm64
-          - variant: musllinux-amd64
-            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest' }}
-            image-suffix: alpine
-            wheel-target: musllinux/amd64
-          - variant: musllinux-arm64
-            runs-on: ${{ github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm' }}
-            image-suffix: alpine
-            wheel-target: musllinux/arm64
-        exclude:
-          # python:3.10/3.11-alpine arm64 tests hang indefinitely
-          # tracked in https://github.com/grafana/pyroscope-rs/issues/365
-          - variant: musllinux-arm64
-            PYTHON_VERSION: "3.10"
-          - variant: musllinux-arm64
-            PYTHON_VERSION: "3.11"
-    needs: ["python-linux-build"]
-    name: Python Linux Test - ${{ matrix.variant }} - ${{ matrix.PYTHON_VERSION }}
-    runs-on: ${{ matrix.runs-on }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+          toolchain: 1.99.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          persist-credentials: false
-          submodules: recursive
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: "${{ matrix.variant }}.whl"
-          path: dist
+          python-version: ${{ matrix.python-version }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: stable
           cache-dependency-path: integration-test/go.mod
-      - run: go test -v -timeout 60m -count=1 .
+      - name: Build and install native wheel
+        run: |
+          python -m pip wheel --no-deps --wheel-dir dist .
+          python -m pip install --no-index --only-binary=:all: --find-links dist pyroscope-io
+      - name: Install Pyroscope
+        run: |
+          python integration-test/download_pyroscope.py "$RUNNER_TEMP/pyroscope-bin"
+          echo "$RUNNER_TEMP/pyroscope-bin" >> "$GITHUB_PATH"
+      - name: Run integration tests
+        run: go test -v -timeout 45m -count=1 ./...
         working-directory: integration-test
         env:
-          PYTHON_VERSION: ${{ matrix.PYTHON_VERSION }}
-          PYTHON_IMAGE_SUFFIX: ${{ matrix.image-suffix }}
-          PYROSCOPE_WHEEL_TARGET: ${{ matrix.wheel-target }}
+          PYTHON: python
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: native-${{ matrix.platform.name }}-py${{ matrix.python-version }}
+          path: dist/*.whl
 
   sdist-build:
     name: sdist
@@ -177,113 +125,3 @@ jobs:
         with:
           name: "sdist.whl"
           path: dist/*
-
-  python-macos-build:
-    name: Python macOS Build
-    runs-on: macos-15
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          submodules: recursive
-      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
-        with:
-          toolchain: 1.99.1
-          targets: x86_64-apple-darwin,aarch64-apple-darwin
-
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: |
-            3.10
-            3.11
-            3.12
-            3.13
-            3.14
-            3.15
-
-      - name: Build Python 3.10
-        env:
-          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.10
-        run: |
-          python3.10 -m pip install build wheel
-          make mac/amd64 mac/arm64 PYTHON=python3.10
-      - name: Build Python 3.11
-        env:
-          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.11
-        run: |
-          python3.11 -m pip install build wheel
-          make mac/amd64 mac/arm64 PYTHON=python3.11
-      - name: Build Python 3.12
-        env:
-          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.12
-        run: |
-          python3.12 -m pip install build wheel
-          make mac/amd64 mac/arm64 PYTHON=python3.12
-      - name: Build Python 3.13
-        env:
-          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.13
-        run: |
-          python3.13 -m pip install build wheel
-          make mac/amd64 mac/arm64 PYTHON=python3.13
-      - name: Build Python 3.14
-        env:
-          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.14
-        run: |
-          python3.14 -m pip install build wheel
-          make mac/amd64 mac/arm64 PYTHON=python3.14
-      - name: Build Python 3.15
-        env:
-          CARGO_TARGET_DIR: ${{ github.workspace }}/rust/target/py3.15
-        run: |
-          python3.15 -m pip install build wheel
-          make mac/amd64 mac/arm64 PYTHON=python3.15
-
-      - name: Check wheel tags
-        run: |
-          set -euxo pipefail
-          for whl in dist/*.whl; do
-              echo "Wheel: $whl"
-              unzip -p "$whl" '*.dist-info/WHEEL'
-              unzip -p "$whl" '*.dist-info/WHEEL' | grep -qE 'Tag:.*macosx_11_0_' || { echo "ERROR: expected macosx_11_0 tag not found"; exit 1; }
-          done
-
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ${{ github.sha }}-python-macos
-          path: dist/*
-
-  python-macos-test:
-    name: Python macOS Test - ${{ matrix.arch.name }} - ${{ matrix.python-version }}
-    needs: ["python-macos-build"]
-    runs-on: ${{ matrix.arch.runner }}
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        arch:
-          - name: amd64
-            runner: macos-15-intel
-          - name: arm64
-            runner: macos-15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: ${{ github.sha }}-python-macos
-          path: dist
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install matching wheel
-        run: |
-          python -m pip install --no-index --only-binary=:all: --find-links dist pyroscope-io
-      # These tests exercise native profiler lifecycle behavior without a server.
-      # The profile-query integration suite requires Linux containers.
-      - name: Test concurrent configure and shutdown
-        run: python scripts/tests/test_concurrency.py
-      - name: Test interpreter shutdown
-        run: python scripts/tests/test_atexit.py

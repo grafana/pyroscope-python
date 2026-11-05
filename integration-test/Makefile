@@ -1,18 +1,16 @@
 PROFILER ?= all
+PYTHON ?= python3
+PYROSCOPE_BINARY ?= $(CURDIR)/../.cache/pyroscope/pyroscope
 
-UNAME_MACHINE := $(shell uname -m)
-WHEEL_ARCH := $(if $(filter arm64 aarch64,$(UNAME_MACHINE)),arm64,amd64)
-WHEEL_PLATFORM := $(if $(findstring alpine,$(PYTHON_IMAGE_SUFFIX)),musllinux,linux)
-WHEEL_TARGET := $(or $(PYROSCOPE_WHEEL_TARGET),$(WHEEL_PLATFORM)/$(WHEEL_ARCH))
+.PHONY: setup
+setup:
+	$(PYTHON) -m pip wheel --no-deps --wheel-dir ../dist ..
+	$(PYTHON) -m pip install --force-reinstall --no-index --only-binary=:all: --find-links ../dist pyroscope-io
+	$(PYTHON) download_pyroscope.py $(dir $(PYROSCOPE_BINARY))
 
-.PHONY: wheel
-wheel:
-	@if [ -n "$(PYROSCOPE_WHEEL_DIR)" ]; then \
-		echo "using prebuilt wheel from PYROSCOPE_WHEEL_DIR=$(PYROSCOPE_WHEEL_DIR)"; \
-	else \
-		$(MAKE) -C .. $(WHEEL_TARGET); \
-	fi
+.PHONY: test test/%
+test:
+	PYTHON=$(PYTHON) PYROSCOPE_BINARY=$(PYROSCOPE_BINARY) go test -v -timeout 45m -count=1 ./... -profiler='$(PROFILER)'
 
-.PHONY: test/%
-test/%: wheel
-	go test -v -timeout 20m -count=1 -run '^$*$$' . -profiler='$(PROFILER)'
+test/%:
+	PYTHON=$(PYTHON) PYROSCOPE_BINARY=$(PYROSCOPE_BINARY) go test -v -timeout 20m -count=1 -run '^$*$$' . -profiler='$(PROFILER)'

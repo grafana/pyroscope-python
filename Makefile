@@ -39,39 +39,11 @@ musllinux/arm64:
 		.
 
 ASAN_PYTHON_REF ?= 3.14
-ASAN_IMAGE ?= pyroscope-python-asan:$(ASAN_PYTHON_REF)
-ASAN_WHEEL_DIR := dist/asan
 PROFILER ?= all
 
-.PHONY: asan/image
-asan/image:
-	docker buildx build \
-		--build-arg=PYTHON_REF=$(ASAN_PYTHON_REF) \
-		--target=runtime \
-		--load \
-		-t $(ASAN_IMAGE) \
-		-f docker/asan.Dockerfile \
-		.
-
-.PHONY: asan/wheel
-asan/wheel:
-	rm -rf $(ASAN_WHEEL_DIR)
-	docker buildx build \
-		--build-arg=PYTHON_REF=$(ASAN_PYTHON_REF) \
-		--target=wheel \
-		$(if $(ASAN_PYSPY_DIR),--build-context=pyspy=$(ASAN_PYSPY_DIR)) \
-		--output=$(ASAN_WHEEL_DIR) \
-		-f docker/asan.Dockerfile \
-		.
-
 .PHONY: asan/test
-asan/test: asan/image asan/wheel
-	cd integration-test && \
-		PYTHON_IMAGE=$(ASAN_IMAGE) \
-		PYTHON_VERSION=$(ASAN_PYTHON_REF) \
-		PYROSCOPE_WHEEL_DIR=../$(ASAN_WHEEL_DIR) \
-		PYROSCOPE_WHEEL_GLOB='*.whl' \
-		go test -v -timeout 60m -count=1 $(if $(RUN),-run '$(RUN)') . -profiler='$(PROFILER)'
+asan/test:
+	ASAN_PYTHON_REF=$(ASAN_PYTHON_REF) PROFILER='$(PROFILER)' RUN='$(RUN)' bash scripts/asan-test.sh
 
 PYTHON ?= python3
 

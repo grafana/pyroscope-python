@@ -51,9 +51,17 @@ jobs:
         with:
           go-version: stable
           cache-dependency-path: integration-test/go.mod
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: nightly-2026-10-25
+          components: rust-src
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 llvm-18 libclang-rt-18-dev g++ make cmake pkg-config libssl-dev libffi-dev zlib1g-dev libbz2-dev liblzma-dev libsqlite3-dev libreadline-dev libncurses-dev libgdbm-dev uuid-dev
       - name: Run ASAN tests
         env:
-          PYROSCOPE_TEST_LOG_DIR: ${{ github.workspace }}/asan-results/containers
+          PYROSCOPE_TEST_LOG_DIR: ${{ github.workspace }}/asan-results/processes
           PROFILER: ${{ matrix.profiler }}
           ASAN_PYTHON_REF: ${{ matrix.PYTHON_VERSION }}
         run: |
