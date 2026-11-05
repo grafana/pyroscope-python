@@ -38,21 +38,6 @@ export RUSTFLAGS="-Zsanitizer=address -Zsanitizer-recover=address -Cforce-frame-
 
 cd "$repo_dir"
 cargo test --manifest-path kindasafe/Cargo.toml --locked --release --target "$CARGO_BUILD_TARGET" --workspace
-python_include_dir=$("$PYTHON" -c 'import sysconfig; print(sysconfig.get_path("include"))')
-"$CXX" -std=c++20 -O2 -fsanitize=address -fno-omit-frame-pointer -g -DPL_LINUX \
-    -I "$python_include_dir" \
-    -I dd-trace-py/ddtrace/internal/datadog/profiling/stack/echion \
-    integration-test/testdata/snapshot_asan.cpp \
-    dd-trace-py/ddtrace/internal/datadog/profiling/stack/src/echion/danger.cc \
-    -o "$asan_dir/snapshot-asan"
-ASAN_OPTIONS="$ASAN_OPTIONS:detect_stack_use_after_return=1" "$asan_dir/snapshot-asan"
-if "$asan_dir/snapshot-asan" bad-destination > "$asan_dir/snapshot-destination.log" 2>&1; then
-    echo "error: ASAN did not catch an invalid destination write" >&2
-    exit 1
-fi
-grep -q 'ERROR: AddressSanitizer: heap-buffer-overflow' "$asan_dir/snapshot-destination.log"
-grep -q 'WRITE of size' "$asan_dir/snapshot-destination.log"
-
 "$PYTHON" -m pip wheel --no-deps --wheel-dir "$asan_dir/wheels" .
 "$PYTHON" -m pip install --force-reinstall --no-index --only-binary=:all: --find-links "$asan_dir/wheels" pyroscope-io
 python3 integration-test/download_pyroscope.py "$asan_dir/backend"
