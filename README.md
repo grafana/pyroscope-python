@@ -10,6 +10,41 @@ Uses [py-spy](https://github.com/benfred/py-spy) for stack sampling and the [pyr
 pip install pyroscope-io
 ```
 
+For source builds, initialize the native dependency submodules with
+`git submodule update --init --recursive`. Cargo uses the `py-spy` submodule
+as a local path dependency; its version is pinned by the parent repository.
+
+## Signal handler requirements
+
+The signal-based Python stack unwinder and deferred resolver use kindasafe's
+`SIGSEGV` and `SIGBUS` handlers to recover from failed memory reads. SDK users are
+responsible for ensuring that their application and its libraries do not change these
+handlers during initialization or after kindasafe installs them, including across profiler stops
+and restarts. Install any other handlers before initializing the profiler; handlers
+that kindasafe chains to must support direct chaining and remain loaded.
+
+The SDK assumes recovery remains available after successful initialization. It does
+not detect handler replacement or reinstall handlers on restart. Replacing these
+handlers can cause a profiling memory read to crash the process. Recovery must be
+successfully initialized before sampling, and SDK users must ensure `SIGSEGV` and
+`SIGBUS` remain unblocked on the resolver thread and on the sampled thread throughout
+unwinding, including when sampling interrupts another signal handler. These reads do
+not check initialization or signal masks; a failed read in that state can crash the
+process. Kindasafe reads use direct memory loads
+without syscalls on the successful memory-load path.
+
+Deferred name and line resolution uses py-spy's decoder with kindasafe memory reads
+after Python resumes. These reads assume source ranges do not overlap unrelated live
+Rust exclusive borrows, including after allocation reuse. Fault recovery does not
+establish this condition. Type and
+length validation cannot prevent all incorrect attribution from reused addresses or
+inconsistent reads.
+
+Signal profiles include a synthetic single-frame stack named `[dropped: REASON]` for
+each nonzero drop reason. These stacks are added once when each pprof is built, weighted
+by the number of dropped samples (converted to CPU time using the sampling period).
+Counters are consumed at that point, so drops are not repeated in later profiles.
+
 ## License
 
 Apache-2.0

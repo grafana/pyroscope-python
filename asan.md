@@ -10,6 +10,7 @@
 ```
 make asan/test                                  # image + wheel + full integration suite
 make asan/test PROFILER=py-spy                   # only py-spy
+make asan/test PROFILER=signal                   # only Signal (ITimer and CTimer)
 make asan/test PROFILER=stack                    # Stack and memory (vendored dd-trace-py)
 make asan/test PROFILER=py-spy RUN='Callbacks'    # subset
 make asan/image                                 # pyroscope-python-asan:3.14
@@ -26,8 +27,7 @@ Tested with CPython 3.10 to 3.15. 3.10 and 3.11 still find system libraries thro
 Accepted values are `all`, `py-spy`, `signal`, and `stack`; `dd-trace-py`
 is an alias for `stack`. A selected implementation skips unrelated CPU tests.
 Memory-only tests run in every suite, so each ASAN job covers the memory profiler. Lifecycle tests run with their existing implementation.
-Signal test cases are included but skipped until the follow-up PR adds the implementation.
-The ASAN matrix runs only `py-spy` and `stack`.
+Signal supports CPython 3.10–3.14 and is skipped on other versions.
 
 `TestPythonProfilerCallbacks` runs a 20-second C-to-Python callback loop for
 py-spy, both Signal timers, and Stack (both its default sampler and explicit wall
@@ -74,7 +74,7 @@ If that checkout changes dependencies, update `rust/Cargo.lock` to match before 
 
 ## kindasafe reads
 
-The follow-up Signal unwinder and deferred resolver read through `kindasafe`. Its naked
+The Signal unwinder and deferred resolver read through `kindasafe`. Its naked
 assembly bypasses compiler instrumentation, so ASAN builds check every successful
 `u64` and `slice` read with `__asan_region_is_poisoned` and report the first poisoned
 byte through `__asan_report_load_n_noabort`. Faulting reads use signal recovery,

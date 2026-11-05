@@ -3,7 +3,7 @@
 ## Included
 
 - cpu profiling; `oncpu=True` skips unwinding idle threads and uploads cpu only, `oncpu=False` uploads cpu+wall
-- fast copy (safe_memcpy) only, with no syscall copy fallback and no warmup; its SIGSEGV/SIGBUS handlers install from `stack::start`, not at import, and `configure()` returns `False` when they cannot be installed
+- fast copy (safe_memcpy) only, with no syscall copy fallback; its SIGSEGV/SIGBUS handlers install from `stack::start`, not at import, and `configure()` returns `False` when they cannot be installed
 - no faulthandler patch: enable faulthandler before `configure()`; a later `faulthandler.enable()` replaces our handlers and the sampler stops
 - thread registration via `threading`
 - fork child and restart handling `configure_experimental_stack_profiler(max_nframe, max_threads, adaptive_*)`.
