@@ -76,6 +76,13 @@ impl<T: Copy, const N: usize> RingBuffer<T, N> {
         })
     }
 
+    /// Approximate occupied slots, including record headers. Concurrent reads can
+    /// overestimate occupancy; this is a scheduling hint, not permission to read slots.
+    pub fn occupied_slots(&self) -> usize {
+        let tail = self.tail.load(Ordering::Acquire);
+        self.head.load(Ordering::Acquire).wrapping_sub(tail).min(N)
+    }
+
     fn slot(&self, index: usize) -> *mut MaybeUninit<Slot<T>> {
         self.slots[index & (N - 1)].get()
     }

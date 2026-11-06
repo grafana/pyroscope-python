@@ -234,3 +234,26 @@ fn drain<T: Copy + Default, const N: usize>(c: &mut Consumer<'_, T, N>) -> Vec<V
     let mut buf = [T::default(); N];
     std::iter::from_fn(|| c.pop_slice(&mut buf).ok().map(|len| buf[..len].to_vec())).collect()
 }
+
+#[test]
+fn occupancy_counts_headers_across_index_wrap() {
+    let rb = RingBuffer::<usize, 8>::new();
+    rb.head
+        .store(usize::MAX - 2, core::sync::atomic::Ordering::Relaxed);
+    rb.tail
+        .store(usize::MAX - 2, core::sync::atomic::Ordering::Relaxed);
+    assert_eq!(rb.occupied_slots(), 0);
+    let mut producer = rb.producer().unwrap();
+    producer.push_slice(&[1, 2, 3]).unwrap();
+    assert_eq!(rb.occupied_slots(), 4);
+    producer.push_slice(&[4, 5, 6]).unwrap();
+    assert_eq!(rb.occupied_slots(), 8);
+    let mut consumer = rb.consumer().unwrap();
+    let mut out = [0; 3];
+    assert_eq!(consumer.pop_slice(&mut out), Ok(3));
+    assert_eq!(out, [1, 2, 3]);
+    assert_eq!(rb.occupied_slots(), 4);
+    assert_eq!(consumer.pop_slice(&mut out), Ok(3));
+    assert_eq!(out, [4, 5, 6]);
+    assert_eq!(rb.occupied_slots(), 0);
+}

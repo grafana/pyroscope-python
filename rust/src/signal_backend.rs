@@ -13,7 +13,6 @@ use std::{
         atomic::{AtomicBool, AtomicU32, Ordering},
     },
     thread::JoinHandle,
-    time::Duration,
 };
 
 const LOG_TAG: &str = "Pyroscope::Signal";
@@ -28,6 +27,7 @@ pub struct Signal {
     backend_config: BackendConfig,
     sampler_thread: Option<JoinHandle<()>>,
     running: Arc<AtomicBool>,
+    notification: Option<Arc<signal_sampler::notification::Notification>>,
 }
 
 impl Signal {
@@ -38,6 +38,7 @@ impl Signal {
             threads::attach(session.timer())?;
         }
 
+        let notification = session.notification();
         let buffer = Arc::new(Mutex::new(StackBuffer::default()));
         let running = Arc::new(AtomicBool::new(true));
         let sampler_thread = {
@@ -45,16 +46,34 @@ impl Signal {
             let running = running.clone();
             std::thread::spawn(move || {
                 let pid = std::process::id();
-                while running.load(Ordering::Relaxed) {
-                    std::thread::sleep(Duration::from_millis(10)); //todo do not wake up on every 10ms, notify from producer when buf is half full
-                    let traces = session.drain();
-                    let Ok(mut buffer) = buffer.lock() else {
+                loop {
+                    if let Err(error) = session.wait(&running) {
+                        log::error!(target: LOG_TAG, "consumer notification failed: {error}");
+                        running.store(false, Ordering::Release);
+                    }
+                    if !running.load(Ordering::Acquire) {
+                        session.stop();
+                    }
+                    loop {
+                        let traces = session.drain();
+                        let Ok(mut buffer) = buffer.lock() else {
+                            running.store(false, Ordering::Release);
+                            break;
+                        };
+                        for frames in traces {
+                            let trace = to_stack_trace(frames, &backend_config, pid);
+                            // TODO: Apply thread tags once samples include the thread ID.
+                            let _ = buffer.record(trace);
+                        }
+                        if !running.load(Ordering::Acquire) {
+                            session.stop();
+                        }
+                        if !session.has_samples() {
+                            break;
+                        }
+                    }
+                    if !running.load(Ordering::Acquire) {
                         break;
-                    };
-                    for frames in traces {
-                        let trace = to_stack_trace(frames, &backend_config, pid);
-                        // TODO: Apply thread tags once samples include the thread ID.
-                        let _ = buffer.record(trace);
                     }
                 }
                 if config.sampler.signal_timer == SignalTimer::CTimer {
@@ -69,6 +88,7 @@ impl Signal {
             backend_config,
             sampler_thread: Some(sampler_thread),
             running,
+            notification: Some(notification),
         })
     }
 
@@ -77,7 +97,10 @@ impl Signal {
     }
 
     pub fn shutdown_thread(&mut self) -> Result<()> {
-        self.running.store(false, Ordering::Relaxed);
+        self.running.store(false, Ordering::Release);
+        if let Some(notification) = self.notification.take() {
+            notification.wake();
+        }
         if let Some(handle) = self.sampler_thread.take() {
             handle
                 .join()
