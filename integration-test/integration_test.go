@@ -118,6 +118,14 @@ func TestPythonSignalProfilerLifecycle(t *testing.T) {
 			requireContainerExit(t, workload, 0, 2*time.Minute)
 		})
 	}
+	if _, minor := pythonVersion(t); minor >= 11 {
+		t.Run("ctimer_preexisting_thread_cleanup", func(t *testing.T) {
+			workload := startPythonTestContainer(t, net, wheelDir, "signal_lifecycle_workload.py", map[string]string{
+				"SCENARIO": "ctimer_preexisting_thread_cleanup",
+			})
+			requireContainerExit(t, workload, 0, 2*time.Minute)
+		})
+	}
 }
 
 func TestPythonStackProfilerRestart(t *testing.T) {
