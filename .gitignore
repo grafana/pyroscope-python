@@ -10,6 +10,7 @@ dist/
 **/target/
 **/*.rs.bk
 .cache
+.tmp/
 .DS_Store
 
 flamegraph.svg

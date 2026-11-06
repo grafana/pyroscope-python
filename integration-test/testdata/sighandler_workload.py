@@ -18,7 +18,7 @@ CPU_TIMER_RESTART_REFUSED = (
     "the CPU timer stack profiler cannot be restarted in this process"
 )
 
-libc = ctypes.CDLL(None)
+libc = ctypes.CDLL(None, use_errno=True)
 
 
 def handler(signo):
@@ -231,7 +231,7 @@ def cpu_timer_fork_child_refused():
 
 
 def cpu_timer_unsupported_fallback():
-    # On CPython 3.10/3.11, enabling the timer option still selects the wall
+    # On macOS and CPython 3.10/3.11, the timer option selects the wall
     # sampler. It allocates no alternate stack and can restart after shutdown.
     configure()
     run_worker(
@@ -251,28 +251,42 @@ def cpu_timer_unsupported_fallback():
     expect(wait_exitcode(pid) == 0, "fallback could not configure in a fork child")
 
 
-SA_ONSTACK = 0x08000000
+SA_ONSTACK = 0x0001 if sys.platform == "darwin" else 0x08000000
 SS_ONSTACK = 1
-SS_DISABLE = 2
+SS_DISABLE = 4 if sys.platform == "darwin" else 2
 APP_ALTSTACK_SIZE = 1 << 20
 AFTER_FORK_BURN_SECONDS = 15
 
 
 class Sigaction(ctypes.Structure):
-    _fields_ = [
-        ("sa_handler", ctypes.c_void_p),
-        ("sa_mask", ctypes.c_ulong * (128 // ctypes.sizeof(ctypes.c_ulong))),
-        ("sa_flags", ctypes.c_int),
-        ("sa_restorer", ctypes.c_void_p),
-    ]
+    if sys.platform == "darwin":
+        _fields_ = [
+            ("sa_handler", ctypes.c_void_p),
+            ("sa_mask", ctypes.c_uint32),
+            ("sa_flags", ctypes.c_int),
+        ]
+    else:
+        _fields_ = [
+            ("sa_handler", ctypes.c_void_p),
+            ("sa_mask", ctypes.c_ulong * (128 // ctypes.sizeof(ctypes.c_ulong))),
+            ("sa_flags", ctypes.c_int),
+            ("sa_restorer", ctypes.c_void_p),
+        ]
 
 
 class StackT(ctypes.Structure):
-    _fields_ = [
-        ("ss_sp", ctypes.c_void_p),
-        ("ss_flags", ctypes.c_int),
-        ("ss_size", ctypes.c_size_t),
-    ]
+    if sys.platform == "darwin":
+        _fields_ = [
+            ("ss_sp", ctypes.c_void_p),
+            ("ss_size", ctypes.c_size_t),
+            ("ss_flags", ctypes.c_int),
+        ]
+    else:
+        _fields_ = [
+            ("ss_sp", ctypes.c_void_p),
+            ("ss_flags", ctypes.c_int),
+            ("ss_size", ctypes.c_size_t),
+        ]
 
 
 def install_onstack(signo, address):

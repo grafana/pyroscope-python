@@ -89,7 +89,12 @@ def bounded_drain():
         while not stop.is_set():
             hashlib.sha256(blob).digest()  # Native CPU work releases the GIL.
 
-    assert configure(signal_timer=pyroscope.SignalTimer.CTimer, sample_rate=1000)
+    timer = (
+        pyroscope.SignalTimer.CTimer
+        if sys.platform == "linux"
+        else pyroscope.SignalTimer.ITimer
+    )
+    assert configure(signal_timer=timer, sample_rate=1000)
     threads = [threading.Thread(target=deep, args=(200,)) for _ in range(8)]
     for thread in threads:
         thread.start()
