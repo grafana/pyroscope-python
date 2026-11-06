@@ -38,20 +38,63 @@ musllinux/arm64:
 		-f docker/wheel-musllinux.Dockerfile \
 		.
 
+ASAN_PYTHON_REF ?= 3.14
+ASAN_IMAGE ?= pyroscope-python-asan:$(ASAN_PYTHON_REF)
+ASAN_WHEEL_DIR := dist/asan
+PROFILER ?= all
+
+.PHONY: asan/image
+asan/image:
+	docker buildx build \
+		--build-arg=PYTHON_REF=$(ASAN_PYTHON_REF) \
+		--target=runtime \
+		--load \
+		-t $(ASAN_IMAGE) \
+		-f docker/asan.Dockerfile \
+		.
+
+.PHONY: asan/wheel
+asan/wheel:
+	rm -rf $(ASAN_WHEEL_DIR)
+	docker buildx build \
+		--build-arg=PYTHON_REF=$(ASAN_PYTHON_REF) \
+		--target=wheel \
+		$(if $(ASAN_PYSPY_DIR),--build-context=pyspy=$(ASAN_PYSPY_DIR)) \
+		--output=$(ASAN_WHEEL_DIR) \
+		-f docker/asan.Dockerfile \
+		.
+
+.PHONY: asan/test
+asan/test: asan/image asan/wheel
+	cd integration-test && \
+		PYTHON_IMAGE=$(ASAN_IMAGE) \
+		PYTHON_VERSION=$(ASAN_PYTHON_REF) \
+		PYROSCOPE_WHEEL_DIR=../$(ASAN_WHEEL_DIR) \
+		PYROSCOPE_WHEEL_GLOB='*.whl' \
+		go test -v -timeout 60m -count=1 $(if $(RUN),-run '$(RUN)') . -profiler='$(PROFILER)'
+
+PYTHON ?= python3
+
 .PHONY: mac/amd64
 mac/amd64:
-	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=x86_64-apple-darwin python3 -m build --wheel
-	wheel tags --platform-tag macosx_11_0_x86_64 --remove dist/*.whl
+	rm -rf build dist/mac
+	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=x86_64-apple-darwin $(PYTHON) -m build --wheel --outdir dist/mac
+	$(PYTHON) -m wheel tags --platform-tag macosx_11_0_x86_64 --remove dist/mac/*.whl
+	mv dist/mac/*.whl dist/
+	rm -rf dist/mac
 
 .PHONY: mac/arm64
 mac/arm64:
-	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=aarch64-apple-darwin python3 -m build --wheel
-	wheel tags --platform-tag macosx_11_0_arm64 --remove dist/*.whl
+	rm -rf build dist/mac
+	MACOSX_DEPLOYMENT_TARGET=11.0 CARGO_BUILD_TARGET=aarch64-apple-darwin $(PYTHON) -m build --wheel --outdir dist/mac
+	$(PYTHON) -m wheel tags --platform-tag macosx_11_0_arm64 --remove dist/mac/*.whl
+	mv dist/mac/*.whl dist/
+	rm -rf dist/mac
 
 .PHONY: check/tag-version
 check/tag-version:
 	@TAG_VERSION=$${TAG#python-}; \
-	CARGO_VERSION=$$(cd rust && cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version'); \
+	CARGO_VERSION=$$(cd rust && cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "pyroscope_python_extension") | .version'); \
 	if [ "$$TAG_VERSION" != "$$CARGO_VERSION" ]; then \
 		echo "error: tag version ($$TAG_VERSION) does not match Cargo.toml version ($$CARGO_VERSION)"; \
 		exit 1; \

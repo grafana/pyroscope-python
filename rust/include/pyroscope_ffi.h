@@ -13,10 +13,6 @@
 typedef enum {
   PprofBuilderType_Memory,
   /*
-   py-spy.
-   */
-  PprofBuilderType_Cpu,
-  /*
    The vendored dd-trace-py stack sampler.
    */
   PprofBuilderType_CpuWall,
@@ -50,6 +46,10 @@ typedef struct {
   uintptr_t len;
 } FFIStringView;
 
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
+
 void pyroscope_push_sample(PprofBuilderType builder_type,
                            const FFIFrame *frames,
                            uintptr_t len,
@@ -57,8 +57,41 @@ void pyroscope_push_sample(PprofBuilderType builder_type,
 
 extern void memalloc_heap_postfork_child(void);
 
+extern void pyroscope_stack_configure(double interval_s,
+                                      uint32_t max_nframes,
+                                      uint32_t max_threads,
+                                      uint32_t max_tasks,
+                                      bool oncpu,
+                                      bool adaptive_sampling,
+                                      double target_overhead,
+                                      uint64_t max_sampling_period_us,
+                                      double baseline_core_pct,
+                                      uint32_t p_stable_window_s,
+                                      double p_stable_percentile,
+                                      bool cpu_timer_enabled,
+                                      uint64_t cpu_timer_interval_ms);
+
+extern uint64_t pyroscope_stack_interval_us(void);
+
+extern bool pyroscope_stack_is_safe_copy_failed(void);
+
+extern bool pyroscope_stack_start(void);
+
+extern void pyroscope_stack_stop(void);
+
+extern bool pyroscope_stack_take_sampling_thread_error(void);
+
+extern void pyroscope_stack_register_thread_gil(uint64_t id,
+                                                uint64_t native_id);
+
+extern void pyroscope_stack_unregister_thread_gil(uint64_t id);
+
 FFIInternedString pyroscope_string_table_intern_utf8(FFIStringView s);
 
 FFIInternedString pyroscope_string_table_intern_ascii(FFIStringView s);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif  // __cplusplus
 
 #endif  /* PYROSCOPE_FFI_H_ */

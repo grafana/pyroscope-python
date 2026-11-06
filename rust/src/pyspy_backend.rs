@@ -3,8 +3,11 @@ use crate::{
         BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame, StackTrace,
         ThreadTagsSet,
     },
+    encode::pprof,
     error::{PyroscopeError, Result},
+    utils::TimeRange,
 };
+use prost::Message;
 use py_spy::sampler::Sampler;
 use std::{
     sync::{
@@ -25,6 +28,7 @@ pub struct Pyspy {
 
 pub struct Reporter {
     buffer: Arc<Mutex<StackBuffer>>,
+    signal_config: Option<BackendConfig>,
 }
 
 impl Pyspy {
@@ -48,6 +52,7 @@ impl Pyspy {
     pub fn reporter(&self) -> Reporter {
         Reporter {
             buffer: self.buffer.clone(),
+            signal_config: None,
         }
     }
 }
@@ -122,13 +127,37 @@ impl Drop for Pyspy {
 }
 
 impl Reporter {
-    pub fn report(&self) -> Result<ReportBatch> {
-        let report = std::mem::take(&mut *self.buffer.lock()?);
-        let reports: Vec<Report> = report.into();
+    pub fn new_signal(buffer: Arc<Mutex<StackBuffer>>, config: BackendConfig) -> Self {
+        Reporter {
+            buffer,
+            signal_config: Some(config),
+        }
+    }
+
+    pub fn report(&self, sample_rate: u32, time_range: &TimeRange) -> Result<ReportBatch> {
+        let mut report = std::mem::take(&mut *self.buffer.lock()?);
+        let data = if let Some(config) = &self.signal_config {
+            // Add one weighted stack per drop reason only when building the pprof.
+            crate::signal_backend::record_dropped_stacks(
+                &mut report,
+                pyroscope_python_unwind::METRICS.take_drop_counts(),
+                config,
+                std::process::id(),
+            )?;
+            let bytes = if report.data.is_empty() {
+                Vec::new()
+            } else {
+                pprof::encode(report.into(), sample_rate, time_range.clone()).encode_to_vec()
+            };
+            ReportData::RawPprof(bytes)
+        } else {
+            let reports: Vec<Report> = report.into();
+            ReportData::Reports(reports)
+        };
 
         Ok(ReportBatch {
             profile_type: "process_cpu".into(),
-            data: ReportData::Reports(reports),
+            data,
         })
     }
 }
@@ -193,6 +222,62 @@ impl From<(py_spy::StackTrace, &BackendConfig)> for StackTraceWrapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signal_report_consumes_drops_only_when_building_pprof() {
+        use crate::encode::r#gen::google::Profile;
+        use pyroscope_python_unwind::METRICS;
+        use std::time::{Duration, UNIX_EPOCH};
+
+        let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
+        METRICS.take_drop_counts();
+        let buffer = Arc::new(Mutex::new(StackBuffer::default()));
+        let reporter = Reporter::new_signal(buffer.clone(), BackendConfig::default());
+        let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
+        for count in [3, 2] {
+            METRICS.resolve_error.fetch_add(count, Ordering::Relaxed);
+            assert!(buffer.lock().unwrap().data.is_empty());
+            let report = reporter.report(100, &range).unwrap();
+            let ReportData::RawPprof(bytes) = report.data else {
+                panic!("signal report must already contain the pprof");
+            };
+            let profile = Profile::decode(bytes.as_slice()).unwrap();
+            assert_eq!(profile.sample.len(), 1, "{profile:#?}");
+            let sample = &profile.sample[0];
+            let frames: Vec<_> = sample
+                .location_id
+                .iter()
+                .rev()
+                .flat_map(|id| {
+                    let location = profile
+                        .location
+                        .iter()
+                        .find(|location| location.id == *id)
+                        .unwrap();
+                    location.line.iter().map(|line| {
+                        let function = profile
+                            .function
+                            .iter()
+                            .find(|function| function.id == line.function_id)
+                            .unwrap();
+                        (
+                            profile.string_table[function.name as usize].as_str(),
+                            profile.string_table[function.filename as usize].as_str(),
+                            line.line,
+                        )
+                    })
+                })
+                .collect();
+            assert_eq!(
+                frames,
+                [("[dropped: resolve_error]", "", 0)],
+                "{profile:#?}"
+            );
+            assert_eq!(sample.value, [count as i64 * 10_000_000], "{profile:#?}");
+            assert!(sample.label.is_empty(), "{profile:#?}");
+            assert!(reporter.report(100, &range).unwrap().is_empty());
+        }
+    }
 
     fn create_test_frame(
         name: &str,

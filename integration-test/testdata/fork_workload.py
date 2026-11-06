@@ -11,7 +11,6 @@ os.register_at_fork(after_in_child=lambda: time.sleep(0.5))
 
 import pyroscope  # noqa: E402
 
-
 logger = logging.getLogger(__name__)
 stop_burning = threading.Event()
 
@@ -80,6 +79,7 @@ def fork(child):
 
 def main():
     logging.basicConfig(level=logging.INFO)
+    pyroscope.configure_experimental_stack_profiler(cpu_timer_enabled=False)
     configure()
     burner = threading.Thread(target=parent_burn)
     burner.start()
@@ -89,7 +89,9 @@ def main():
             code = wait_child(fork(lambda: None), CHILD_DEADLINE_SECONDS)
             if code != 0:
                 raise AssertionError(f"fork child {i} exited with {code}")
-        code = wait_child(fork(fork_child_main), CHILD_PROFILE_SECONDS + CHILD_DEADLINE_SECONDS)
+        code = wait_child(
+            fork(fork_child_main), CHILD_PROFILE_SECONDS + CHILD_DEADLINE_SECONDS
+        )
         if code != 0:
             raise AssertionError(f"profiled fork child exited with {code}")
     finally:

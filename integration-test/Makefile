@@ -1,7 +1,4 @@
-.PHONY: ci-matrix
-ci-matrix:
-	@output="$$(go test -list . -json .)" && \
-		printf '%s\n' "$$output" | jq -sc '[.[] | select(.Action=="output") | .Output | rtrimstr("\n") | select(startswith("Test"))]'
+PROFILER ?= all
 
 UNAME_MACHINE := $(shell uname -m)
 WHEEL_ARCH := $(if $(filter arm64 aarch64,$(UNAME_MACHINE)),arm64,amd64)
@@ -18,4 +15,4 @@ wheel:
 
 .PHONY: test/%
 test/%: wheel
-	go test -v -timeout 20m -count=1 -run '^$*$$' .
+	go test -v -timeout 20m -count=1 -run '^$*$$' . -profiler='$(PROFILER)'

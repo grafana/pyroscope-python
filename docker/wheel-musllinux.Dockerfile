@@ -1,6 +1,6 @@
-# syntax=docker/dockerfile:1.23@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
+# syntax=docker/dockerfile:1.28@sha256:bb22d9815c728170f72750f4e5b0d672e06176142e1d602c7e66c050100b7e5b
 ARG PLATFORM=x86_64
-FROM quay.io/pypa/musllinux_1_2_${PLATFORM}:2026.09.26-1 AS builder
+FROM quay.io/pypa/musllinux_1_2_${PLATFORM}:2026.10.26-1 AS builder
 ARG OPENSSL_VERSION=3.5.9
 
 RUN apk add --no-cache gcc musl-dev make perl linux-headers
@@ -31,7 +31,7 @@ RUN adduser -D builder \
 USER builder
 RUN test "$(id -u)" = "1000" || { echo "ERROR: builder uid is $(id -u), expected 1000"; exit 1; }
 
-ENV RUST_VERSION=1.98.0
+ENV RUST_VERSION=1.99.1
 RUN curl https://static.rust-lang.org/rustup/dist/$(arch)-unknown-linux-musl/rustup-init -o /tmp/rustup-init \
     && chmod +x /tmp/rustup-init \
     && /tmp/rustup-init -y --default-toolchain=${RUST_VERSION} --default-host=$(arch)-unknown-linux-musl \
@@ -47,6 +47,8 @@ ADD --chown=builder:builder pyproject.toml \
 ADD --chown=builder:builder rust/ rust/
 ADD --chown=builder:builder python/ python/
 ADD --chown=builder:builder dd-trace-py/ dd-trace-py/
+ADD --chown=builder:builder kindasafe/ kindasafe/
+ADD --chown=builder:builder py-spy/ py-spy/
 ADD --chown=builder:builder docker/wheels.sh wheels.sh
 
 

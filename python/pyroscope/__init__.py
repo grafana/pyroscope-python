@@ -1,50 +1,53 @@
 # SPDX-License-Identifier: Apache-2.0
 # Provenance-includes-location: https://github.com/DataDog/dd-trace-py/blob/main/ddtrace/profiling/collector/threading.py
-# Provenance-includes-location: https://github.com/DataDog/dd-trace-py/blob/main/ddtrace/profiling/_faulthandler.py
 # Provenance-includes-license: Apache-2.0 OR BSD-3-Clause
 # Provenance-includes-copyright: Datadog, Inc.
 
-import warnings
 import logging
 import sys
+import warnings
+from contextlib import contextmanager
 
 from . import _native as lib
-
-from contextlib import contextmanager
 
 LOGGER = logging.getLogger(__name__)
 
 LineNo = lib.LineNo
 ProfilerImplementation = lib.ProfilerImplementation
+SignalTimer = lib.SignalTimer
+
 
 def configure(
-        app_name=None,
-        application_name=None,
-        server_address="http://localhost:4040",
-        basic_auth_username="",
-        basic_auth_password="",
-        enable_logging=False,
-        sample_rate=100,
-        oncpu=True,
-        native=None,
-        gil_only=True,
-        report_pid=False,
-        report_thread_id=False,
-        report_thread_name=False,
-        tags=None,
-        tenant_id="",
-        http_headers=None,
-        line_no=LineNo.LastInstruction,
-        upload_interval=10,
-        mem_enabled=False,
-        mem_max_nframe=128,
-        mem_heap_sample_size=512 * 1024,
-        mem_enable_mem_domain=True,
-        cpu_enabled=True,
-        cpu_implementation=ProfilerImplementation.PySpy,
+    app_name=None,
+    application_name=None,
+    server_address="http://localhost:4040",
+    basic_auth_username="",
+    basic_auth_password="",
+    enable_logging=False,
+    sample_rate=100,
+    oncpu=True,
+    native=None,
+    gil_only=True,
+    report_pid=False,
+    report_thread_id=False,
+    report_thread_name=False,
+    tags=None,
+    tenant_id="",
+    http_headers=None,
+    line_no=LineNo.LastInstruction,
+    upload_interval=10,
+    mem_enabled=False,
+    mem_max_nframe=128,
+    mem_heap_sample_size=512 * 1024,
+    mem_enable_mem_domain=True,
+    cpu_enabled=True,
+    cpu_implementation=ProfilerImplementation.PySpy,
+    signal_timer=SignalTimer.ITimer,
 ):
     if app_name is not None:
-        warnings.warn("app_name is deprecated, use application_name", DeprecationWarning)
+        warnings.warn(
+            "app_name is deprecated, use application_name", DeprecationWarning
+        )
         application_name = app_name
 
     if native is not None:
@@ -79,19 +82,21 @@ def configure(
         mem_enable_mem_domain,
         cpu_enabled,
         cpu_implementation,
+        signal_timer,
     )
 
+
 def configure_experimental_stack_profiler(
-        fast_copy=True,
-        fast_copy_warmup=15.0,
-        max_nframe=128,
-        max_threads=25,
-        adaptive_sampling=True,
-        adaptive_target_overhead=0.01,
-        adaptive_max_interval_us=100000,
-        adaptive_baseline=0.0,
-        adaptive_p_stable_window_s=600,
-        adaptive_p_stable_percentile=95.0,
+    max_nframe=128,
+    max_threads=25,
+    adaptive_sampling=True,
+    adaptive_target_overhead=0.01,
+    adaptive_max_interval_us=100000,
+    adaptive_baseline=0.0,
+    adaptive_p_stable_window_s=600,
+    adaptive_p_stable_percentile=95.0,
+    cpu_timer_enabled=True,
+    cpu_timer_interval_ms=10,
 ):
     """Set the options of the stack CPU profiler, for the whole process.
 
@@ -100,12 +105,19 @@ def configure_experimental_stack_profiler(
     configure() with cpu_implementation=ProfilerImplementation.Stack has
     started the profiler.
 
-    fast_copy reads the sampled memory with memcpy under SIGSEGV/SIGBUS
-    handlers instead of a syscall, after fast_copy_warmup seconds on the
-    syscall copy.
+    The profiler reads the sampled memory with memcpy under its own
+    SIGSEGV/SIGBUS handlers, and configure() returns False when it cannot
+    install them. Enable faulthandler before configure(): the handlers chain
+    to the faulthandler that is already installed, but a later
+    faulthandler.enable() replaces them and the profiler stops sampling.
 
     max_threads caps how many threads one sampling cycle covers; past the cap
     the sampler picks a uniform random subset. 0 means no cap.
+
+    cpu_timer_enabled uses per-thread CPU timers on Linux CPython 3.12+.
+    Older Python versions and macOS use the wall sampler even when this
+    option is enabled. With CPU timers active, the profiler cannot restart
+    after shutdown() or in a fork child, and configure() returns False.
 
     adaptive_sampling moves the sampling interval between 100us and
     adaptive_max_interval_us to keep the sampler near adaptive_target_overhead,
@@ -115,8 +127,6 @@ def configure_experimental_stack_profiler(
     CPU seen over the last adaptive_p_stable_window_s seconds.
     """
     return lib.configure_experimental_stack_profiler(
-        fast_copy,
-        fast_copy_warmup,
         max_nframe,
         max_threads,
         adaptive_sampling,
@@ -125,7 +135,10 @@ def configure_experimental_stack_profiler(
         adaptive_baseline,
         adaptive_p_stable_window_s,
         adaptive_p_stable_percentile,
+        cpu_timer_enabled,
+        cpu_timer_interval_ms,
     )
+
 
 def shutdown():
     drop = lib.drop_agent()
@@ -136,20 +149,25 @@ def shutdown():
         LOGGER.warning("Pyroscope Agent shutdown failed")
     return drop
 
+
 def add_thread_tag(key, value):
     return lib.add_thread_tag(key, value)
+
 
 def remove_thread_tag(key, value):
     return lib.remove_thread_tag(key, value)
 
+
 def runtime_name():
     return sys.implementation.name
+
 
 def runtime_version():
     vinfo = sys.implementation.version
     if vinfo.releaselevel == "final" and not vinfo.serial:
         vinfo = vinfo[:3]
     return ".".join(map(str, vinfo))
+
 
 @contextmanager
 def tag_wrapper(tags):
@@ -161,18 +179,30 @@ def tag_wrapper(tags):
         for key, value in tags.items():
             lib.remove_thread_tag(key, value)
 
+
 def stop():
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
+
+
 def change_name(name):
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
+
+
 def tag(tags):
     warnings.warn("deprecated, use tag_wrapper function", DeprecationWarning)
+
+
 def remove_tags(*keys):
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
+
+
 def build_summary():
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
+
+
 def test_logger():
     warnings.warn("deprecated, no longer applicable", DeprecationWarning)
+
 
 def _install_stack_threads(threading, register, unregister):
     Thread = threading.Thread
@@ -185,6 +215,8 @@ def _install_stack_threads(threading, register, unregister):
             register(self.ident, self.native_id)
 
     def _bootstrap_inner(self, *args, **kwargs):
+        # TODO: Threads already running when this wrapper is installed never call
+        # unregister. Hook Thread._delete on Python 3.11+ to handle their exit too.
         orig_bootstrap_inner(self, *args, **kwargs)
         if self.ident is not None:
             unregister(self.ident)
@@ -192,75 +224,16 @@ def _install_stack_threads(threading, register, unregister):
     Thread._set_native_id = _set_native_id
     Thread._bootstrap_inner = _bootstrap_inner
 
+    _register_stack_threads(threading, register)
+
+
+def _register_stack_threads(threading, register):
+    current_id = threading.get_ident()
     for tid, thread in list(threading._active.items()):
-        register(tid, getattr(thread, "native_id", None) or tid)
-
-def _install_stack_faulthandler(faulthandler, threading, pause_sampling, resume_sampling, uninstall_segv_handler, reinstall_segv_handler):
-    _original_enable = faulthandler.enable
-    _original_disable = faulthandler.disable
-    _enable_lock = threading.Lock()
-
-    def _patched_enable(*args, **kwargs):
-        with _enable_lock:
-            # None means the sampler is running but did not pause in time:
-            # swapping handlers now would race with safe_memcpy.
-            pause_result = pause_sampling()
-            safe_to_swap = pause_result is not None
-            try:
-                if safe_to_swap:
-                    try:
-                        uninstall_segv_handler()
-                    except Exception:
-                        pass
-
-                    # Without a fresh install, faulthandler can save itself as its
-                    # own previous handler and loop forever on a fault.
-                    try:
-                        _original_disable()
-                    except Exception:
-                        pass
-
-                try:
-                    _original_enable(*args, **kwargs)
-                except Exception:
-                    if safe_to_swap:
-                        try:
-                            reinstall_segv_handler()
-                        except Exception:
-                            pass
-                    raise
-
-                try:
-                    reinstall_segv_handler()
-                except Exception:
-                    pass
-            finally:
-                if pause_result is True:
-                    resume_sampling()
-
-    def _patched_disable():
-        with _enable_lock:
-            pause_result = pause_sampling()
-            safe_to_swap = pause_result is not None
-            try:
-                if not safe_to_swap:
-                    return False
-
-                try:
-                    disabled = _original_disable()
-                except Exception:
-                    disabled = False
-
-                # disable() restores the handler faulthandler saved, which need not be ours.
-                try:
-                    reinstall_segv_handler()
-                except Exception:
-                    pass
-
-                return disabled
-            finally:
-                if pause_result is True:
-                    resume_sampling()
-
-    faulthandler.enable = _patched_enable
-    faulthandler.disable = _patched_disable
+        # Older Python versions retain the parent's Thread.native_id after fork.
+        native_id = (
+            threading.get_native_id()
+            if tid == current_id
+            else getattr(thread, "native_id", None) or tid
+        )
+        register(tid, native_id)

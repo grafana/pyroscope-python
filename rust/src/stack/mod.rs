@@ -9,13 +9,12 @@ use std::ops::{Deref, DerefMut};
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-mod faulthandler;
 mod sampler;
 mod threads;
 
 use sampler::{
-    configure, fast_copy_initialized, interval_us, is_safe_copy_failed, sampler_start,
-    sampler_stop, sampling_thread_failed,
+    configure, interval_us, is_safe_copy_failed, sampler_start, sampler_stop,
+    sampling_thread_failed,
 };
 static PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuWallProfile>> = LeakableMutex::new();
 static ONCPU_PROFILE_BUILDER: LeakableMutex<PProfBuilder<CpuProfile>> = LeakableMutex::new();
@@ -28,43 +27,39 @@ pub struct Config {
 
 #[derive(Debug)]
 pub struct Options {
-    pub fast_copy: bool,
-    pub fast_copy_warmup_s: f64,
     pub max_nframe: u32,
     pub max_threads: u32,
+    pub max_tasks: u32,
     pub adaptive_sampling: bool,
     pub adaptive_target_overhead: f64,
     pub adaptive_max_interval_us: u64,
     pub adaptive_baseline: f64,
     pub adaptive_p_stable_window_s: u32,
     pub adaptive_p_stable_percentile: f64,
+    pub cpu_timer_enabled: bool,
+    pub cpu_timer_interval_ms: u64,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
-            fast_copy: true,
-            fast_copy_warmup_s: 15.0,
             max_nframe: 128,
             max_threads: 25,
+            max_tasks: 50,
             adaptive_sampling: true,
             adaptive_target_overhead: 0.01,
             adaptive_max_interval_us: 100_000,
             adaptive_baseline: 0.0,
             adaptive_p_stable_window_s: 600,
             adaptive_p_stable_percentile: 95.0,
+            cpu_timer_enabled: true,
+            cpu_timer_interval_ms: 10,
         }
     }
 }
 
 impl Options {
     fn validate(&self) -> Result<(), String> {
-        let w = self.fast_copy_warmup_s;
-        if !(w.is_finite() && w >= 0.0) {
-            return Err(format!(
-                "fast_copy_warmup must be a finite, non-negative number of seconds, got {w}"
-            ));
-        }
         let o = self.adaptive_target_overhead;
         if !(o.is_finite() && o > 0.0 && o <= 1.0) {
             return Err(format!(
@@ -94,6 +89,7 @@ impl Options {
 }
 
 static STARTED: AtomicBool = AtomicBool::new(false);
+static STOPPED_ONCE: AtomicBool = AtomicBool::new(false);
 
 static OPTIONS: OnceLock<Options> = OnceLock::new();
 
@@ -139,21 +135,21 @@ pub fn start(py: Python<'_>, config: &Config, sample_rate: u32) -> PyResult<()> 
     configure(1.0 / f64::from(sample_rate.max(1)), options, config.oncpu);
 
     if is_safe_copy_failed() {
-        log::error!(
-            target: "pyroscope-python",
-            "no safe memory copy method available (safe_memcpy and process_vm_readv both failed); \
-             the CPU stack sampler stays off"
-        );
-        return Ok(());
-    }
-
-    if fast_copy_initialized() {
-        faulthandler::install(py)?;
+        return Err(PyRuntimeError::new_err(
+            "failed to install the CPU stack sampler's SIGSEGV/SIGBUS handlers",
+        ));
     }
 
     if !sampler_start() {
+        if STOPPED_ONCE.load(Ordering::Acquire) {
+            return Err(PyRuntimeError::new_err(
+                "the CPU timer stack profiler cannot be restarted in this process: it was stopped \
+                 by an earlier shutdown() or by fork(), and the CPU timer engine does not support \
+                 restarting",
+            ));
+        }
         return Err(PyRuntimeError::new_err(
-            "failed to start the CPU stack sampler's sampling thread",
+            "failed to start the CPU stack sampler's sampling thread or CPU timer",
         ));
     }
     STARTED.store(true, Ordering::Release);
@@ -168,6 +164,7 @@ pub fn stop(py: Python<'_>) {
         // interns strings, and `memory::dump_pprof` holds the interner lock
         // while attached to Python.
         py.detach(sampler_stop);
+        STOPPED_ONCE.store(true, Ordering::Release);
     }
     clear_samples();
 }

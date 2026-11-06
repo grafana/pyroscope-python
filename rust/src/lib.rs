@@ -1,6 +1,8 @@
 mod ffi;
 mod memory;
 mod pyspy_backend;
+mod signal_backend;
+mod signal_sampler;
 mod stack;
 
 // Re-exports structs
@@ -44,6 +46,9 @@ fn at_fork_after_in_parent(py: Python<'_>) -> PyResult<()> {
 
 #[pyfunction]
 fn at_fork_after_in_child(py: Python<'_>) -> PyResult<()> {
+    // TODO: Make the signal profiler fork-safe: disarm ITIMER_PROF and SIGPROF
+    // handling in the child and reset ACTIVE/HANDLED_SIGNALS without acquiring
+    // mutexes that may have been held by threads that did not survive the fork.
     memory::postfork_child();
     stack::postfork_child();
     encode::interner::postfork_child();
@@ -133,8 +138,6 @@ fn initialize_logging(logging_level: u32) -> bool {
 #[allow(clippy::too_many_arguments)]
 #[pyfunction]
 fn configure_experimental_stack_profiler(
-    fast_copy: bool,
-    fast_copy_warmup: f64,
     max_nframe: u32,
     max_threads: u32,
     adaptive_sampling: bool,
@@ -143,10 +146,10 @@ fn configure_experimental_stack_profiler(
     adaptive_baseline: f64,
     adaptive_p_stable_window_s: u32,
     adaptive_p_stable_percentile: f64,
+    cpu_timer_enabled: bool,
+    cpu_timer_interval_ms: u64,
 ) -> bool {
     stack::set_options(stack::Options {
-        fast_copy,
-        fast_copy_warmup_s: fast_copy_warmup,
         max_nframe,
         max_threads,
         adaptive_sampling,
@@ -155,6 +158,9 @@ fn configure_experimental_stack_profiler(
         adaptive_baseline,
         adaptive_p_stable_window_s,
         adaptive_p_stable_percentile,
+        cpu_timer_enabled,
+        cpu_timer_interval_ms,
+        ..stack::Options::default()
     })
 }
 
@@ -185,11 +191,19 @@ fn initialize_agent(
     mem_enable_mem_domain: bool,
     cpu_enabled: bool,
     cpu_implementation: ProfilerImplementation,
+    signal_timer: SignalTimer,
 ) -> bool {
     if !cpu_enabled && !mem_enabled {
         log::error!(
             target: "pyroscope-python",
             "at least one of CPU or memory profiling must be enabled"
+        );
+        return false;
+    }
+    if cpu_enabled && cpu_implementation == ProfilerImplementation::Stack && !oncpu {
+        log::error!(
+            target: "pyroscope-python",
+            "the Stack CPU profiler supports only oncpu=True"
         );
         return false;
     }
@@ -200,21 +214,53 @@ fn initialize_agent(
         report_pid,
     };
 
+    if cpu_enabled && cpu_implementation == ProfilerImplementation::Signal && !oncpu {
+        log::error!(
+            target: "pyroscope-python",
+            "the Signal CPU profiler supports only oncpu=True"
+        );
+        return false;
+    }
+
+    let signal_config =
+        (cpu_enabled && cpu_implementation == ProfilerImplementation::Signal).then(|| {
+            let version = py.version_info();
+            pyroscope::CpuConfig::Signal(signal_backend::Config {
+                sampler: signal_sampler::Config {
+                    python_version: (version.major, version.minor),
+                    sampling_rate: sample_rate,
+                    signal_timer: signal_timer.into(),
+                    lines: line_no.into(),
+                },
+            })
+        });
+    if signal_timer == SignalTimer::CTimer
+        && signal_config.is_some()
+        && let Err(e) = signal_backend::threads::install(py)
+    {
+        log::error!(target: "pyroscope-python", "failed to install the CTimer thread hooks: {e}");
+        return false;
+    }
+
     let pyspy_enabled = cpu_enabled && cpu_implementation == ProfilerImplementation::PySpy;
     let pyspy_config = pyspy_enabled.then(|| py_spy::Config {
         blocking: py_spy::config::LockingStrategy::NonBlocking,
         native: false,
+        type_checks: py_spy::config::TypesConfig::Strict,
         pid: Some(std::process::id().try_into().unwrap()),
         sampling_rate: sample_rate.into(),
         include_idle: !oncpu,
         include_thread_ids: true,
-        include_thread_names: report_thread_name,
+        collect_thread_names: report_thread_name,
         subprocesses: false,
         gil_only,
         lineno: line_no.into(),
         duration: py_spy::config::RecordDuration::Unlimited,
         ..py_spy::Config::default()
     });
+    let cpu_config = pyspy_config
+        .map(pyroscope::CpuConfig::PySpy)
+        .or(signal_config);
 
     let dynamic_tags = ThreadTagsSet::new();
 
@@ -249,7 +295,7 @@ fn initialize_agent(
 
     let result = ffikit::run(
         py,
-        PyroscopeAgentBuilder::new(agent_builder, pyspy_config, backend_config, dynamic_tags),
+        PyroscopeAgentBuilder::new(agent_builder, cpu_config, backend_config, dynamic_tags),
     );
     match result {
         Ok(_) => {
@@ -287,6 +333,27 @@ fn remove_thread_tag(key: String, value: String) -> bool {
 pub enum ProfilerImplementation {
     PySpy = 0,
     Stack = 1,
+    /// Experimental: unwinds the python stack of the thread on the CPU inside a `SIGPROF`
+    /// handler. CPython 3.11 to 3.14 only, no thread ids, names or line numbers.
+    Signal = 2,
+}
+
+#[pyclass(eq, eq_int, from_py_object)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SignalTimer {
+    /// One process-wide `setitimer(ITIMER_PROF)` timer.
+    ITimer = 0,
+    /// Linux only: one timer per python thread on its CPU clock.
+    CTimer = 1,
+}
+
+impl From<SignalTimer> for signal_sampler::SignalTimer {
+    fn from(val: SignalTimer) -> Self {
+        match val {
+            SignalTimer::ITimer => signal_sampler::SignalTimer::ITimer,
+            SignalTimer::CTimer => signal_sampler::SignalTimer::CTimer,
+        }
+    }
 }
 
 #[pyclass(eq, eq_int, from_py_object)]
@@ -311,6 +378,7 @@ impl From<LineNo> for py_spy::config::LineNo {
 fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LineNo>()?;
     m.add_class::<ProfilerImplementation>()?;
+    m.add_class::<SignalTimer>()?;
     m.add_function(wrap_pyfunction!(initialize_logging, m)?)?;
     m.add_function(wrap_pyfunction!(initialize_agent, m)?)?;
     m.add_function(wrap_pyfunction!(configure_experimental_stack_profiler, m)?)?;

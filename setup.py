@@ -1,9 +1,10 @@
-from setuptools import setup
-from setuptools_rust import Binding, RustExtension
-from pathlib import Path
+import os
 import sys
 import sysconfig
-import os
+from pathlib import Path
+
+from setuptools import setup
+from setuptools_rust import Binding, RustExtension
 
 # The C++ profilers read version-specific CPython internal structs, so they
 # must be compiled against the exact Python the wheel targets. Pass the
@@ -16,10 +17,12 @@ import os
 python_root = Path(sys.base_prefix).resolve()
 
 env = os.environ.copy()
-env.update({
-    "Python3_ROOT_DIR": f"{python_root}",
-    "Python3_EXECUTABLE": sys.executable,
-})
+env.update(
+    {
+        "Python3_ROOT_DIR": f"{python_root}",
+        "Python3_EXECUTABLE": sys.executable,
+    }
+)
 
 if sysconfig.get_config_var("Py_GIL_DISABLED") == 1:
     raise SystemExit(

@@ -1,0 +1,68 @@
+name: ASAN
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: CPython version
+        type: choice
+        default: all
+        options: [all, "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
+      profiler:
+        description: CPU profiler implementation
+        type: choice
+        default: all
+        options: [all, py-spy, signal, stack]
+      arch:
+        description: Architecture
+        type: choice
+        default: all
+        options: [all, amd64, arm64]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  asan-test:
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        PYTHON_VERSION: ${{ fromJSON(github.event_name == 'pull_request' && '["3.12"]' || (inputs.python-version && inputs.python-version != 'all') && format('["{0}"]', inputs.python-version) || '["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]') }}
+        profiler: ${{ fromJSON((inputs.profiler && inputs.profiler != 'all') && format('["{0}"]', inputs.profiler) || '["py-spy", "signal", "stack"]') }}
+        arch: ${{ fromJSON(github.event_name == 'pull_request' && '["amd64"]' || (inputs.arch && inputs.arch != 'all') && format('["{0}"]', inputs.arch) || '["amd64", "arm64"]') }}
+    name: ASAN Test - ${{ matrix.profiler }} - ${{ matrix.arch }} - ${{ matrix.PYTHON_VERSION }}
+    runs-on: ${{ matrix.arch == 'amd64' && (github.repository_owner == 'grafana' && 'ubuntu-x64-large' || 'ubuntu-latest') || (github.repository_owner == 'grafana' && 'ubuntu-arm64-large' || 'ubuntu-24.04-arm') }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: stable
+          cache-dependency-path: integration-test/go.mod
+      - name: Run ASAN tests
+        env:
+          PYROSCOPE_TEST_LOG_DIR: ${{ github.workspace }}/asan-results/containers
+          PROFILER: ${{ matrix.profiler }}
+          ASAN_PYTHON_REF: ${{ matrix.PYTHON_VERSION }}
+        run: |
+          mkdir -p asan-results
+          set -o pipefail
+          make asan/test 2>&1 | tee asan-results/test.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: asan-${{ matrix.profiler }}-${{ matrix.arch }}-${{ matrix.PYTHON_VERSION }}
+          path: asan-results/
+          if-no-files-found: warn

@@ -6,7 +6,6 @@ import time
 
 import pyroscope
 
-
 logger = logging.getLogger(__name__)
 shutdown_requested = threading.Event()
 

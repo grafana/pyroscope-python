@@ -2,3 +2,10 @@
 	path = dd-trace-py
 	url = git@github.com:grafana/dd-trace-py.git
 	branch = main
+[submodule "kindasafe"]
+	path = kindasafe
+	url = git@github.com:grafana/pyroscope-kinda-safe.git
+	branch = kk/signal-sampler-fixes
+[submodule "py-spy"]
+	path = py-spy
+	url = git@github.com:grafana/pyroscope-py-spy.git

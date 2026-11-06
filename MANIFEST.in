@@ -1,6 +1,7 @@
 include rust/Cargo.toml
 include rust/Cargo.lock
 include rust/build.rs
+recursive-include rust/crates/ Cargo.toml build.rs *.rs *.c
 recursive-include rust/src/ *.rs
 include rust/include/pyroscope_ffi.h
 include dd-trace-py/CMakeLists.txt
@@ -11,3 +12,13 @@ recursive-include dd-trace-py/ddtrace *.h
 recursive-include dd-trace-py/ddtrace *.cpp
 recursive-include dd-trace-py/ddtrace *.hpp
 recursive-include dd-trace-py/ddtrace *.cc
+include kindasafe/Cargo.toml
+include kindasafe/Cargo.lock
+include kindasafe/LICENSE
+recursive-include kindasafe/kindasafe Cargo.toml README.md *.rs
+recursive-include kindasafe/kindasafe_init Cargo.toml README.md *.rs
+include py-spy/Cargo.toml
+include py-spy/build.rs
+include py-spy/README.md
+include py-spy/LICENSE
+recursive-include py-spy/src *.rs

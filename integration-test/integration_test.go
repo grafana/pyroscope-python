@@ -27,9 +27,10 @@ const (
 )
 
 type profileConfig struct {
-	onCPU   bool
-	gilOnly bool
-	stack   bool
+	onCPU       bool
+	gilOnly     bool
+	stack       bool
+	signalTimer string
 }
 
 func TestPythonProfilerOnCPUWithGILOnly(t *testing.T) {
@@ -52,11 +53,75 @@ func TestPythonStackProfilerOnCPU(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, stack: true})
 }
 
-func TestPythonStackProfilerOffCPU(t *testing.T) {
-	testPythonProfilerConfiguration(t, profileConfig{onCPU: false, stack: true})
+func TestPythonSignalProfilerITimer(t *testing.T) {
+	skipUnlessPythonSupportsSignal(t)
+	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, signalTimer: "ITimer"})
+}
+
+func TestPythonSignalProfilerCTimer(t *testing.T) {
+	skipUnlessPythonSupportsSignal(t)
+	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, signalTimer: "CTimer"})
+}
+
+func TestPythonSignalProfilerCTimerRawFork(t *testing.T) {
+	skipUnlessPythonSupportsSignal(t)
+	wheelDir := ensureWheel(t)
+	net := dockertest.CreateNetwork(t)
+	pyroscopeURL := startPyroscope(t, net)
+	for _, scenario := range []string{"main", "unregistered"} {
+		t.Run(scenario, func(t *testing.T) {
+			appName := fmt.Sprintf("pyroscopers.python.test.rawfork.%s.%d", scenario, time.Now().UnixNano())
+			canary := randomHex(t, 16)
+			workload := startPythonTestContainer(t, net, wheelDir, "signal_ctimer_workload.py", map[string]string{
+				"SCENARIO":                   scenario,
+				"PYROSCOPE_APPLICATION_NAME": appName,
+				"CANARY":                     canary,
+			})
+			selector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
+			stack := "<module>;raw_fork;fork_and_profile;raw_fork_child_burn"
+			if scenario == "unregistered" {
+				stack = "raw_fork.<locals>.worker;fork_and_profile;raw_fork_child_burn"
+				if _, minor := pythonVersion(t); minor < 11 {
+					stack = "worker;fork_and_profile;raw_fork_child_burn"
+				}
+			}
+			requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector, profileShape{
+				stacks:   []stackShare{{stack, 0.90, 1}},
+				minTotal: int64(time.Second), minCoverage: 0.90,
+			}, 45*time.Second)
+		})
+	}
+}
+
+func TestPythonSignalProfilerCTimerArmingFailure(t *testing.T) {
+	skipUnlessPythonSupportsSignal(t)
+	wheelDir := ensureWheel(t)
+	net := dockertest.CreateNetwork(t)
+	startPyroscope(t, net)
+	workload := startPythonTestContainer(t, net, wheelDir, "signal_ctimer_workload.py", map[string]string{
+		"SCENARIO": "arming_failure",
+	})
+	requireContainerExit(t, workload, 0, time.Minute)
+	t.Log(workload.Logs(t))
+}
+
+func TestPythonSignalProfilerLifecycle(t *testing.T) {
+	skipUnlessPythonSupportsSignal(t)
+	wheelDir := ensureWheel(t)
+	net := dockertest.CreateNetwork(t)
+	startPyroscope(t, net)
+	for _, scenario := range []string{"zero_rate", "ctimer_shutdown_fork", "recovery_handlers_preserved", "bounded_drain", "fault_fallback"} {
+		t.Run(scenario, func(t *testing.T) {
+			workload := startPythonTestContainer(t, net, wheelDir, "signal_lifecycle_workload.py", map[string]string{
+				"SCENARIO": scenario,
+			})
+			requireContainerExit(t, workload, 0, 2*time.Minute)
+		})
+	}
 }
 
 func TestPythonStackProfilerRestart(t *testing.T) {
+	skipUnlessProfiler(t, "stack")
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -70,14 +135,60 @@ func TestPythonStackProfilerRestart(t *testing.T) {
 		"CANARY_SECOND":              canarySecond,
 	})
 	t.Cleanup(func() {
-		workload.Stop(t, 30*time.Second)
+		requireCleanStop(t, workload)
 	})
 
 	selector := func(canary string) string {
 		return fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
 	}
-	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector(canaryFirst), "burn_first", 4*time.Minute)
-	requireProfileContains(t, workload, pyroscopeURL, cpuProfileTypeID, selector(canarySecond), "burn_second", 3*time.Minute)
+	_, minor := pythonVersion(t)
+	prefix := threadStackPrefix(profileConfig{stack: true}, minor)
+	isSet := "Event.is_set"
+	if minor < 11 {
+		isSet = "is_set"
+	}
+	for _, phase := range []struct{ canary, leaf string }{{canaryFirst, "burn_first"}, {canarySecond, "burn_second"}} {
+		requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector(phase.canary), profileShape{
+			stacks: []stackShare{
+				{prefix + phase.leaf, 0.60, 1},
+				{prefix + phase.leaf + ";" + isSet, 0, 0.40},
+			},
+			minTotal: int64(time.Second), minCoverage: 0.90,
+		}, 3*time.Minute)
+	}
+}
+
+func TestPythonStackProfilerCpuTimerFork(t *testing.T) {
+	skipUnlessProfiler(t, "stack")
+	if !pythonSupportsCPUTimer(t) {
+		t.Skip("CPU timers require CPython 3.12+; older versions use the wall sampler")
+	}
+	wheelDir := ensureWheel(t)
+
+	net := dockertest.CreateNetwork(t)
+	pyroscopeURL := startPyroscope(t, net)
+	appName := fmt.Sprintf("pyroscopers.python.test.cputimerfork.%d", time.Now().UnixNano())
+	canary := randomHex(t, 16)
+	workload := startPythonTestContainer(t, net, wheelDir, "sighandler_workload.py", map[string]string{
+		"PYROSCOPE_APPLICATION_NAME": appName,
+		"SCENARIO":                   "cpu_timer_worker_fork_onstack_signal",
+		"CANARY":                     canary,
+	})
+
+	selector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
+	_, minor := pythonVersion(t)
+	prefix := threadStackPrefix(profileConfig{stack: true}, minor) +
+		"run_worker.<locals>.work;cpu_timer_worker_fork_onstack_signal.<locals>.work;burn_after_fork;burn_for"
+	// One second is spent in burn_for before the fork, then 15 seconds after.
+	// The inline arithmetic loop stays in one Python frame, so the complete
+	// post-fork stack should receive about 15/16 (94%) of the CPU sample weight.
+	requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector, profileShape{
+		stacks: []stackShare{
+			{prefix, 0.90, 1},
+		},
+		minTotal: int64(3 * time.Second), minCoverage: 0.90,
+	}, 3*time.Minute)
+	requireContainerExit(t, workload, 0, 3*time.Minute)
 }
 
 func TestPythonNonCPUIntegrationSuites(t *testing.T) {
@@ -88,30 +199,49 @@ func TestPythonNonCPUIntegrationSuites(t *testing.T) {
 }
 
 func TestPythonSignalHandlerSuites(t *testing.T) {
+	skipUnlessProfiler(t, "stack", "py-spy")
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
 	startPyroscope(t, net)
 	scenarios := []string{
 		"import_installs_nothing",
+		"stack_offcpu_refused",
 		"pyspy_and_memory_install_nothing",
-		"fast_copy_off_installs_nothing",
 		"first_cpu_configure_wins",
 		"stack_installs_both",
-		"fast_copy_off_leaves_faulthandler_unpatched",
+		"faulthandler_unpatched",
 		"reconfigure_keeps_handlers",
 		"foreign_after_configure_is_not_reclaimed",
 		"crash_with_our_handler",
 		"sigbus_with_our_handler",
 		"crash_chains_to_earlier_faulthandler",
 		"crash_after_faulthandler_takeover",
-		"enable_after_warmup_keeps_ours",
-		"disable_after_warmup_keeps_ours",
-		"enable_during_warmup_falls_back",
-		"takeover_falls_back_permanently",
+		"faulthandler_enable_after_configure_stops_sampling",
+		"takeover_stops_sampling",
+		"cpu_timer_unsupported_fallback",
+		"cpu_timer_restart_refused",
+		"cpu_timer_fork_child_refused",
+		"cpu_timer_shutdown_elsewhere_then_fork",
+		"cpu_timer_fork_keeps_app_altstack",
+		"cpu_timer_fork_on_altstack_keeps_mapping",
 	}
 	for _, scenario := range scenarios {
 		t.Run(scenario, func(t *testing.T) {
+			switch scenario {
+			case "import_installs_nothing":
+			case "pyspy_and_memory_install_nothing":
+				skipUnlessProfiler(t, "py-spy")
+			default:
+				skipUnlessProfiler(t, "stack")
+			}
+			if scenario == "cpu_timer_unsupported_fallback" {
+				if pythonSupportsCPUTimer(t) {
+					t.Skip("fallback applies to CPython older than 3.12")
+				}
+			} else if strings.HasPrefix(scenario, "cpu_timer_") && !pythonSupportsCPUTimer(t) {
+				t.Skip("CPU timers require CPython 3.12+; older versions use the wall sampler")
+			}
 			appName := fmt.Sprintf("pyroscopers.python.test.sighandler.%d", time.Now().UnixNano())
 			workload := startPythonTestContainer(t, net, wheelDir, "sighandler_workload.py", map[string]string{
 				"PYROSCOPE_APPLICATION_NAME": appName,
@@ -122,7 +252,37 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 	}
 }
 
+func skipUnlessPythonSupportsSignal(t *testing.T) {
+	t.Helper()
+	skipUnlessProfiler(t, "signal")
+	major, minor := pythonVersion(t)
+	if major != 3 || minor < 10 || minor > 14 {
+		t.Skip("the Signal profiler supports only CPython 3.10 to 3.14")
+	}
+}
+
+func pythonVersion(t *testing.T) (int, int) {
+	t.Helper()
+	var major, minor int
+	version := envOrDefault("PYTHON_VERSION", "3.11")
+	if _, err := fmt.Sscanf(version, "%d.%d", &major, &minor); err != nil {
+		t.Fatalf("invalid PYTHON_VERSION %q: %v", version, err)
+	}
+	return major, minor
+}
+
+func pythonSupportsCPUTimer(t *testing.T) bool {
+	t.Helper()
+	var major, minor int
+	version := envOrDefault("PYTHON_VERSION", "3.11")
+	if _, err := fmt.Sscanf(version, "%d.%d", &major, &minor); err != nil {
+		t.Fatalf("invalid PYTHON_VERSION %q: %v", version, err)
+	}
+	return major > 3 || major == 3 && minor >= 12
+}
+
 func testPythonMemoryProfiler(t *testing.T) {
+	// Memory profiling is independent of the CPU implementation; run it in every suite.
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -134,7 +294,7 @@ func testPythonMemoryProfiler(t *testing.T) {
 		"CANARY":                     canary,
 	})
 	t.Cleanup(func() {
-		workload.Stop(t, 30*time.Second)
+		requireCleanStop(t, workload)
 	})
 
 	labelSelector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
@@ -145,23 +305,17 @@ func testPythonMemoryProfiler(t *testing.T) {
 		{name: "alloc_space", profileTypeID: memoryAllocSpaceProfileTypeID},
 		{name: "inuse_space", profileTypeID: memoryInuseSpaceProfileTypeID},
 	}
+	_, minor := pythonVersion(t)
+	stack := threadStackPrefix(profileConfig{}, minor) + "memhog"
 	for _, profile := range profiles {
-		require.Eventually(t, func() bool {
-			collapsed, err := queryProfile(pyroscopeURL, profile.profileTypeID, labelSelector)
-			if err != nil {
-				t.Logf("query failed for %s: %v", profile.name, err)
-				return false
-			}
-			if collapsed == "" {
-				t.Logf("memory profile %s is empty", profile.name)
-				return false
-			}
-			if !strings.Contains(collapsed, "memhog") {
-				t.Logf("memory profile %s does not contain memhog yet:\n%s", profile.name, collapsed)
-				return false
-			}
-			return true
-		}, 3*time.Minute, 5*time.Second, "expected memhog samples in %s", profile.name)
+		t.Run(profile.name, func(t *testing.T) {
+			// The workload retains 8–16 MiB of bytearrays allocated at memhog.
+			// Allow heap sampling variance but require several MiB and dominance.
+			requireProfileShape(t, workload, pyroscopeURL, profile.profileTypeID, labelSelector, profileShape{
+				stacks:   []stackShare{{stack, 0.90, 1}},
+				minTotal: 4 * 1024 * 1024, minCoverage: 0.90,
+			}, 3*time.Minute)
+		})
 	}
 
 	collapsed, err := queryProfile(pyroscopeURL, cpuProfileTypeID, labelSelector)
@@ -170,6 +324,7 @@ func testPythonMemoryProfiler(t *testing.T) {
 }
 
 func testPythonConcurrentConfigureShutdown(t *testing.T) {
+	skipUnlessProfiler(t, "py-spy")
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -183,6 +338,7 @@ func testPythonConcurrentConfigureShutdown(t *testing.T) {
 }
 
 func testPythonAtexitShutdown(t *testing.T) {
+	skipUnlessProfiler(t, "py-spy")
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -196,6 +352,7 @@ func testPythonAtexitShutdown(t *testing.T) {
 }
 
 func testPythonForkChild(t *testing.T) {
+	skipUnlessProfiler(t, "stack")
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -208,24 +365,17 @@ func testPythonForkChild(t *testing.T) {
 	})
 
 	labelSelector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
-	require.Eventually(t, func() bool {
-		collapsed, err := queryProfile(pyroscopeURL, cpuProfileTypeID, labelSelector)
-		if err != nil {
-			t.Logf("query failed: %v", err)
-			return false
-		}
-		if !strings.Contains(collapsed, "main;fork;fork_child_main;fork_child_burn") {
-			t.Logf("fork child profile does not contain main;fork;fork_child_main;fork_child_burn yet:\n%s", collapsed)
-			return false
-		}
-		return true
-	}, 3*time.Minute, 5*time.Second, "expected fork_child_burn samples from the fork child")
+	requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, labelSelector, profileShape{
+		stacks:   []stackShare{{"<module>;main;fork;fork_child_main;fork_child_burn", 0.90, 1}},
+		minTotal: int64(time.Second), minCoverage: 0.90,
+	}, 3*time.Minute)
 
 	requireContainerExit(t, workload, 0, 3*time.Minute)
 }
 
 func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 	t.Helper()
+	skipUnlessProfiler(t, cfg.profilerName())
 	wheelDir := ensureWheel(t)
 
 	net := dockertest.CreateNetwork(t)
@@ -234,7 +384,7 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 	canary := randomHex(t, 16)
 	workload := startWorkload(t, net, appName, canary, cfg, wheelDir)
 	t.Cleanup(func() {
-		workload.Stop(t, 30*time.Second)
+		requireCleanStop(t, workload)
 	})
 
 	labelSelector := fmt.Sprintf(
@@ -245,6 +395,8 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 		boolString(cfg.gilOnly),
 	)
 
+	_, minor := pythonVersion(t)
+	collectUntil := time.Now().Add(15 * time.Second)
 	var workloadExited bool
 	var workloadExitCode int
 	require.Eventually(t, func() bool {
@@ -259,6 +411,10 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 			return true
 		}
 
+		if time.Now().Before(collectUntil) {
+			return false
+		}
+
 		collapsed, err := queryProfile(pyroscopeURL, cpuProfileTypeID, labelSelector)
 		if err != nil {
 			t.Logf("query failed for %s: %v", cfg, err)
@@ -268,12 +424,13 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 			t.Logf("profile for %s is empty", cfg)
 			return false
 		}
-		if !strings.Contains(collapsed, "multihash") {
-			t.Logf("profile for %s does not contain multihash yet:\n%s", cfg, collapsed)
+		if err := checkConfigurationProfile(collapsed, cfg, minor); err != nil {
+			t.Logf("profile for %s: %v\n%s", cfg, err, collapsed)
 			return false
 		}
+		t.Logf("profile for %s:\n%s", cfg, collapsed)
 		return true
-	}, 3*time.Minute, 5*time.Second, "expected multihash samples for %s", cfg)
+	}, 3*time.Minute, 5*time.Second, "expected exact stacks and sample proportions for %s", cfg)
 	if workloadExited {
 		t.Fatalf("workload container exited before producing the expected profile (exit code %d)", workloadExitCode)
 	}
@@ -299,21 +456,23 @@ func startPyroscope(t *testing.T, net *dockertest.Network) string {
 
 func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string, cfg profileConfig, wheelDir string) *dockertest.Container {
 	t.Helper()
+	env := map[string]string{
+		"PYTHONUNBUFFERED":              "1",
+		"PYTHONDONTWRITEBYTECODE":       "1",
+		"PYROSCOPE_APPLICATION_NAME":    appName,
+		"PYROSCOPE_SERVER_ADDRESS":      "http://pyroscope:4040",
+		"ONCPU":                         boolString(cfg.onCPU),
+		"GIL_ONLY":                      boolString(cfg.gilOnly),
+		"CPU_IMPLEMENTATION":            cfg.implementation(),
+		"SIGNAL_TIMER":                  cfg.signalTimer,
+		"CANARY":                        canary,
+		"PIP_DISABLE_PIP_VERSION_CHECK": "1",
+	}
 	return dockertest.StartContainer(t, dockertest.ContainerRequest{
 		Image:    pythonImage(),
 		Platform: wheelDockerPlatform(),
 		Network:  net.Name,
-		Env: map[string]string{
-			"PYTHONUNBUFFERED":              "1",
-			"PYTHONDONTWRITEBYTECODE":       "1",
-			"PYROSCOPE_APPLICATION_NAME":    appName,
-			"PYROSCOPE_SERVER_ADDRESS":      "http://pyroscope:4040",
-			"ONCPU":                         boolString(cfg.onCPU),
-			"GIL_ONLY":                      boolString(cfg.gilOnly),
-			"CPU_IMPLEMENTATION":            cfg.implementation(),
-			"CANARY":                        canary,
-			"PIP_DISABLE_PIP_VERSION_CHECK": "1",
-		},
+		Env:      env,
 		Volumes: []string{
 			repoRoot() + ":/pyroscope-python:ro",
 			wheelDir + ":/pyroscope-wheels:ro",
@@ -321,7 +480,7 @@ func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string
 		Cmd: []string{
 			"sh",
 			"-c",
-			"python -m pip install --no-cache-dir --no-index --find-links /pyroscope-wheels pyroscope-io && python /pyroscope-python/integration-test/testdata/workload.py",
+			"python -m pip install --no-cache-dir --no-index --find-links /pyroscope-wheels pyroscope-io && exec python /pyroscope-python/integration-test/testdata/workload.py",
 		},
 	})
 }
@@ -350,7 +509,7 @@ func startPythonTestContainer(t *testing.T, net *dockertest.Network, wheelDir, s
 			"sh",
 			"-c",
 			fmt.Sprintf(
-				"python -m pip install --no-cache-dir --no-index --find-links /pyroscope-wheels pyroscope-io && python /pyroscope-python/integration-test/testdata/%s",
+				"python -m pip install --no-cache-dir --no-index --find-links /pyroscope-wheels pyroscope-io && exec python /pyroscope-python/integration-test/testdata/%s",
 				script,
 			),
 		},
@@ -363,17 +522,39 @@ func requireContainerExit(t *testing.T, container *dockertest.Container, expecte
 	if code != expected {
 		t.Fatalf("container exited with %d, expected %d\nlogs:\n%s", code, expected, container.Logs(t))
 	}
+	requireNoSanitizerReport(t, container)
 }
 
-// The workload is expected to outlive the poll, so its exit means one of its
-// own assertions tripped rather than that the samples went missing.
-func requireProfileContains(
+func requireCleanStop(t *testing.T, workload *dockertest.Container) {
+	t.Helper()
+	workload.Stop(t, 30*time.Second)
+	state, err := workload.State()
+	if err != nil {
+		t.Errorf("failed to inspect workload container after stop: %v", err)
+		return
+	}
+	if state.Running || state.ExitCode != 0 {
+		t.Errorf("workload container did not exit cleanly after stop (running=%t, exit code %d)\nlogs:\n%s",
+			state.Running, state.ExitCode, workload.Logs(t))
+		return
+	}
+	requireNoSanitizerReport(t, workload)
+}
+
+func requireNoSanitizerReport(t *testing.T, container *dockertest.Container) {
+	t.Helper()
+	if logs := container.Logs(t); strings.Contains(logs, "ERROR: AddressSanitizer") {
+		t.Errorf("container logged an AddressSanitizer report\nlogs:\n%s", logs)
+	}
+}
+
+// Wait for a substantial profile and check exact complete stacks and their weight.
+// A successful finite workload may exit before Pyroscope makes its data queryable.
+func requireProfileShape(
 	t *testing.T,
 	workload *dockertest.Container,
-	pyroscopeURL string,
-	profileTypeID string,
-	labelSelector string,
-	needle string,
+	pyroscopeURL, profileTypeID, labelSelector string,
+	want profileShape,
 	timeout time.Duration,
 ) {
 	t.Helper()
@@ -383,24 +564,22 @@ func requireProfileContains(
 			t.Logf("failed to inspect workload container: %v", err)
 			return false
 		}
-		if !state.Running {
-			t.Fatalf(
-				"workload container exited with %d while waiting for %s\nlogs:\n%s",
-				state.ExitCode, needle, workload.Logs(t),
-			)
+		if !state.Running && state.ExitCode != 0 {
+			t.Fatalf("workload container exited with %d while waiting for profile %s\nlogs:\n%s",
+				state.ExitCode, labelSelector, workload.Logs(t))
 		}
-
 		collapsed, err := queryProfile(pyroscopeURL, profileTypeID, labelSelector)
 		if err != nil {
-			t.Logf("query failed for %s: %v", needle, err)
+			t.Logf("query failed for %s: %v", labelSelector, err)
 			return false
 		}
-		if !strings.Contains(collapsed, needle) {
-			t.Logf("profile %s does not contain %s yet:\n%s", labelSelector, needle, collapsed)
+		if err := checkProfileShape(collapsed, want); err != nil {
+			t.Logf("profile %s: %v\n%s", labelSelector, err, collapsed)
 			return false
 		}
+		t.Logf("profile %s:\n%s", labelSelector, collapsed)
 		return true
-	}, timeout, 5*time.Second, "expected %s samples in %s", needle, labelSelector)
+	}, timeout, 5*time.Second, "expected exact stacks and sample proportions in %s", labelSelector)
 }
 
 func queryProfile(pyroscopeURL string, profileTypeID string, labelSelector string) (string, error) {
@@ -467,6 +646,9 @@ func wheelDir() string {
 }
 
 func wheelPattern() string {
+	if glob := os.Getenv("PYROSCOPE_WHEEL_GLOB"); glob != "" {
+		return glob
+	}
 	target := wheelBuildTarget()
 	platform := "manylinux"
 	if strings.HasPrefix(target, "musllinux/") {
@@ -565,9 +747,16 @@ func (c profileConfig) implementation() string {
 	if c.stack {
 		return "Stack"
 	}
+	if c.signalTimer != "" {
+		return "Signal"
+	}
 	return "PySpy"
 }
 
 func (c profileConfig) String() string {
-	return fmt.Sprintf("oncpu=%s/gil_only=%s/impl=%s", boolString(c.onCPU), boolString(c.gilOnly), c.implementation())
+	s := fmt.Sprintf("oncpu=%s/gil_only=%s/impl=%s", boolString(c.onCPU), boolString(c.gilOnly), c.implementation())
+	if c.signalTimer != "" {
+		s += "/timer=" + c.signalTimer
+	}
+	return s
 }
