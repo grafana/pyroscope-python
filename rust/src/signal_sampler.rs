@@ -13,7 +13,6 @@ use timer::Timer;
 use timer::{Mode, SignalHandler};
 use unwind::{Frame, MAX_FRAMES};
 
-pub(crate) mod notification;
 mod resolve;
 pub use py_spy::{Frame as ResolvedFrame, config::LineNo as Lines};
 use pyroscope_python_unwind as unwind;
@@ -21,10 +20,7 @@ use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
 
 extern "C" fn signal_handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut libc::c_void) {
-    notification::REGISTRY.with(|notification| {
-        unwind::handler();
-        notification.published(unwind::occupied_slots);
-    });
+    unwind::handler();
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,9 +73,7 @@ pub type SharedTimer = Arc<Mutex<Option<Timer>>>;
 pub struct SignalHandlerSession {
     timer: SharedTimer,
     // Dropped after the timer, see the `Drop` impl.
-    registration: Option<notification::Registration<'static>>,
     _handler: SignalHandler,
-    notification: Arc<notification::Notification>,
     buf: Vec<Frame>,
     resolver: resolve::Resolver,
 }
@@ -112,11 +106,6 @@ impl SignalHandlerSession {
 
         let signal_handler = SignalHandler::install(Timer::SIGNAL, signal_handler)
             .map_err(|e| format!("failed to install the signal handler: {e}"))?;
-        let notification = Arc::new(
-            notification::Notification::new()
-                .map_err(|e| format!("failed to create consumer notification: {e}"))?,
-        );
-        let registration = notification::REGISTRY.register(notification.clone());
         // Discard drop counts left by the previous session before arming the timer.
         unwind::METRICS.take_drop_counts();
         let interval = Duration::from_secs_f64(1.0 / config.sampling_rate as f64);
@@ -131,42 +120,10 @@ impl SignalHandlerSession {
             Timer::start(mode, interval).map_err(|e| format!("failed to start the timer: {e}"))?;
         Ok(SignalHandlerSession {
             timer: Arc::new(Mutex::new(Some(timer))),
-            registration: Some(registration),
             _handler: signal_handler,
-            notification,
             buf,
             resolver,
         })
-    }
-
-    pub(crate) fn notification(&self) -> Arc<notification::Notification> {
-        self.notification.clone()
-    }
-
-    pub fn has_samples(&self) -> bool {
-        unwind::occupied_slots() != 0
-    }
-
-    pub fn wait(&self, running: &std::sync::atomic::AtomicBool) -> std::io::Result<()> {
-        if !self.has_samples() {
-            self.notification
-                .wait(1, None, running, unwind::occupied_slots)?;
-        }
-        if running.load(std::sync::atomic::Ordering::Acquire) {
-            self.notification.wait(
-                unwind::SLOTS / 2,
-                Some(notification::MAX_DELAY),
-                running,
-                unwind::occupied_slots,
-            )?;
-        }
-        Ok(())
-    }
-
-    pub fn stop(&mut self) {
-        *self.timer.lock().unwrap_or_else(|e| e.into_inner()) = None;
-        // Quiesce callbacks before the final drain or closing their descriptors.
-        self.registration.take();
     }
 
     pub fn timer(&self) -> SharedTimer {
@@ -198,7 +155,7 @@ impl Drop for SignalHandlerSession {
     /// Stops the timers before the handler is removed. Holding the lock keeps a concurrent hook
     /// from using a dead timer.
     fn drop(&mut self) {
-        self.stop();
+        *self.timer.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }
 

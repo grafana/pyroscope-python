@@ -83,15 +83,9 @@ pub struct Frame {
     pub instr: usize,
 }
 
-/// Ring capacity in frame slots, including one header slot per stack.
-pub const SLOTS: usize = 1 << 16;
+const SLOTS: usize = 1 << 16;
 
 static RECORDS: RingBuffer<Frame, SLOTS> = RingBuffer::new();
-
-/// Approximate occupied frame slots, including record headers, for consumer scheduling.
-pub fn occupied_slots() -> usize {
-    RECORDS.occupied_slots()
-}
 
 /// Reads the records the handler wrote. `None` if another consumer is active.
 pub fn consumer() -> Option<Consumer<'static, Frame, SLOTS>> {
