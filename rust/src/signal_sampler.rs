@@ -13,14 +13,25 @@ use timer::Timer;
 use timer::{Mode, SignalHandler};
 use unwind::{Frame, MAX_FRAMES};
 
+mod notification;
 mod resolve;
+pub(crate) use notification::Notification;
 pub use py_spy::{Frame as ResolvedFrame, config::LineNo as Lines};
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
 
 extern "C" fn signal_handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut libc::c_void) {
-    unwind::handler();
+    #[cfg(target_os = "linux")]
+    let errno = unsafe { libc::__errno_location() };
+    #[cfg(target_os = "macos")]
+    let errno = unsafe { libc::__error() };
+    let saved_errno = unsafe { *errno };
+    if let Some(fd) = notification::enter_callback() {
+        let wake = unwind::handler();
+        notification::leave_callback(fd, wake);
+    }
+    unsafe { *errno = saved_errno };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,6 +87,7 @@ pub struct SignalHandlerSession {
     _handler: SignalHandler,
     buf: Vec<Frame>,
     resolver: resolve::Resolver,
+    notification: Arc<Notification>,
 }
 
 impl SignalHandlerSession {
@@ -97,6 +109,10 @@ impl SignalHandlerSession {
         };
 
         let resolver = resolve::Resolver::new(types, config.lines);
+        let notification = Arc::new(
+            Notification::new()
+                .map_err(|e| format!("failed to create signal notification: {e}"))?,
+        );
 
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];
@@ -118,16 +134,27 @@ impl SignalHandlerSession {
         };
         let timer =
             Timer::start(mode, interval).map_err(|e| format!("failed to start the timer: {e}"))?;
+        notification.activate();
         Ok(SignalHandlerSession {
             timer: Arc::new(Mutex::new(Some(timer))),
             _handler: signal_handler,
             buf,
             resolver,
+            notification,
         })
     }
 
     pub fn timer(&self) -> SharedTimer {
         self.timer.clone()
+    }
+
+    pub fn notification(&self) -> Arc<Notification> {
+        self.notification.clone()
+    }
+
+    pub fn stop_sampling(&self) {
+        *self.timer.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.notification.deactivate();
     }
 
     /// Resolves a bounded batch of recorded stacks, each innermost frame first.
@@ -155,7 +182,7 @@ impl Drop for SignalHandlerSession {
     /// Stops the timers before the handler is removed. Holding the lock keeps a concurrent hook
     /// from using a dead timer.
     fn drop(&mut self) {
-        *self.timer.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.stop_sampling();
     }
 }
 

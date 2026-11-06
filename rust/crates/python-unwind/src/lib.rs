@@ -92,21 +92,45 @@ pub fn consumer() -> Option<Consumer<'static, Frame, SLOTS>> {
     RECORDS.consumer()
 }
 
+pub fn arm_sleep() -> bool {
+    RECORDS.arm_sleep()
+}
+
+pub fn is_empty() -> bool {
+    RECORDS.is_empty()
+}
+
+pub fn published_index() -> usize {
+    RECORDS.published_index()
+}
+
+pub fn consumed_through(index: usize) -> bool {
+    RECORDS.consumed_through(index)
+}
+
+pub fn end_wakeup() -> bool {
+    RECORDS.end_wakeup()
+}
+
 /// Unwinds the interrupted thread into the ring buffer. Requires successful recovery initialization
 /// and both recovery signals to remain unblocked, as documented by [`unwind`].
-pub fn handler() {
+pub fn handler() -> bool {
     // TODO: consider MaybeUninit for frame storage after measuring the initialization cost.
     let mut frames = [Frame::default(); MAX_FRAMES];
     // Unwind errors are counted by the unwinder. Never publish a partial stack.
     let Ok(frames) = unwind(&mut frames) else {
-        return;
+        return false;
     };
     let Some(mut producer) = RECORDS.producer() else {
         METRICS.contentions.fetch_add(1, Ordering::Relaxed);
-        return;
+        return false;
     };
-    if producer.push_slice(frames).is_err() {
-        METRICS.buffer_dropped.fetch_add(1, Ordering::Relaxed);
+    match producer.push_slice_and_check_wakeup(frames) {
+        Ok(wake) => wake,
+        Err(_) => {
+            METRICS.buffer_dropped.fetch_add(1, Ordering::Relaxed);
+            producer.wake_on_full()
+        }
     }
 }
 

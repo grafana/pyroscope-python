@@ -2,7 +2,9 @@ use crate::{
     backend::{BackendConfig, StackBuffer, StackFrame, StackTrace},
     error::{PyroscopeError, Result},
     pyspy_backend::Reporter,
-    signal_sampler::{self, ResolvedFrame, SharedTimer, SignalHandlerSession, SignalTimer},
+    signal_sampler::{
+        self, Notification, ResolvedFrame, SharedTimer, SignalHandlerSession, SignalTimer,
+    },
 };
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -11,9 +13,9 @@ use std::{
     sync::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicBool, AtomicU32, Ordering},
+        mpsc,
     },
     thread::JoinHandle,
-    time::Duration,
 };
 
 const LOG_TAG: &str = "Pyroscope::Signal";
@@ -28,6 +30,36 @@ pub struct Signal {
     backend_config: BackendConfig,
     sampler_thread: Option<JoinHandle<()>>,
     running: Arc<AtomicBool>,
+    flush: Arc<Flush>,
+}
+
+struct FlushRequest {
+    through: usize,
+    done: mpsc::Sender<()>,
+}
+
+pub(crate) struct Flush {
+    requests: mpsc::Sender<FlushRequest>,
+    notification: Arc<Notification>,
+}
+
+impl Flush {
+    /// The ring may stay below its wake threshold for an entire report interval.
+    /// Snapshot the published index and wait until the sampling thread has moved
+    /// every earlier record into the reporter's buffer.
+    pub fn request(&self) -> Result<()> {
+        let (done, completed) = mpsc::channel();
+        self.requests
+            .send(FlushRequest {
+                through: pyroscope_python_unwind::published_index(),
+                done,
+            })
+            .map_err(|_| PyroscopeError::new("Signal: sampler stopped before report boundary"))?;
+        self.notification.wake();
+        completed
+            .recv()
+            .map_err(|_| PyroscopeError::new("Signal: sampler stopped during report boundary"))
+    }
 }
 
 impl Signal {
@@ -40,13 +72,22 @@ impl Signal {
 
         let buffer = Arc::new(Mutex::new(StackBuffer::default()));
         let running = Arc::new(AtomicBool::new(true));
+        let notification = session.notification();
+        let (requests, pending) = mpsc::channel::<FlushRequest>();
+        let flush = Arc::new(Flush {
+            requests,
+            notification: notification.clone(),
+        });
         let sampler_thread = {
             let buffer = buffer.clone();
             let running = running.clone();
             std::thread::spawn(move || {
                 let pid = std::process::id();
-                while running.load(Ordering::Relaxed) {
-                    std::thread::sleep(Duration::from_millis(10)); //todo do not wake up on every 10ms, notify from producer when buf is half full
+                let mut boundaries: Vec<FlushRequest> = Vec::new();
+                while running.load(Ordering::Acquire) {
+                    while let Ok(request) = pending.try_recv() {
+                        boundaries.push(request);
+                    }
                     let traces = session.drain();
                     let Ok(mut buffer) = buffer.lock() else {
                         break;
@@ -56,9 +97,38 @@ impl Signal {
                         // TODO: Apply thread tags once samples include the thread ID.
                         let _ = buffer.record(trace);
                     }
+                    drop(buffer);
+                    boundaries.retain(|request| {
+                        if pyroscope_python_unwind::consumed_through(request.through) {
+                            let _ = request.done.send(());
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                    if pyroscope_python_unwind::is_empty() && pyroscope_python_unwind::arm_sleep() {
+                        if let Err(error) = notification.wait() {
+                            log::error!(target: LOG_TAG, "signal notification failed: {error}");
+                            break;
+                        }
+                    }
                 }
                 if config.sampler.signal_timer == SignalTimer::CTimer {
                     threads::detach();
+                }
+                session.stop_sampling();
+                // Preserve published records before shutdown completes.
+                loop {
+                    let traces = session.drain();
+                    let Ok(mut buffer) = buffer.lock() else {
+                        break;
+                    };
+                    for frames in traces {
+                        let _ = buffer.record(to_stack_trace(frames, &backend_config, pid));
+                    }
+                    if pyroscope_python_unwind::is_empty() {
+                        break;
+                    }
                 }
                 drop(session);
             })
@@ -69,15 +139,22 @@ impl Signal {
             backend_config,
             sampler_thread: Some(sampler_thread),
             running,
+            flush,
         })
     }
 
     pub fn reporter(&self) -> Reporter {
-        Reporter::new_signal(self.buffer.clone(), self.backend_config)
+        Reporter::new_signal_with_flush(
+            self.buffer.clone(),
+            self.backend_config,
+            self.flush.clone(),
+        )
     }
 
     pub fn shutdown_thread(&mut self) -> Result<()> {
-        self.running.store(false, Ordering::Relaxed);
+        self.running.store(false, Ordering::Release);
+        pyroscope_python_unwind::end_wakeup();
+        self.flush.notification.wake();
         if let Some(handle) = self.sampler_thread.take() {
             handle
                 .join()
@@ -257,6 +334,94 @@ mod tests {
     };
     use prost::Message;
     use std::time::{Duration, UNIX_EPOCH};
+
+    #[test]
+    fn sparse_sample_is_recorded_before_report_boundary() {
+        let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
+        pyroscope_python_unwind::METRICS.take_drop_counts();
+        let notification = Arc::new(Notification::new().unwrap());
+        let (requests, pending) = mpsc::channel::<FlushRequest>();
+        let flush = Arc::new(Flush {
+            requests,
+            notification: notification.clone(),
+        });
+        let config = BackendConfig::default();
+        let buffer = Arc::new(Mutex::new(StackBuffer::default()));
+        let reporter = Reporter::new_signal_with_flush(buffer.clone(), config, flush);
+        let worker = std::thread::spawn(move || {
+            notification.wait().unwrap();
+            let request = pending.recv().unwrap();
+            buffer
+                .lock()
+                .unwrap()
+                .record(StackTrace::new(
+                    &config,
+                    Some(123),
+                    None,
+                    None,
+                    vec![
+                        StackFrame {
+                            name: "leaf".into(),
+                            filename: "sparse.py".into(),
+                            line: 20,
+                        },
+                        StackFrame {
+                            name: "root".into(),
+                            filename: "sparse.py".into(),
+                            line: 10,
+                        },
+                    ],
+                ))
+                .unwrap();
+            request.done.send(()).unwrap();
+        });
+        let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(1)).unwrap();
+        let report = reporter.report(100, &range).unwrap();
+        worker.join().unwrap();
+        let crate::backend::ReportData::RawPprof(bytes) = report.data else {
+            panic!("expected pprof")
+        };
+        let profile = Profile::decode(bytes.as_slice()).unwrap();
+        let actual: Vec<_> = profile
+            .sample
+            .iter()
+            .map(|sample| {
+                let frames: Vec<_> = sample
+                    .location_id
+                    .iter()
+                    .rev()
+                    .flat_map(|id| {
+                        let location = profile
+                            .location
+                            .iter()
+                            .find(|location| location.id == *id)
+                            .unwrap();
+                        location.line.iter().map(|line| {
+                            let function = profile
+                                .function
+                                .iter()
+                                .find(|function| function.id == line.function_id)
+                                .unwrap();
+                            (
+                                profile.string_table[function.name as usize].as_str(),
+                                profile.string_table[function.filename as usize].as_str(),
+                                line.line,
+                            )
+                        })
+                    })
+                    .collect();
+                (frames, sample.value.clone())
+            })
+            .collect();
+        assert_eq!(
+            actual,
+            [(
+                vec![("root", "sparse.py", 10), ("leaf", "sparse.py", 20)],
+                vec![10_000_000]
+            )],
+            "{profile:#?}"
+        );
+    }
 
     #[test]
     fn drop_reasons_are_single_frame_pprof_samples_with_exact_weights() {

@@ -31,6 +31,94 @@ fn empty_record() {
 }
 
 #[test]
+fn sleeping_reader_carries_flag_until_half_full_and_wakes_once() {
+    let rb = RingBuffer::<usize, 16>::new();
+    assert!(rb.arm_sleep());
+    let mut producer = rb.producer().unwrap();
+    for value in 0..3 {
+        assert_eq!(producer.push_slice_and_check_wakeup(&[value]), Ok(false));
+    }
+    assert_eq!(producer.push_slice_and_check_wakeup(&[3]), Ok(true));
+    assert_eq!(producer.push_slice_and_check_wakeup(&[4]), Ok(false));
+    drop(producer);
+    let mut consumer = rb.consumer().unwrap();
+    let mut observed = Vec::new();
+    for _ in 0..5 {
+        let mut out = [0];
+        assert_eq!(consumer.pop_slice(&mut out), Ok(1));
+        observed.push(out[0]);
+    }
+    assert_eq!(observed, [0, 1, 2, 3, 4]);
+    assert!(rb.arm_sleep());
+}
+
+#[test]
+fn ending_clears_sleep_and_claims_one_wakeup() {
+    let rb = RingBuffer::<usize, 16>::new();
+    assert!(rb.arm_sleep());
+    assert!(rb.end_wakeup());
+    assert!(!rb.end_wakeup());
+    assert!(rb.arm_sleep());
+}
+
+#[test]
+fn full_buffer_claims_pending_wakeup() {
+    let rb = RingBuffer::<usize, 8>::new();
+    let mut producer = rb.producer().unwrap();
+    producer.push_slice(&[1, 2, 3, 4, 5, 6, 7]).unwrap();
+    assert!(rb.arm_sleep() == false);
+    // A sleeping reader can be below the half-full watermark when the next
+    // record is larger than the remaining capacity.
+    let mut consumer = rb.consumer().unwrap();
+    assert_eq!(consumer.pop_slice(&mut [0; 7]), Ok(7));
+    assert!(rb.arm_sleep());
+    assert_eq!(producer.push_slice_and_check_wakeup(&[1, 2]), Ok(false));
+    assert_eq!(producer.push_slice_and_check_wakeup(&[3, 4, 5, 6, 7]), Err(Full));
+    assert!(producer.wake_on_full());
+    assert!(!producer.wake_on_full());
+}
+
+#[test]
+fn boundary_index_tracks_sparse_records_across_bounded_batches() {
+    let rb = RingBuffer::<usize, 128>::new();
+    let mut producer = rb.producer().unwrap();
+    for i in 0..40 { producer.push_slice(&[i]).unwrap(); }
+    let boundary = rb.published_index();
+    let mut consumer = rb.consumer().unwrap();
+    let mut out = [0];
+    for i in 0..16 { assert_eq!(consumer.pop_slice(&mut out), Ok(1)); assert_eq!(out[0], i); }
+    assert!(!rb.consumed_through(boundary));
+    for i in 16..40 { assert_eq!(consumer.pop_slice(&mut out), Ok(1)); assert_eq!(out[0], i); }
+    assert!(rb.consumed_through(boundary));
+}
+
+#[test]
+fn publication_racing_reader_rearm_never_requires_an_unclaimed_wake() {
+    use std::sync::{Arc, Barrier};
+    for _ in 0..500 {
+        let rb = Arc::new(RingBuffer::<usize, 8>::new());
+        let gate = Arc::new(Barrier::new(2));
+        let writer = rb.clone();
+        let writer_gate = gate.clone();
+        let thread = std::thread::spawn(move || {
+            writer_gate.wait();
+            let mut producer = writer.producer().unwrap();
+            let mut woke = false;
+            for value in 0..2 {
+                woke |= producer.push_slice_and_check_wakeup(&[value]).unwrap();
+            }
+            woke
+        });
+        gate.wait();
+        let armed = rb.arm_sleep();
+        let woke = thread.join().unwrap();
+        assert!(!armed || woke, "reader armed without a wake after half-full publication");
+        let mut consumer = rb.consumer().unwrap();
+        assert_eq!(drain(&mut consumer), vec![vec![0], vec![1]]);
+    }
+}
+
+#[test]
 fn too_small_output_keeps_record() {
     let rb = RingBuffer::<usize, 4>::new();
     let mut p = rb.producer().unwrap();
@@ -100,8 +188,8 @@ fn oversized_record_leaves_buffer_unchanged() {
 fn wraps_machine_word_counter() {
     use std::sync::atomic::Ordering;
     let rb = RingBuffer::<usize, 8>::new();
-    rb.head.store(usize::MAX - 2, Ordering::Relaxed);
-    rb.tail.store(usize::MAX - 2, Ordering::Relaxed);
+    rb.head.store(super::super::INDEX - 2, Ordering::Relaxed);
+    rb.tail.store(super::super::INDEX - 2, Ordering::Relaxed);
     let mut p = rb.producer().unwrap();
     let mut c = rb.consumer().unwrap();
     p.push_slice(&[1, 2, 3, 4]).unwrap();

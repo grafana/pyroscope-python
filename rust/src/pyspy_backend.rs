@@ -29,6 +29,7 @@ pub struct Pyspy {
 pub struct Reporter {
     buffer: Arc<Mutex<StackBuffer>>,
     signal_config: Option<BackendConfig>,
+    signal_flush: Option<Arc<crate::signal_backend::Flush>>,
 }
 
 impl Pyspy {
@@ -53,6 +54,7 @@ impl Pyspy {
         Reporter {
             buffer: self.buffer.clone(),
             signal_config: None,
+            signal_flush: None,
         }
     }
 }
@@ -131,10 +133,24 @@ impl Reporter {
         Reporter {
             buffer,
             signal_config: Some(config),
+            signal_flush: None,
         }
     }
 
+    pub(crate) fn new_signal_with_flush(
+        buffer: Arc<Mutex<StackBuffer>>,
+        config: BackendConfig,
+        flush: Arc<crate::signal_backend::Flush>,
+    ) -> Self {
+        let mut reporter = Self::new_signal(buffer, config);
+        reporter.signal_flush = Some(flush);
+        reporter
+    }
+
     pub fn report(&self, sample_rate: u32, time_range: &TimeRange) -> Result<ReportBatch> {
+        if let Some(flush) = &self.signal_flush {
+            flush.request()?;
+        }
         let mut report = std::mem::take(&mut *self.buffer.lock()?);
         let data = if let Some(config) = &self.signal_config {
             // Add one weighted stack per drop reason only when building the pprof.
