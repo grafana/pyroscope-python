@@ -49,6 +49,51 @@ def ctimer_shutdown_fork():
     assert os.waitstatus_to_exitcode(status) == 0, status
 
 
+def ctimer_preexisting_thread_cleanup():
+    assert sys.version_info >= (3, 11)
+    release_old = threading.Event()
+    release_new = threading.Event()
+    ready_old = threading.Event()
+    ready_new = threading.Event()
+
+    def worker(ready, release):
+        ready.set()
+        assert release.wait(30)
+
+    old = threading.Thread(target=worker, args=(ready_old, release_old))
+    old.start()
+    assert ready_old.wait(10)
+
+    try:
+        assert configure(signal_timer=pyroscope.SignalTimer.CTimer)
+        old_timer = f"tid.{old.native_id}\n"
+        assert old_timer in Path("/proc/self/timers").read_text()
+
+        new = threading.Thread(target=worker, args=(ready_new, release_new))
+        new.start()
+        try:
+            assert ready_new.wait(10)
+            new_timer = f"tid.{new.native_id}\n"
+            timers = Path("/proc/self/timers").read_text()
+            assert old_timer in timers and new_timer in timers, timers
+
+            release_old.set()
+            old.join(10)
+            assert not old.is_alive()
+            timers = Path("/proc/self/timers").read_text()
+            assert old_timer not in timers and new_timer in timers, timers
+
+            assert pyroscope.shutdown()
+            assert not Path("/proc/self/timers").read_text().strip()
+        finally:
+            release_new.set()
+            new.join(10)
+            assert not new.is_alive()
+    finally:
+        release_old.set()
+        old.join(10)
+
+
 def recovery_handlers_preserved():
     libc = ctypes.CDLL(None)
 
