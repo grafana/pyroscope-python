@@ -48,3 +48,44 @@ Counters are consumed at that point, so drops are not repeated in later profiles
 ## License
 
 Apache-2.0
+
+### Running integration tests
+
+The integration suite runs Python and a real Pyroscope server as native processes
+on Linux and macOS. It uses the same workloads and profile assertions on both
+platforms. Each test gets isolated backend storage, loopback ports, and process
+groups that are stopped during cleanup.
+
+With Go, Rust, CMake, a C++ compiler, and the target Python installed:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+make -C integration-test setup PYTHON=python
+make -C integration-test test PYTHON=python
+# Or run one suite:
+make -C integration-test test/TestPythonSignalHandlerSuites PYTHON=python
+```
+
+`setup` builds and installs the native wheel and downloads Pyroscope 2.3.1 using
+`wget` and `tar`. To download only the backend, run
+`make -C integration-test download-pyroscope`. The binary is stored in
+`integration-test/.tmp/pyroscope`; Make skips the download when it already exists.
+Set `PYROSCOPE_BINARY` to use an existing backend executable when running tests.
+CPU timer tests require Linux and CPython 3.12+; macOS and older Python versions
+run the fallback tests instead. CI covers Python 3.10–3.15 on both architectures
+of Linux and macOS. Release manylinux/musllinux packaging remains separate from
+these native tests; the native Linux jobs exercise glibc, not musl.
+
+The Linux ASAN job also uses this native harness. `make asan/test
+ASAN_PYTHON_REF=3.12` builds an instrumented CPython and SDK, requiring Clang/LLVM
+18, CPython build dependencies, and Rust nightly-2026-10-25 with rust-src.
+CPython sources and builds are cached separately for each version under
+`.tmp/cpython-asan/310/` through `.tmp/cpython-asan/315/`. Run
+`make asan/clone ASAN_PYTHON_REF=3.15` to clone only, or
+`make asan/python ASAN_PYTHON_REF=3.15` to build and install the interpreter.
+These targets use completion files to skip successful clones and builds on later
+runs. `ASAN_PYTHON_REF` supports each version from 3.10 through 3.15.
+The test script accepts an existing build directory directly, for example
+`bash scripts/asan-test.sh .tmp/cpython-asan/315`. It uses the interpreter at
+`<directory>/install/bin/python3` without cloning or rebuilding CPython.

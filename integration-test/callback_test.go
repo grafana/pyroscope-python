@@ -5,8 +5,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"pyroscope-python-integration-test/dockertest"
 )
 
 func TestPythonProfilerCallbacks(t *testing.T) {
@@ -26,16 +24,18 @@ func TestPythonProfilerCallbacks(t *testing.T) {
 			if tc.cfg.signalTimer != "" {
 				skipUnlessPythonSupportsSignal(t)
 			}
-			wheelDir := ensureWheel(t)
-			net := dockertest.CreateNetwork(t)
-			pyroscopeURL := startPyroscope(t, net)
+			if tc.cfg.signalTimer == "CTimer" {
+				skipUnlessSignalCTimer(t)
+			}
+
+			pyroscopeURL := startPyroscope(t)
 			appName := fmt.Sprintf("pyroscopers.python.test.callbacks.%d", time.Now().UnixNano())
 			canary := randomHex(t, 16)
 			timer := tc.cfg.signalTimer
 			if timer == "" {
 				timer = "ITimer"
 			}
-			workload := startPythonTestContainer(t, net, wheelDir, "callback_workload.py", map[string]string{
+			workload := startPythonWorkload(t, pyroscopeURL, "callback_workload.py", map[string]string{
 				"PYROSCOPE_APPLICATION_NAME": appName,
 				"CANARY":                     canary,
 				"CPU_IMPLEMENTATION":         tc.cfg.implementation(),
@@ -44,7 +44,7 @@ func TestPythonProfilerCallbacks(t *testing.T) {
 			})
 			// Finish the entire stress interval, including shutdown, before
 			// accepting a profile. Also reject recoverable sanitizer reports.
-			requireContainerExit(t, workload, 0, 2*time.Minute)
+			requireProcessExit(t, workload, 0, 2*time.Minute)
 			if logs := workload.Logs(t); strings.Contains(logs, "ERROR: AddressSanitizer") {
 				t.Fatalf("callback workload reported an ASAN error:\n%s", logs)
 			}
