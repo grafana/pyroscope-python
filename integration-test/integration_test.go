@@ -118,6 +118,15 @@ func TestPythonSignalProfilerLifecycle(t *testing.T) {
 			requireProcessExit(t, workload, 0, 2*time.Minute)
 		})
 	}
+	if _, minor := pythonVersion(t); minor >= 11 {
+		t.Run("ctimer_preexisting_thread_cleanup", func(t *testing.T) {
+			skipUnlessSignalCTimer(t)
+			workload := startPythonWorkload(t, pyroscopeURL, "signal_lifecycle_workload.py", map[string]string{
+				"SCENARIO": "ctimer_preexisting_thread_cleanup",
+			})
+			requireProcessExit(t, workload, 0, 2*time.Minute)
+		})
+	}
 }
 
 func TestPythonStackProfilerRestart(t *testing.T) {
