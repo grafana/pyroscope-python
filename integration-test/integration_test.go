@@ -63,6 +63,30 @@ func TestPythonSignalProfilerCTimer(t *testing.T) {
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, signalTimer: "CTimer"})
 }
 
+func TestPythonSignalProfilerCTimerOverruns(t *testing.T) {
+	skipUnlessPythonSupportsSignal(t)
+	wheelDir := ensureWheel(t)
+	net := dockertest.CreateNetwork(t)
+	pyroscopeURL := startPyroscope(t, net)
+	appName := fmt.Sprintf("pyroscopers.python.test.overruns.%d", time.Now().UnixNano())
+	workload := startPythonTestContainer(t, net, wheelDir, "signal_ctimer_workload.py", map[string]string{
+		"SCENARIO":                   "overruns",
+		"PYROSCOPE_APPLICATION_NAME": appName,
+	})
+	requireContainerExit(t, workload, 0, time.Minute)
+	// The workload burns 2 thread CPU seconds in 10 us bursts with 25 us sleeps,
+	// ending with 50 ms runnable so overdue notifications arrive before shutdown.
+	// At 100 Hz the bursts can evade scheduler ticks, coalescing expirations;
+	// each delivery must carry 1 + si_overrun periods through to the profile.
+	// Allow 20% sampling/timer noise and 10% weight outside the full burst stack.
+	// These module-level function names are the same on CPython 3.10–3.14.
+	selector := fmt.Sprintf(`{service_name="%s"}`, appName)
+	requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector, profileShape{
+		stacks:   []stackShare{{"<module>;cpu_bursts", 0.90, 1}},
+		minTotal: int64(1600 * time.Millisecond), minCoverage: 0.90,
+	}, 45*time.Second)
+}
+
 func TestPythonSignalProfilerCTimerRawFork(t *testing.T) {
 	skipUnlessPythonSupportsSignal(t)
 	wheelDir := ensureWheel(t)

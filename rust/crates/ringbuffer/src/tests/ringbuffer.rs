@@ -8,25 +8,46 @@ use std::time::{Duration, Instant};
 fn pop_returns_one_record() {
     let rb = RingBuffer::<usize, 8>::new();
     let mut p = rb.producer().unwrap();
-    p.push_slice(&[1, 2, 3, 4, 5]).unwrap();
-    p.push_slice(&[6]).unwrap();
+    p.push_slice(&[1, 2, 3, 4, 5], ()).unwrap();
+    p.push_slice(&[6], ()).unwrap();
 
     let mut c = rb.consumer().unwrap();
     let mut out = [0; 8];
-    assert_eq!(c.pop_slice(&mut out), Ok(5));
+    assert_eq!(c.pop_slice(&mut out), Ok((5, ())));
     assert_eq!(out[..5], [1, 2, 3, 4, 5]);
-    assert_eq!(c.pop_slice(&mut out), Ok(1));
+    assert_eq!(c.pop_slice(&mut out), Ok((1, ())));
     assert_eq!(out[0], 6);
     assert_eq!(c.pop_slice(&mut out), Err(PopError::Empty));
+}
+
+#[test]
+fn metadata_stays_with_records_across_wraparound_and_failed_operations() {
+    let rb = RingBuffer::<usize, 8, usize>::new();
+    let mut producer = rb.producer().unwrap();
+    let mut consumer = rb.consumer().unwrap();
+    for count in 1..100 {
+        producer.push_slice(&[10, 20, 30], count).unwrap();
+        producer.push_slice(&[], count + 100).unwrap();
+        assert_eq!(producer.push_slice(&[40, 50, 60], 999), Err(Full));
+        assert_eq!(
+            consumer.pop_slice(&mut [0; 2]),
+            Err(PopError::TooSmall { needed: 3 })
+        );
+        let mut frames = [0; 3];
+        assert_eq!(consumer.pop_slice(&mut frames), Ok((3, count)));
+        assert_eq!(frames, [10, 20, 30]);
+        assert_eq!(consumer.pop_slice(&mut []), Ok((0, count + 100)));
+        assert_eq!(consumer.pop_slice(&mut []), Err(PopError::Empty));
+    }
 }
 
 #[test]
 fn empty_record() {
     let rb = RingBuffer::<usize, 4>::new();
     let mut p = rb.producer().unwrap();
-    p.push_slice(&[]).unwrap();
+    p.push_slice(&[], ()).unwrap();
     let mut c = rb.consumer().unwrap();
-    assert_eq!(c.pop_slice(&mut []), Ok(0));
+    assert_eq!(c.pop_slice(&mut []), Ok((0, ())));
     assert_eq!(c.pop_slice(&mut []), Err(PopError::Empty));
 }
 
@@ -34,7 +55,7 @@ fn empty_record() {
 fn too_small_output_keeps_record() {
     let rb = RingBuffer::<usize, 4>::new();
     let mut p = rb.producer().unwrap();
-    p.push_slice(&[1, 2, 3]).unwrap();
+    p.push_slice(&[1, 2, 3], ()).unwrap();
     let mut c = rb.consumer().unwrap();
     assert_eq!(
         c.pop_slice(&mut [0; 2]),
@@ -47,14 +68,14 @@ fn too_small_output_keeps_record() {
 fn full_is_all_or_nothing() {
     let rb = RingBuffer::<usize, 8>::new();
     let mut p = rb.producer().unwrap();
-    p.push_slice(&[1, 2, 3]).unwrap();
-    assert_eq!(p.push_slice(&[4, 5, 6, 7]), Err(Full));
-    p.push_slice(&[4, 5]).unwrap();
-    assert_eq!(p.push_slice(&[6]), Err(Full));
+    p.push_slice(&[1, 2, 3], ()).unwrap();
+    assert_eq!(p.push_slice(&[4, 5, 6, 7], ()), Err(Full));
+    p.push_slice(&[4, 5], ()).unwrap();
+    assert_eq!(p.push_slice(&[6], ()), Err(Full));
 
     let mut c = rb.consumer().unwrap();
-    assert_eq!(c.pop_slice(&mut [0; 3]), Ok(3));
-    p.push_slice(&[6, 7]).unwrap();
+    assert_eq!(c.pop_slice(&mut [0; 3]), Ok((3, ())));
+    p.push_slice(&[6, 7], ()).unwrap();
     assert_eq!(drain(&mut c), vec![vec![4, 5], vec![6, 7]]);
 }
 
@@ -62,9 +83,9 @@ fn full_is_all_or_nothing() {
 fn empty_record_takes_a_slot() {
     let rb = RingBuffer::<usize, 2>::new();
     let mut p = rb.producer().unwrap();
-    p.push_slice(&[]).unwrap();
-    p.push_slice(&[]).unwrap();
-    assert_eq!(p.push_slice(&[]), Err(Full));
+    p.push_slice(&[], ()).unwrap();
+    p.push_slice(&[], ()).unwrap();
+    assert_eq!(p.push_slice(&[], ()), Err(Full));
 }
 
 #[test]
@@ -86,13 +107,13 @@ fn second_producer_or_consumer_is_refused() {
 fn oversized_record_leaves_buffer_unchanged() {
     let rb = RingBuffer::<usize, 4>::new();
     let mut p = rb.producer().unwrap();
-    assert_eq!(p.push_slice(&[1, 2, 3, 4]), Err(Full));
+    assert_eq!(p.push_slice(&[1, 2, 3, 4], ()), Err(Full));
     let mut c = rb.consumer().unwrap();
     assert_eq!(c.pop_slice(&mut [0; 4]), Err(PopError::Empty));
-    p.push_slice(&[7, 8, 9]).unwrap();
-    assert_eq!(p.push_slice(&[]), Err(Full));
+    p.push_slice(&[7, 8, 9], ()).unwrap();
+    assert_eq!(p.push_slice(&[], ()), Err(Full));
     assert_eq!(drain(&mut c), vec![vec![7, 8, 9]]);
-    p.push_slice(&[10]).unwrap();
+    p.push_slice(&[10], ()).unwrap();
     assert_eq!(drain(&mut c), vec![vec![10]]);
 }
 
@@ -104,9 +125,9 @@ fn wraps_machine_word_counter() {
     rb.tail.store(usize::MAX - 2, Ordering::Relaxed);
     let mut p = rb.producer().unwrap();
     let mut c = rb.consumer().unwrap();
-    p.push_slice(&[1, 2, 3, 4]).unwrap();
+    p.push_slice(&[1, 2, 3, 4], ()).unwrap();
     assert_eq!(drain(&mut c), vec![vec![1, 2, 3, 4]]);
-    p.push_slice(&[5, 6]).unwrap();
+    p.push_slice(&[5, 6], ()).unwrap();
     assert_eq!(drain(&mut c), vec![vec![5, 6]]);
 }
 
@@ -116,8 +137,8 @@ fn wraps_around() {
     let mut c = rb.consumer().unwrap();
     for i in 0..1000u64 {
         let mut p = rb.producer().unwrap();
-        p.push_slice(&[i, i + 1, i + 2]).unwrap();
-        p.push_slice(&[i]).unwrap();
+        p.push_slice(&[i, i + 1, i + 2], ()).unwrap();
+        p.push_slice(&[i], ()).unwrap();
         assert_eq!(drain(&mut c), vec![vec![i, i + 1, i + 2], vec![i]]);
     }
 }
@@ -140,13 +161,13 @@ fn record(n: usize) -> Vec<Frame> {
 #[test]
 fn concurrent_records_stay_intact() {
     const RECORDS: usize = if cfg!(miri) { 64 } else { 200_000 };
-    static RB: RingBuffer<Frame, 64> = RingBuffer::new();
+    static RB: RingBuffer<Frame, 64, usize> = RingBuffer::new();
 
     let writer = std::thread::spawn(|| {
         let mut written = 0;
         while written < RECORDS {
             let Some(mut p) = RB.producer() else { continue };
-            if p.push_slice(&record(written)).is_ok() {
+            if p.push_slice(&record(written), written + 1).is_ok() {
                 written += 1;
             }
         }
@@ -157,7 +178,10 @@ fn concurrent_records_stay_intact() {
     for n in 0..RECORDS {
         let len = loop {
             match c.pop_slice(&mut buf) {
-                Ok(len) => break len,
+                Ok((len, count)) => {
+                    assert_eq!(count, n + 1);
+                    break len;
+                }
                 Err(e) => assert_eq!(e, PopError::Empty),
             }
         };
@@ -181,7 +205,7 @@ fn written_from_signal_handler() {
             return;
         };
         let frames = [n; 5];
-        if p.push_slice(&frames[..n % 5 + 1]).is_err() {
+        if p.push_slice(&frames[..n % 5 + 1], ()).is_err() {
             DROPPED.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -211,7 +235,7 @@ fn written_from_signal_handler() {
     let deadline = Instant::now() + Duration::from_secs(10);
     while received < 50 && Instant::now() < deadline {
         let Some(mut c) = RB.consumer() else { continue };
-        while let Ok(len) = c.pop_slice(&mut buf) {
+        while let Ok((len, ())) = c.pop_slice(&mut buf) {
             let n = buf[0];
             assert_eq!(len, n % 5 + 1);
             assert!(buf[..len].iter().all(|&v| v == n));
@@ -232,5 +256,10 @@ fn written_from_signal_handler() {
 
 fn drain<T: Copy + Default, const N: usize>(c: &mut Consumer<'_, T, N>) -> Vec<Vec<T>> {
     let mut buf = [T::default(); N];
-    std::iter::from_fn(|| c.pop_slice(&mut buf).ok().map(|len| buf[..len].to_vec())).collect()
+    std::iter::from_fn(|| {
+        c.pop_slice(&mut buf)
+            .ok()
+            .map(|(len, ())| buf[..len].to_vec())
+    })
+    .collect()
 }

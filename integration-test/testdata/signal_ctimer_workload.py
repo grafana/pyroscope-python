@@ -17,8 +17,9 @@ def configure():
     return pyroscope.configure(
         application_name=os.environ.get("PYROSCOPE_APPLICATION_NAME", "ctimer-caller"),
         server_address=os.environ["PYROSCOPE_SERVER_ADDRESS"],
+        # Exercise Signal's default CTimer on Linux.
         cpu_implementation=pyroscope.ProfilerImplementation.Signal,
-        signal_timer=pyroscope.SignalTimer.CTimer,
+        sample_rate=100,
         upload_interval=1,
         tags={"canary": os.environ.get("CANARY", "caller")},
         enable_logging=True,
@@ -30,6 +31,24 @@ def raw_fork_child_burn():
     value = b"raw-fork-child"
     while time.monotonic() < end:
         value = hashlib.sha256(value).digest()
+
+
+def cpu_bursts():
+    assert configure()
+    end = time.thread_time() + 2
+    value = 0
+    while time.thread_time() < end - 0.05:
+        burst_end = time.thread_time() + 0.00001
+        while time.thread_time() < burst_end:
+            value = (value * 1664525 + 1013904223) & 0xFFFFFFFF
+        time.sleep(0.000025)
+    # Finish the same CPU budget with a runnable tail so overdue timer
+    # notifications are delivered before the final drain and shutdown.
+    while time.thread_time() < end:
+        value = (value * 1664525 + 1013904223) & 0xFFFFFFFF
+    # Let the asynchronous resolver drain and upload the final delivery.
+    time.sleep(2)
+    assert pyroscope.shutdown()
 
 
 def fork_and_profile():
@@ -117,5 +136,7 @@ def arming_failure():
 scenario = os.environ["SCENARIO"]
 if scenario == "arming_failure":
     arming_failure()
+elif scenario == "overruns":
+    cpu_bursts()
 else:
     raw_fork(unregistered=scenario == "unregistered")

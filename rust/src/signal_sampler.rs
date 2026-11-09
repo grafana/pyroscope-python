@@ -11,7 +11,7 @@ use std::time::Duration;
 use ringbuffer::PopError;
 use timer::Timer;
 use timer::{Mode, SignalHandler};
-use unwind::{Frame, MAX_FRAMES};
+use unwind::{Frame, MAX_FRAMES, SampleMetadata};
 
 mod resolve;
 pub use py_spy::{Frame as ResolvedFrame, config::LineNo as Lines};
@@ -19,8 +19,22 @@ use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
 
-extern "C" fn signal_handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut libc::c_void) {
-    unwind::handler();
+extern "C" fn signal_handler(_: libc::c_int, info: *mut libc::siginfo_t, _: *mut libc::c_void) {
+    // SAFETY: SignalHandler installs this callback with SA_SIGINFO, so the kernel
+    // supplies a valid siginfo_t for the duration of the callback.
+    let count = sample_count(unsafe { &*info });
+    unwind::handler(SampleMetadata { count });
+}
+
+fn sample_count(info: &libc::siginfo_t) -> usize {
+    #[cfg(target_os = "linux")]
+    if info.si_code == libc::SI_TIMER {
+        // SAFETY: SI_TIMER selects the timer fields of the siginfo union.
+        return 1 + unsafe { info.si_overrun() }.max(0) as usize;
+    }
+    let _ = info;
+    // ITimer and externally generated SIGPROF have no POSIX timer overrun count.
+    1
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,6 +82,11 @@ fn check_version(version: (u8, u8)) -> Result<(), Error> {
 /// The timer of a running [`SignalHandlerSession`], shared with the callers of
 /// [`thread_created`] and [`thread_removed`]. `None` once the session ended.
 pub type SharedTimer = Arc<Mutex<Option<Timer>>>;
+
+pub struct Sample {
+    pub frames: Vec<ResolvedFrame>,
+    pub metadata: SampleMetadata,
+}
 
 /// Running signal sampling. Only one can exist at a time.
 pub struct SignalHandlerSession {
@@ -132,19 +151,19 @@ impl SignalHandlerSession {
 
     /// Resolves a bounded batch of recorded stacks, each innermost frame first.
     /// Returning even while producers are busy lets the sampling thread upload and stop.
-    pub fn drain(&mut self) -> Vec<Vec<ResolvedFrame>> {
+    pub fn drain(&mut self) -> Vec<Sample> {
         let mut traces = Vec::new();
         let Some(mut consumer) = unwind::consumer() else {
             return traces;
         };
         for _ in 0..MAX_DRAIN_STACKS {
-            let n = match consumer.pop_slice(&mut self.buf) {
-                Ok(n) => n,
+            let (n, metadata) = match consumer.pop_slice(&mut self.buf) {
+                Ok(record) => record,
                 Err(PopError::Empty) => break,
                 Err(PopError::TooSmall { .. }) => unreachable!("buffer fits MAX_FRAMES"),
             };
-            if let Ok(trace) = self.resolver.resolve_stack(&self.buf[..n]) {
-                traces.push(trace);
+            if let Ok(frames) = self.resolver.resolve_stack(&self.buf[..n], metadata.count) {
+                traces.push(Sample { frames, metadata });
             }
         }
         traces

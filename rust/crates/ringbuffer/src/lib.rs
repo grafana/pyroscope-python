@@ -9,9 +9,10 @@ use core::cell::UnsafeCell;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-/// Holds `N` slots. A record takes one slot for its length plus one slot per value.
-pub struct RingBuffer<T: Copy, const N: usize> {
-    slots: [UnsafeCell<MaybeUninit<Slot<T>>>; N],
+/// Holds `N` slots. A record takes one slot for its length and metadata plus one slot per value.
+/// `M` is optional per-record metadata, published atomically with the values.
+pub struct RingBuffer<T: Copy, const N: usize, M: Copy = ()> {
+    slots: [UnsafeCell<MaybeUninit<Slot<T, M>>>; N],
     head: AtomicUsize,
     tail: AtomicUsize,
     producer_locked: AtomicBool,
@@ -19,14 +20,14 @@ pub struct RingBuffer<T: Copy, const N: usize> {
 }
 
 #[derive(Clone, Copy)]
-enum Slot<T: Copy> {
-    Len(usize),
+enum Slot<T: Copy, M: Copy> {
+    Len { len: usize, metadata: M },
     Value(T),
 }
 
 // SAFETY: a slot is accessed by the producer only while it is free and by the consumer only
 // while it is published; head and tail hand slots over with release/acquire ordering.
-unsafe impl<T: Copy + Send, const N: usize> Sync for RingBuffer<T, N> {}
+unsafe impl<T: Copy + Send, const N: usize, M: Copy + Send> Sync for RingBuffer<T, N, M> {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Full;
@@ -40,7 +41,7 @@ pub enum PopError {
     },
 }
 
-impl<T: Copy, const N: usize> RingBuffer<T, N> {
+impl<T: Copy, const N: usize, M: Copy> RingBuffer<T, N, M> {
     #[allow(clippy::new_without_default)]
     pub const fn new() -> Self {
         const { assert!(N.is_power_of_two()) };
@@ -54,7 +55,7 @@ impl<T: Copy, const N: usize> RingBuffer<T, N> {
     }
 
     /// Returns `None` if another producer is active, e.g. when called from a nested signal handler.
-    pub fn producer(&self) -> Option<Producer<'_, T, N>> {
+    pub fn producer(&self) -> Option<Producer<'_, T, N, M>> {
         if !try_lock(&self.producer_locked) {
             return None;
         }
@@ -65,7 +66,7 @@ impl<T: Copy, const N: usize> RingBuffer<T, N> {
         })
     }
 
-    pub fn consumer(&self) -> Option<Consumer<'_, T, N>> {
+    pub fn consumer(&self) -> Option<Consumer<'_, T, N, M>> {
         if !try_lock(&self.consumer_locked) {
             return None;
         }
@@ -76,7 +77,7 @@ impl<T: Copy, const N: usize> RingBuffer<T, N> {
         })
     }
 
-    fn slot(&self, index: usize) -> *mut MaybeUninit<Slot<T>> {
+    fn slot(&self, index: usize) -> *mut MaybeUninit<Slot<T, M>> {
         self.slots[index & (N - 1)].get()
     }
 }
@@ -87,15 +88,15 @@ fn try_lock(flag: &AtomicBool) -> bool {
 }
 
 /// Exclusive write access.
-pub struct Producer<'a, T: Copy, const N: usize> {
-    rb: &'a RingBuffer<T, N>,
+pub struct Producer<'a, T: Copy, const N: usize, M: Copy = ()> {
+    rb: &'a RingBuffer<T, N, M>,
     head: usize,
     tail: usize,
 }
 
-impl<T: Copy, const N: usize> Producer<'_, T, N> {
+impl<T: Copy, const N: usize, M: Copy> Producer<'_, T, N, M> {
     /// Publishes `values` as one record. On `Full`, nothing is written.
-    pub fn push_slice(&mut self, values: &[T]) -> Result<(), Full> {
+    pub fn push_slice(&mut self, values: &[T], metadata: M) -> Result<(), Full> {
         if !self.fits(values.len()) {
             self.tail = self.rb.tail.load(Ordering::Acquire);
             if !self.fits(values.len()) {
@@ -109,7 +110,12 @@ impl<T: Copy, const N: usize> Producer<'_, T, N> {
             unsafe { (*self.rb.slot(index)).write(Slot::Value(value)) };
         }
         // SAFETY: the length slot is free too; publish only after all values are written.
-        unsafe { (*self.rb.slot(self.head)).write(Slot::Len(values.len())) };
+        unsafe {
+            (*self.rb.slot(self.head)).write(Slot::Len {
+                len: values.len(),
+                metadata,
+            })
+        };
         self.head = self.head.wrapping_add(1).wrapping_add(values.len());
         self.rb.head.store(self.head, Ordering::Release);
         Ok(())
@@ -120,21 +126,21 @@ impl<T: Copy, const N: usize> Producer<'_, T, N> {
     }
 }
 
-impl<T: Copy, const N: usize> Drop for Producer<'_, T, N> {
+impl<T: Copy, const N: usize, M: Copy> Drop for Producer<'_, T, N, M> {
     fn drop(&mut self) {
         self.rb.producer_locked.store(false, Ordering::Release);
     }
 }
 
-pub struct Consumer<'a, T: Copy, const N: usize> {
-    rb: &'a RingBuffer<T, N>,
+pub struct Consumer<'a, T: Copy, const N: usize, M: Copy = ()> {
+    rb: &'a RingBuffer<T, N, M>,
     head: usize,
     tail: usize,
 }
 
-impl<T: Copy, const N: usize> Consumer<'_, T, N> {
-    /// Copies the next record into the start of `out` and returns its length.
-    pub fn pop_slice(&mut self, out: &mut [T]) -> Result<usize, PopError> {
+impl<T: Copy, const N: usize, M: Copy> Consumer<'_, T, N, M> {
+    /// Copies the next record into `out` and returns its length and metadata.
+    pub fn pop_slice(&mut self, out: &mut [T]) -> Result<(usize, M), PopError> {
         if self.tail == self.head {
             self.head = self.rb.head.load(Ordering::Acquire);
             if self.tail == self.head {
@@ -143,7 +149,9 @@ impl<T: Copy, const N: usize> Consumer<'_, T, N> {
         }
         // SAFETY: the record is published and the producer does not reuse its slots until tail
         // moves past them.
-        let Slot::Len(len) = (unsafe { (*self.rb.slot(self.tail)).assume_init_read() }) else {
+        let Slot::Len { len, metadata } =
+            (unsafe { (*self.rb.slot(self.tail)).assume_init_read() })
+        else {
             unreachable!("record does not start with a length");
         };
         if len > out.len() {
@@ -160,11 +168,11 @@ impl<T: Copy, const N: usize> Consumer<'_, T, N> {
         }
         self.tail = start.wrapping_add(len);
         self.rb.tail.store(self.tail, Ordering::Release);
-        Ok(len)
+        Ok((len, metadata))
     }
 }
 
-impl<T: Copy, const N: usize> Drop for Consumer<'_, T, N> {
+impl<T: Copy, const N: usize, M: Copy> Drop for Consumer<'_, T, N, M> {
     fn drop(&mut self) {
         self.rb.consumer_locked.store(false, Ordering::Release);
     }
