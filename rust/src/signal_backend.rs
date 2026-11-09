@@ -51,10 +51,10 @@ impl Signal {
                     let Ok(mut buffer) = buffer.lock() else {
                         break;
                     };
-                    for frames in traces {
-                        let trace = to_stack_trace(frames, &backend_config, pid);
+                    for sample in traces {
+                        let trace = to_stack_trace(sample.frames, &backend_config, pid);
                         // TODO: Apply thread tags once samples include the thread ID.
-                        let _ = buffer.record(trace);
+                        let _ = buffer.record_with_count(trace, sample.metadata.count);
                     }
                 }
                 if config.sampler.signal_timer == SignalTimer::CTimer {

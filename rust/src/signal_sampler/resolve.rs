@@ -66,9 +66,13 @@ impl Resolver {
         }
     }
 
-    pub fn resolve_stack(&mut self, frames: &[Frame]) -> Result<Vec<ResolvedFrame>, Error> {
+    pub fn resolve_stack(
+        &mut self,
+        frames: &[Frame],
+        count: usize,
+    ) -> Result<Vec<ResolvedFrame>, Error> {
         self.resolve_stack_inner(frames).inspect_err(|_| {
-            METRICS.resolve_error.fetch_add(1, Ordering::Relaxed);
+            METRICS.resolve_error.fetch_add(count, Ordering::Relaxed);
         })
     }
 
@@ -140,7 +144,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn counts_each_failed_stack_once() {
+    fn counts_all_periods_of_each_failed_stack_once() {
         let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
         let mut resolver = Resolver::new(
             Types {
@@ -156,23 +160,26 @@ mod tests {
             instr: i32::MAX as usize + 2,
         };
         assert!(matches!(
-            resolver.resolve_stack(&[invalid_offset; 2]),
+            resolver.resolve_stack(&[invalid_offset; 2], 7),
             Err(Error::InstructionOffset(_))
         ));
-        assert_eq!(METRICS.resolve_error.load(Ordering::Relaxed), before + 1);
+        assert_eq!(METRICS.resolve_error.load(Ordering::Relaxed), before + 7);
 
         // The address range overflows before any memory read or fault recovery.
         assert!(matches!(
-            resolver.resolve_stack(&[Frame {
-                code: usize::MAX,
-                instr: usize::MAX,
-            }]),
+            resolver.resolve_stack(
+                &[Frame {
+                    code: usize::MAX,
+                    instr: usize::MAX,
+                }],
+                11
+            ),
             Err(Error::PySpy(_))
         ));
-        assert_eq!(METRICS.resolve_error.load(Ordering::Relaxed), before + 2);
+        assert_eq!(METRICS.resolve_error.load(Ordering::Relaxed), before + 18);
 
-        assert!(resolver.resolve_stack(&[]).unwrap().is_empty());
-        assert_eq!(METRICS.resolve_error.load(Ordering::Relaxed), before + 2);
+        assert!(resolver.resolve_stack(&[], 13).unwrap().is_empty());
+        assert_eq!(METRICS.resolve_error.load(Ordering::Relaxed), before + 18);
     }
 
     #[cfg(not(miri))]

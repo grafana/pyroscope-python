@@ -23,13 +23,13 @@ fn push(p: &mut Producer<'_, Frame, 64>, id: usize) -> bool {
         code: id,
         line: line as u32,
     });
-    p.push_slice(&frames[..len_of(id)]).is_ok()
+    p.push_slice(&frames[..len_of(id)], ()).is_ok()
 }
 
 /// Returns the id of a popped record after checking that it is intact.
 fn pop(c: &mut Consumer<'_, Frame, 64>) -> Result<usize, PopError> {
     let mut buf = [Frame::default(); MAX_LEN];
-    let len = c.pop_slice(&mut buf)?;
+    let (len, ()) = c.pop_slice(&mut buf)?;
     let id = buf[0].code;
     assert_eq!(len, len_of(id), "record {id} has a wrong length");
     for (line, frame) in buf[..len].iter().enumerate() {
