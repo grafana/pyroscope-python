@@ -11,6 +11,13 @@ import pyroscope
 logger = logging.getLogger(__name__)
 shutdown_requested = threading.Event()
 stop_workers = threading.Event()
+# Stack's adaptive wall sampler can poll only once per 100ms. Keep its work
+# phases much longer than that: CPU accrued between polls is charged to the
+# stack at the next poll, which may already be sleeping at a phase boundary.
+# Preserve the 1:2 work/sleep ratio and the same strict profile assertions.
+# Polling attribution limitation: https://github.com/grafana/pyroscope-python/issues/276
+hash_seconds = 2.0 if os.environ.get("CPU_IMPLEMENTATION") == "Stack" else 0.1
+sleep_seconds = 2 * hash_seconds
 
 
 def env_bool(name):
@@ -25,7 +32,7 @@ def env_bool(name):
 def hash_value(string):
     # Keep nearly all active Python time in this leaf, so profiles have a
     # predictable shape even when interpreter speed or instrumentation changes.
-    deadline = time.monotonic() + 0.1
+    deadline = time.monotonic() + hash_seconds
     while time.monotonic() < deadline:
         string = hashlib.sha256(string.encode()).hexdigest()
     return string
@@ -33,14 +40,14 @@ def hash_value(string):
 
 def multihash(string):
     while not stop_workers.is_set():
-        time.sleep(0.2)
+        time.sleep(sleep_seconds)
         string = hash_value(string)
     return string
 
 
 def multihash2(string):
     while not stop_workers.is_set():
-        time.sleep(0.2)
+        time.sleep(sleep_seconds)
         string = hash_value(string)
     return string
 

@@ -33,7 +33,8 @@ func configurationStacks(cfg profileConfig, minor int) []stackShare {
 	if minor >= 11 {
 		wait = "Event.wait;Condition.wait"
 	}
-	// Both workers spend 100ms hashing and 200ms asleep. CPU/GIL-only
+	// Both workers spend one part hashing and two parts asleep (100/200ms,
+	// or 2/4s for Stack's adaptive wall sampler). CPU/GIL-only
 	// profiles should split almost all weight equally between the hash leaves.
 	// Wall profiles also include the main thread waiting: ~1/3 main wait,
 	// ~2/9 each sleeping worker, and ~1/9 each hash leaf. Allow scheduling
