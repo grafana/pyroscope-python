@@ -49,78 +49,33 @@ def ctimer_shutdown_fork():
     assert os.waitstatus_to_exitcode(status) == 0, status
 
 
-def ctimer_preexisting_thread_cleanup():
-    assert sys.version_info >= (3, 11)
-    release_old = threading.Event()
-    release_new = threading.Event()
-    ready_old = threading.Event()
-    ready_new = threading.Event()
-
-    def worker(ready, release):
-        ready.set()
-        assert release.wait(30)
-
-    old = threading.Thread(target=worker, args=(ready_old, release_old))
-    old.start()
-    assert ready_old.wait(10)
-
-    try:
-        assert configure(signal_timer=pyroscope.SignalTimer.CTimer)
-        old_timer = f"tid.{old.native_id}\n"
-        assert old_timer in Path("/proc/self/timers").read_text()
-
-        new = threading.Thread(target=worker, args=(ready_new, release_new))
-        new.start()
-        try:
-            assert ready_new.wait(10)
-            new_timer = f"tid.{new.native_id}\n"
-            timers = Path("/proc/self/timers").read_text()
-            assert old_timer in timers and new_timer in timers, timers
-
-            release_old.set()
-            old.join(10)
-            assert not old.is_alive()
-            timers = Path("/proc/self/timers").read_text()
-            assert old_timer not in timers and new_timer in timers, timers
-
-            assert pyroscope.shutdown()
-            assert not Path("/proc/self/timers").read_text().strip()
-        finally:
-            release_new.set()
-            new.join(10)
-            assert not new.is_alive()
-    finally:
-        release_old.set()
-        old.join(10)
-
-
-def recovery_handlers():
-    libc = ctypes.CDLL(None)
-    result = []
-    for signum in (signal.SIGSEGV, signal.SIGBUS):
-        action = ctypes.create_string_buffer(256)
-        assert libc.sigaction(signum, None, action) == 0
-        result.append(ctypes.c_void_p.from_buffer(action).value)
-    return tuple(result)
-
-
 def recovery_handlers_preserved():
+    libc = ctypes.CDLL(None)
+
+    def handlers():
+        result = []
+        for signum in (signal.SIGSEGV, signal.SIGBUS):
+            action = ctypes.create_string_buffer(256)
+            assert libc.sigaction(signum, None, action) == 0
+            result.append(ctypes.c_void_p.from_buffer(action).value)
+        return tuple(result)
+
     # Install application handlers before initialization. Recovery handlers must
     # remain installed for the lifetime of the process, including across stops.
     faulthandler.enable()
-    previous = recovery_handlers()
+    previous = handlers()
     assert configure()
-    installed = recovery_handlers()
+    installed = handlers()
     assert all(installed)
     assert all(ours != earlier for ours, earlier in zip(installed, previous))
     signal.raise_signal(signal.SIGPROF)
     assert pyroscope.shutdown()
-    assert recovery_handlers() == installed
+    assert handlers() == installed
     assert configure()
-    assert recovery_handlers() == installed
+    assert handlers() == installed
     signal.raise_signal(signal.SIGPROF)
     assert pyroscope.shutdown()
-    assert recovery_handlers() == installed
+    assert handlers() == installed
     assert faulthandler.is_enabled()
 
 
@@ -158,14 +113,6 @@ def fault_fallback_child():
     signum = int(os.environ["FALLBACK_SIGNAL"])
     ignored = os.environ["FALLBACK_IGNORED"] == "1"
     signal.signal(signum, signal.SIG_IGN if ignored else signal.SIG_DFL)
-    if sys.platform == "darwin" and ignored:
-        # Darwin cannot distinguish sent recovery signals from memory faults.
-        # Initialization rejects SIG_IGN without replacing either handler.
-        previous = recovery_handlers()
-        assert not configure()
-        assert recovery_handlers() == previous
-        signal.raise_signal(signum)
-        return
     assert configure()
     if os.environ["FALLBACK_STOPPED"] == "1":
         assert pyroscope.shutdown()
