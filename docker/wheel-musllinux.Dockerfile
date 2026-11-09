@@ -10,14 +10,16 @@ ENV CC=clang
 ENV CXX=clang++
 
 # Build OpenSSL from source
-RUN curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
+RUN curl -fsSL --retry 5 --retry-delay 2 "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
     -o /tmp/openssl.tar.gz \
     && tar xzf /tmp/openssl.tar.gz -C /tmp \
     && cd /tmp/openssl-${OPENSSL_VERSION} \
     && ./config no-shared no-tests --prefix=/usr/local/openssl --openssldir=/etc/ssl \
     && make -j$(nproc) \
     && make install_sw \
-    && ln -sf /usr/local/openssl/lib64 /usr/local/openssl/lib || true \
+    && if [ -d /usr/local/openssl/lib64 ] && [ ! -e /usr/local/openssl/lib ]; then \
+        ln -s lib64 /usr/local/openssl/lib; \
+    fi \
     && cd / \
     && rm -rf /tmp/openssl*
 

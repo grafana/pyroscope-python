@@ -18,14 +18,16 @@ ENV SOURCE_DATE_EPOCH=0
 RUN --mount=type=bind,from=manylinux,source=/opt/clang,target=/opt/clang \
     --mount=type=bind,from=manylinux,source=/usr/include,target=/usr/include \
     --mount=type=bind,from=manylinux,source=/opt/rh/devtoolset-10,target=/opt/rh/devtoolset-10 \
-    curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
+    curl -fsSL --retry 5 --retry-delay 2 "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz" \
     -o /tmp/openssl.tar.gz \
     && tar xzf /tmp/openssl.tar.gz -C /tmp \
     && cd /tmp/openssl-${OPENSSL_VERSION} \
     && ./config no-shared no-tests --prefix=/usr/local/openssl --openssldir=/etc/ssl \
     && make -j$(nproc) build_libs \
     && make install_dev \
-    && ln -sf /usr/local/openssl/lib64 /usr/local/openssl/lib || true \
+    && if [ -d /usr/local/openssl/lib64 ] && [ ! -e /usr/local/openssl/lib ]; then \
+        ln -s lib64 /usr/local/openssl/lib; \
+    fi \
     && cd / \
     && rm -rf /tmp/openssl*
 
