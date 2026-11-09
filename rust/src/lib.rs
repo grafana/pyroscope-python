@@ -1,5 +1,6 @@
 mod ffi;
 mod memory;
+mod native_profiler;
 mod pyspy_backend;
 mod signal_backend;
 mod signal_sampler;

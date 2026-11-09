@@ -19,8 +19,14 @@ use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
 
-extern "C" fn signal_handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut libc::c_void) {
-    unwind::handler();
+extern "C" fn signal_handler(
+    _: libc::c_int,
+    info: *mut libc::siginfo_t,
+    context: *mut libc::c_void,
+) {
+    if !unsafe { crate::native_profiler::sample(info, context) } {
+        unwind::handler();
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +78,7 @@ pub type SharedTimer = Arc<Mutex<Option<Timer>>>;
 /// Running signal sampling. Only one can exist at a time.
 pub struct SignalHandlerSession {
     timer: SharedTimer,
+    native: Option<crate::native_profiler::Session>,
     // Dropped after the timer, see the `Drop` impl.
     _handler: SignalHandler,
     buf: Vec<Frame>,
@@ -118,7 +125,9 @@ impl SignalHandlerSession {
         };
         let timer =
             Timer::start(mode, interval).map_err(|e| format!("failed to start the timer: {e}"))?;
+        let native = crate::native_profiler::Session::start(config.sampling_rate)?;
         Ok(SignalHandlerSession {
+            native: Some(native),
             timer: Arc::new(Mutex::new(Some(timer))),
             _handler: signal_handler,
             buf,
@@ -155,6 +164,7 @@ impl Drop for SignalHandlerSession {
     /// Stops the timers before the handler is removed. Holding the lock keeps a concurrent hook
     /// from using a dead timer.
     fn drop(&mut self) {
+        self.native.take();
         *self.timer.lock().unwrap_or_else(|e| e.into_inner()) = None;
     }
 }

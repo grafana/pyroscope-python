@@ -44,6 +44,10 @@ hashbrown = "0.17.1"
 lazy_static = "1.5.0"
 pyo3.workspace = true
 
+[target.'cfg(all(target_os = "linux", any(target_arch = "x86_64", target_arch = "aarch64")))'.dependencies]
+framehop = { version = "0.16", default-features = false, features = ["std"] }
+object = { version = "0.40", default-features = false, features = ["read", "elf", "std"] }
+
 
 [build-dependencies]
 cmake = "0.1"

@@ -233,13 +233,6 @@ impl PyroscopeAgent {
     fn shutdown(mut self) {
         log::debug!(target: LOG_TAG, "PyroscopeAgent::drop()");
 
-        if let Some(backend) = &mut self.backend {
-            match backend.shutdown_thread() {
-                Ok(_) => log::debug!(target: LOG_TAG, "Backend shutdown"),
-                Err(e) => log::error!(target: LOG_TAG, "Backend shutdown error: {e}"),
-            }
-        }
-
         match self.session_manager.push(SessionSignal::Kill) {
             Ok(_) => log::trace!(target: LOG_TAG, "Sent kill signal to SessionManager"),
             Err(_) => log::error!(
@@ -252,6 +245,15 @@ impl PyroscopeAgent {
             match handle.join() {
                 Ok(_) => log::trace!(target: LOG_TAG, "Dropped SessionManager thread"),
                 Err(_) => log::error!(target: LOG_TAG, "Error Dropping SessionManager thread"),
+            }
+        }
+
+        // Keep signal sampling alive until the encoder/uploader has finished its
+        // final session, then stop its timers and flush native profiles.
+        if let Some(backend) = &mut self.backend {
+            match backend.shutdown_thread() {
+                Ok(_) => log::debug!(target: LOG_TAG, "Backend shutdown"),
+                Err(e) => log::error!(target: LOG_TAG, "Backend shutdown error: {e}"),
             }
         }
 
@@ -274,6 +276,7 @@ impl PyroscopeAgent {
         let stx = self.session_manager.tx.clone();
 
         self.handle = Some(std::thread::spawn(move || {
+            let _native = crate::native_profiler::register(crate::native_profiler::REPORTER);
             log::trace!(target: LOG_TAG, "Main Thread started");
             let mut sw = StopWatch::new();
             loop {

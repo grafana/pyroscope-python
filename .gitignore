@@ -19,3 +19,6 @@ perf.data.*
 python/pyroscope_io.egg-info/
 /cmake-build-*/
 /sites/
+
+/native-profiles/
+/rust/native-profiles/

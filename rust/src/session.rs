@@ -57,6 +57,7 @@ impl SessionManager {
 
         // Create a thread for the SessionManager
         let handle = Some(thread::spawn(move || {
+            let _native = crate::native_profiler::register(crate::native_profiler::UPLOADER);
             log::trace!(target: LOG_TAG, "Started");
             while let Ok(signal) = rx.recv() {
                 match signal {

@@ -44,6 +44,7 @@ impl Signal {
             let buffer = buffer.clone();
             let running = running.clone();
             std::thread::spawn(move || {
+                let native = crate::native_profiler::register(crate::native_profiler::READER);
                 let pid = std::process::id();
                 while running.load(Ordering::Relaxed) {
                     std::thread::sleep(Duration::from_millis(10)); //todo do not wake up on every 10ms, notify from producer when buf is half full
@@ -60,6 +61,7 @@ impl Signal {
                 if config.sampler.signal_timer == SignalTimer::CTimer {
                     threads::detach();
                 }
+                drop(native);
                 drop(session);
             })
         };

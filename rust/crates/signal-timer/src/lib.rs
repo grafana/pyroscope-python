@@ -6,6 +6,8 @@
 
 #[cfg(target_os = "linux")]
 mod ctimer;
+#[cfg(target_os = "linux")]
+pub use ctimer::CTimer;
 mod itimer;
 
 use std::ffi::c_void;

@@ -27,6 +27,9 @@
 //! another signal handler. Initialization and signal masks are not checked while unwinding;
 //! violating these preconditions can turn a failed memory read into a process crash.
 //! Kindasafe reads use direct memory loads without syscalls on the successful memory-load path.
+//! The SDK's experimental native worker profiler shares these recovery handlers. Its framehop
+//! walks require the same successful initialization and unblocked recovery signals; dispatching
+//! a worker sample to framehop does not relax this contract.
 //! In ASAN builds, a fault recovered during a read is reported to ASAN after recovery.
 
 #[cfg(test)]
