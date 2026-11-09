@@ -14,13 +14,35 @@ use timer::{Mode, SignalHandler};
 use unwind::{Frame, MAX_FRAMES};
 
 mod resolve;
+#[cfg(Py_3_15)]
+pub(super) mod thread_state;
 pub use py_spy::{Frame as ResolvedFrame, config::LineNo as Lines};
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
 
 extern "C" fn signal_handler(_: libc::c_int, _: *mut libc::siginfo_t, _: *mut libc::c_void) {
-    unwind::handler();
+    unwind::handler::<CurrentThreadState>();
+}
+
+struct CurrentThreadState;
+
+// SAFETY: both paths use pthread TLS without allocation or locks. On 3.15 the
+// registration/exit hooks maintain the cache; older CPython manages its own key.
+// Switching interpreters or replacing a registered thread's state is unsupported.
+unsafe impl unwind::ThreadState for CurrentThreadState {
+    fn current() -> usize {
+        #[cfg(Py_3_15)]
+        {
+            thread_state::current()
+        }
+        #[cfg(not(Py_3_15))]
+        // Before 3.15 CPython uses pthread_getspecific for this lookup. In 3.15 it
+        // uses C thread-local storage, whose dynamic lookup may allocate or lock.
+        unsafe {
+            pyo3::ffi::PyGILState_GetThisThreadState() as usize
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,9 +73,9 @@ pub(super) static METRICS_LOCK: Mutex<()> = Mutex::new(());
 
 fn check_version(version: (u8, u8)) -> Result<(), Error> {
     let (major, minor) = version;
-    if !matches!(version, (3, 10..=14)) {
+    if !matches!(version, (3, 10..=15)) {
         return Err(format!(
-            "unwinding in the signal handler supports only Python 3.10 to 3.14, found {major}.{minor}"
+            "unwinding in the signal handler supports only Python 3.10 to 3.15, found {major}.{minor}"
         ));
     }
     if version != unwind::PY_VERSION {

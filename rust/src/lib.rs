@@ -234,11 +234,11 @@ fn initialize_agent(
                 },
             })
         });
-    if signal_timer == SignalTimer::CTimer
+    if (signal_timer == SignalTimer::CTimer || cfg!(Py_3_15))
         && signal_config.is_some()
         && let Err(e) = signal_backend::threads::install(py)
     {
-        log::error!(target: "pyroscope-python", "failed to install the CTimer thread hooks: {e}");
+        log::error!(target: "pyroscope-python", "failed to install the Signal thread hooks: {e}");
         return false;
     }
 
@@ -334,7 +334,7 @@ pub enum ProfilerImplementation {
     PySpy = 0,
     Stack = 1,
     /// Experimental: unwinds the python stack of the thread on the CPU inside a `SIGPROF`
-    /// handler. CPython 3.11 to 3.14 only, no thread ids, names or line numbers.
+    /// handler. CPython 3.10 to 3.15 only, no thread ids or names.
     Signal = 2,
 }
 

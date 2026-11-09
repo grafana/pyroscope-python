@@ -10,8 +10,11 @@
 //! Initialize kindasafe recovery, invoke [`handler`] from a `SIGPROF` callback, and drain with [`consumer`].
 //! Each record contains the interrupted thread's frames, innermost first.
 //!
-//! Supports CPython 3.10 to 3.14, default (GIL) build, 64-bit targets. The offsets come from the
+//! Supports CPython 3.10 to 3.15, default (GIL) build, 64-bit targets. The offsets come from the
 //! checked-in layouts verified against the target CPython headers by `pyroscope-python-offsets`.
+//! Callers provide thread-state retrieval through the statically dispatched [`ThreadState`]
+//! trait. Platform-specific lookup and cache lifecycle belong to the sampler. A missing
+//! thread state drops the sample with [`Error::NoThreadState`].
 //!
 //! Native reads rely on CPython's current-thread ownership of the active frame chain: the
 //! interrupted thread is paused, active frames retain their code, and other threads must not
@@ -39,6 +42,17 @@ pub use layout::{OB_TYPE, PY_VERSION};
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 
+/// Statically dispatched access to the interrupted thread's Python state.
+///
+/// # Safety
+/// Implementations must be safe to call from a signal handler: no allocation, locks,
+/// or lazy initialization. Return zero for a missing state, otherwise the address of
+/// the calling thread's live Python state under the ownership assumptions documented
+/// at crate level. Any cached pointer must be cleared before its state is destroyed.
+pub unsafe trait ThreadState {
+    fn current() -> usize;
+}
+
 /// Maximum number of frames visited in one stack, including skipped frames.
 pub const MAX_FRAMES: usize = 256;
 
@@ -55,8 +69,7 @@ const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_CSTACK;
 #[cfg(all(Py_3_14, not(Py_3_15)))]
 const SKIP_OWNERS: u8 =
     (1 << layout::FRAME_OWNED_BY_CSTACK) | (1 << layout::FRAME_OWNED_BY_INTERPRETER);
-// CPython 3.15 removed C-stack-owned frames. Keep the crate buildable for the
-// other profilers; Signal startup still rejects 3.15 before installing a timer.
+// CPython 3.15 removed C-stack-owned frames.
 #[cfg(Py_3_15)]
 const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_INTERPRETER;
 
@@ -94,11 +107,11 @@ pub fn consumer() -> Option<Consumer<'static, Frame, SLOTS>> {
 
 /// Unwinds the interrupted thread into the ring buffer. Requires successful recovery initialization
 /// and both recovery signals to remain unblocked, as documented by [`unwind`].
-pub fn handler() {
+pub fn handler<T: ThreadState>() {
     // TODO: consider MaybeUninit for frame storage after measuring the initialization cost.
     let mut frames = [Frame::default(); MAX_FRAMES];
     // Unwind errors are counted by the unwinder. Never publish a partial stack.
-    let Ok(frames) = unwind(&mut frames) else {
+    let Ok(frames) = unwind::<T>(&mut frames) else {
         return;
     };
     let Some(mut producer) = RECORDS.producer() else {
@@ -108,12 +121,6 @@ pub fn handler() {
     if producer.push_slice(frames).is_err() {
         METRICS.buffer_dropped.fetch_add(1, Ordering::Relaxed);
     }
-}
-
-fn current_thread_state() -> usize {
-    // TODO: PyGILState_GetThisThreadState is not safe on 3.15; find another way to get the tstate.
-    // SAFETY: this queries the calling thread's state without requiring the GIL.
-    unsafe { pyo3_ffi::PyGILState_GetThisThreadState() as usize }
 }
 
 #[derive(Default)]
@@ -167,8 +174,8 @@ impl Metrics {
 /// Writes the calling thread's frames into `frames`, innermost first, and returns that subslice.
 /// On error, the caller must discard the partial stack.
 /// Unwind errors are counted here; publishing the stack is the caller's responsibility.
-pub fn unwind(frames: &mut [Frame]) -> Result<&[Frame], Error> {
-    unwind_thread(current_thread_state(), frames)
+pub fn unwind<T: ThreadState>(frames: &mut [Frame]) -> Result<&[Frame], Error> {
+    unwind_thread(T::current(), frames)
 }
 
 fn unwind_thread(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
@@ -331,7 +338,17 @@ mod tests {
         let no_thread_before = METRICS.no_thread_state.load(Ordering::Relaxed);
         let invalid_before = METRICS.invalid.load(Ordering::Relaxed);
         let mut output = [Frame::default(); 1];
-        assert_eq!(unwind_thread(0, &mut output), Err(Error::NoThreadState));
+        struct MissingThreadState;
+        // SAFETY: a constant zero reports no state without accessing memory or TLS.
+        unsafe impl ThreadState for MissingThreadState {
+            fn current() -> usize {
+                0
+            }
+        }
+        assert_eq!(
+            unwind::<MissingThreadState>(&mut output),
+            Err(Error::NoThreadState)
+        );
         assert_eq!(unwind_thread(usize::MAX, &mut output), Err(Error::Invalid));
         assert_eq!(
             METRICS.no_thread_state.load(Ordering::Relaxed),
