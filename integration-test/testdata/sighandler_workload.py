@@ -172,7 +172,7 @@ def sigbus_with_our_handler():
 
 
 def crash_chains_to_earlier_faulthandler():
-    faulthandler.enable()
+    faulthandler.enable(file=int(os.environ["FAULT_LOG_FD"]))
     foreign = handlers()
     configure()
     expect(handlers() != foreign, "configure() did not install on top of faulthandler")
@@ -181,7 +181,7 @@ def crash_chains_to_earlier_faulthandler():
 
 def crash_after_faulthandler_takeover():
     configure()
-    faulthandler.enable()
+    faulthandler.enable(file=int(os.environ["FAULT_LOG_FD"]))
     segfault()
 
 
@@ -530,24 +530,36 @@ def main(scenario):
     want = SCENARIOS[scenario]
     env = dict(os.environ, **want.env)
     env.pop("PYTHONFAULTHANDLER", None)
-    result = subprocess.run(
-        [sys.executable, __file__, "child", scenario],
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=120,
-        text=True,
-    )
+    # A fatal traceback uses several writes. Keep it separate from concurrent
+    # profiler diagnostics so its complete banner cannot be interleaved.
+    with tempfile.TemporaryFile(mode="w+") as fault_log:
+        env["FAULT_LOG_FD"] = str(fault_log.fileno())
+        result = subprocess.run(
+            [sys.executable, __file__, "child", scenario],
+            env=env,
+            pass_fds=(fault_log.fileno(),),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+            text=True,
+        )
+        fault_log.seek(0)
+        fault_output = fault_log.read()
     sys.stderr.write(result.stderr)
+    sys.stderr.write(fault_output)
 
     expect(
         result.returncode == want.returncode,
         f"{scenario}: child exited with {result.returncode}, expected {want.returncode}",
     )
     for needle in want.required:
-        expect(needle in result.stderr, f"{scenario}: stderr lacks {needle!r}")
+        output = fault_output if needle == FAULTHANDLER_BANNER else result.stderr
+        expect(needle in output, f"{scenario}: output lacks {needle!r}")
     for needle in want.forbidden:
-        expect(needle not in result.stderr, f"{scenario}: stderr contains {needle!r}")
+        expect(
+            needle not in result.stderr + fault_output,
+            f"{scenario}: output contains {needle!r}",
+        )
     expect(
         "panicked" not in result.stderr,
         f"{scenario}: child stderr contains a native panic",
