@@ -37,7 +37,7 @@ def configure(
     mem_enable_mem_domain=True,
     cpu_enabled=True,
     cpu_implementation=ProfilerImplementation.PySpy,
-    signal_timer=SignalTimer.ITimer,
+    signal_timer=SignalTimer.CTimer if sys.platform == "linux" else SignalTimer.ITimer,
 ):
     if app_name is not None:
         warnings.warn(
