@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"time"
 
 	"pyroscope-python-integration-test/api/querier"
-	"pyroscope-python-integration-test/dockertest"
 	"pyroscope-python-integration-test/pyroscope/model"
 	"pyroscope-python-integration-test/require"
 )
@@ -38,6 +38,9 @@ func TestPythonProfilerOnCPUWithGILOnly(t *testing.T) {
 }
 
 func TestPythonProfilerOnCPUWithoutGILOnly(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("macOS py-spy thread-ID and idle-detection differences invalidate CPU profile expectations; pending https://github.com/benfred/py-spy/pull/906/")
+	}
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, gilOnly: false})
 }
 
@@ -59,20 +62,19 @@ func TestPythonSignalProfilerITimer(t *testing.T) {
 }
 
 func TestPythonSignalProfilerCTimer(t *testing.T) {
-	skipUnlessPythonSupportsSignal(t)
+	skipUnlessSignalCTimer(t)
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, signalTimer: "CTimer"})
 }
 
 func TestPythonSignalProfilerCTimerRawFork(t *testing.T) {
-	skipUnlessPythonSupportsSignal(t)
-	wheelDir := ensureWheel(t)
-	net := dockertest.CreateNetwork(t)
-	pyroscopeURL := startPyroscope(t, net)
+	skipUnlessSignalCTimer(t)
+
+	pyroscopeURL := startPyroscope(t)
 	for _, scenario := range []string{"main", "unregistered"} {
 		t.Run(scenario, func(t *testing.T) {
 			appName := fmt.Sprintf("pyroscopers.python.test.rawfork.%s.%d", scenario, time.Now().UnixNano())
 			canary := randomHex(t, 16)
-			workload := startPythonTestContainer(t, net, wheelDir, "signal_ctimer_workload.py", map[string]string{
+			workload := startPythonWorkload(t, pyroscopeURL, "signal_ctimer_workload.py", map[string]string{
 				"SCENARIO":                   scenario,
 				"PYROSCOPE_APPLICATION_NAME": appName,
 				"CANARY":                     canary,
@@ -94,50 +96,41 @@ func TestPythonSignalProfilerCTimerRawFork(t *testing.T) {
 }
 
 func TestPythonSignalProfilerCTimerArmingFailure(t *testing.T) {
-	skipUnlessPythonSupportsSignal(t)
-	wheelDir := ensureWheel(t)
-	net := dockertest.CreateNetwork(t)
-	startPyroscope(t, net)
-	workload := startPythonTestContainer(t, net, wheelDir, "signal_ctimer_workload.py", map[string]string{
+	skipUnlessSignalCTimer(t)
+
+	pyroscopeURL := startPyroscope(t)
+	workload := startPythonWorkload(t, pyroscopeURL, "signal_ctimer_workload.py", map[string]string{
 		"SCENARIO": "arming_failure",
 	})
-	requireContainerExit(t, workload, 0, time.Minute)
+	requireProcessExit(t, workload, 0, time.Minute)
 	t.Log(workload.Logs(t))
 }
 
 func TestPythonSignalProfilerLifecycle(t *testing.T) {
 	skipUnlessPythonSupportsSignal(t)
-	wheelDir := ensureWheel(t)
-	net := dockertest.CreateNetwork(t)
-	startPyroscope(t, net)
+
+	pyroscopeURL := startPyroscope(t)
 	for _, scenario := range []string{"zero_rate", "ctimer_shutdown_fork", "recovery_handlers_preserved", "bounded_drain", "fault_fallback"} {
 		t.Run(scenario, func(t *testing.T) {
-			workload := startPythonTestContainer(t, net, wheelDir, "signal_lifecycle_workload.py", map[string]string{
+			if scenario == "ctimer_shutdown_fork" {
+				skipUnlessSignalCTimer(t)
+			}
+			workload := startPythonWorkload(t, pyroscopeURL, "signal_lifecycle_workload.py", map[string]string{
 				"SCENARIO": scenario,
 			})
-			requireContainerExit(t, workload, 0, 2*time.Minute)
-		})
-	}
-	if _, minor := pythonVersion(t); minor >= 11 {
-		t.Run("ctimer_preexisting_thread_cleanup", func(t *testing.T) {
-			workload := startPythonTestContainer(t, net, wheelDir, "signal_lifecycle_workload.py", map[string]string{
-				"SCENARIO": "ctimer_preexisting_thread_cleanup",
-			})
-			requireContainerExit(t, workload, 0, 2*time.Minute)
+			requireProcessExit(t, workload, 0, 2*time.Minute)
 		})
 	}
 }
 
 func TestPythonStackProfilerRestart(t *testing.T) {
 	skipUnlessProfiler(t, "stack")
-	wheelDir := ensureWheel(t)
 
-	net := dockertest.CreateNetwork(t)
-	pyroscopeURL := startPyroscope(t, net)
+	pyroscopeURL := startPyroscope(t)
 	appName := fmt.Sprintf("pyroscopers.python.test.restart.%d", time.Now().UnixNano())
 	canaryFirst := randomHex(t, 16)
 	canarySecond := randomHex(t, 16)
-	workload := startPythonTestContainer(t, net, wheelDir, "restart_workload.py", map[string]string{
+	workload := startPythonWorkload(t, pyroscopeURL, "restart_workload.py", map[string]string{
 		"PYROSCOPE_APPLICATION_NAME": appName,
 		"CANARY_FIRST":               canaryFirst,
 		"CANARY_SECOND":              canarySecond,
@@ -169,15 +162,13 @@ func TestPythonStackProfilerRestart(t *testing.T) {
 func TestPythonStackProfilerCpuTimerFork(t *testing.T) {
 	skipUnlessProfiler(t, "stack")
 	if !pythonSupportsCPUTimer(t) {
-		t.Skip("CPU timers require CPython 3.12+; older versions use the wall sampler")
+		t.Skip("CPU timers require Linux and CPython 3.12+; otherwise the wall sampler is used")
 	}
-	wheelDir := ensureWheel(t)
 
-	net := dockertest.CreateNetwork(t)
-	pyroscopeURL := startPyroscope(t, net)
+	pyroscopeURL := startPyroscope(t)
 	appName := fmt.Sprintf("pyroscopers.python.test.cputimerfork.%d", time.Now().UnixNano())
 	canary := randomHex(t, 16)
-	workload := startPythonTestContainer(t, net, wheelDir, "sighandler_workload.py", map[string]string{
+	workload := startPythonWorkload(t, pyroscopeURL, "sighandler_workload.py", map[string]string{
 		"PYROSCOPE_APPLICATION_NAME": appName,
 		"SCENARIO":                   "cpu_timer_worker_fork_onstack_signal",
 		"CANARY":                     canary,
@@ -196,7 +187,7 @@ func TestPythonStackProfilerCpuTimerFork(t *testing.T) {
 		},
 		minTotal: int64(3 * time.Second), minCoverage: 0.90,
 	}, 3*time.Minute)
-	requireContainerExit(t, workload, 0, 3*time.Minute)
+	requireProcessExit(t, workload, 0, 3*time.Minute)
 }
 
 func TestPythonNonCPUIntegrationSuites(t *testing.T) {
@@ -208,10 +199,8 @@ func TestPythonNonCPUIntegrationSuites(t *testing.T) {
 
 func TestPythonSignalHandlerSuites(t *testing.T) {
 	skipUnlessProfiler(t, "stack", "py-spy")
-	wheelDir := ensureWheel(t)
 
-	net := dockertest.CreateNetwork(t)
-	startPyroscope(t, net)
+	pyroscopeURL := startPyroscope(t)
 	scenarios := []string{
 		"import_installs_nothing",
 		"stack_offcpu_refused",
@@ -245,17 +234,17 @@ func TestPythonSignalHandlerSuites(t *testing.T) {
 			}
 			if scenario == "cpu_timer_unsupported_fallback" {
 				if pythonSupportsCPUTimer(t) {
-					t.Skip("fallback applies to CPython older than 3.12")
+					t.Skip("fallback applies when Linux CPU timers are unavailable")
 				}
 			} else if strings.HasPrefix(scenario, "cpu_timer_") && !pythonSupportsCPUTimer(t) {
-				t.Skip("CPU timers require CPython 3.12+; older versions use the wall sampler")
+				t.Skip("CPU timers require Linux and CPython 3.12+; otherwise the wall sampler is used")
 			}
 			appName := fmt.Sprintf("pyroscopers.python.test.sighandler.%d", time.Now().UnixNano())
-			workload := startPythonTestContainer(t, net, wheelDir, "sighandler_workload.py", map[string]string{
+			workload := startPythonWorkload(t, pyroscopeURL, "sighandler_workload.py", map[string]string{
 				"PYROSCOPE_APPLICATION_NAME": appName,
 				"SCENARIO":                   scenario,
 			})
-			requireContainerExit(t, workload, 0, 3*time.Minute)
+			requireProcessExit(t, workload, 0, 3*time.Minute)
 		})
 	}
 }
@@ -271,33 +260,39 @@ func skipUnlessPythonSupportsSignal(t *testing.T) {
 
 func pythonVersion(t *testing.T) (int, int) {
 	t.Helper()
+	output, err := exec.Command(envOrDefault("PYTHON", "python3"), "-c",
+		"import sys; print(str(sys.version_info.major) + '.' + str(sys.version_info.minor))").Output()
+	if err != nil {
+		t.Fatalf("query Python version: %v", err)
+	}
 	var major, minor int
-	version := envOrDefault("PYTHON_VERSION", "3.11")
-	if _, err := fmt.Sscanf(version, "%d.%d", &major, &minor); err != nil {
-		t.Fatalf("invalid PYTHON_VERSION %q: %v", version, err)
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(output)), "%d.%d", &major, &minor); err != nil {
+		t.Fatalf("invalid Python version %q: %v", output, err)
 	}
 	return major, minor
 }
 
 func pythonSupportsCPUTimer(t *testing.T) bool {
 	t.Helper()
-	var major, minor int
-	version := envOrDefault("PYTHON_VERSION", "3.11")
-	if _, err := fmt.Sscanf(version, "%d.%d", &major, &minor); err != nil {
-		t.Fatalf("invalid PYTHON_VERSION %q: %v", version, err)
+	major, minor := pythonVersion(t)
+	return runtime.GOOS == "linux" && (major > 3 || major == 3 && minor >= 12)
+}
+
+func skipUnlessSignalCTimer(t *testing.T) {
+	t.Helper()
+	skipUnlessPythonSupportsSignal(t)
+	if runtime.GOOS != "linux" {
+		t.Skip("Signal CTimer requires Linux")
 	}
-	return major > 3 || major == 3 && minor >= 12
 }
 
 func testPythonMemoryProfiler(t *testing.T) {
 	// Memory profiling is independent of the CPU implementation; run it in every suite.
-	wheelDir := ensureWheel(t)
 
-	net := dockertest.CreateNetwork(t)
-	pyroscopeURL := startPyroscope(t, net)
+	pyroscopeURL := startPyroscope(t)
 	appName := fmt.Sprintf("pyroscopers.python.test.memory.%d", time.Now().UnixNano())
 	canary := randomHex(t, 16)
-	workload := startPythonTestContainer(t, net, wheelDir, "memory_workload.py", map[string]string{
+	workload := startPythonWorkload(t, pyroscopeURL, "memory_workload.py", map[string]string{
 		"PYROSCOPE_APPLICATION_NAME": appName,
 		"CANARY":                     canary,
 	})
@@ -333,41 +328,35 @@ func testPythonMemoryProfiler(t *testing.T) {
 
 func testPythonConcurrentConfigureShutdown(t *testing.T) {
 	skipUnlessProfiler(t, "py-spy")
-	wheelDir := ensureWheel(t)
 
-	net := dockertest.CreateNetwork(t)
-	startPyroscope(t, net)
+	pyroscopeURL := startPyroscope(t)
 	appName := fmt.Sprintf("pyroscopers.python.test.concurrency.%d", time.Now().UnixNano())
-	workload := startPythonTestContainer(t, net, wheelDir, "concurrency_workload.py", map[string]string{
+	workload := startPythonWorkload(t, pyroscopeURL, "concurrency_workload.py", map[string]string{
 		"PYROSCOPE_APPLICATION_NAME": appName,
 	})
 
-	requireContainerExit(t, workload, 0, 3*time.Minute)
+	requireProcessExit(t, workload, 0, 3*time.Minute)
 }
 
 func testPythonAtexitShutdown(t *testing.T) {
 	skipUnlessProfiler(t, "py-spy")
-	wheelDir := ensureWheel(t)
 
-	net := dockertest.CreateNetwork(t)
-	startPyroscope(t, net)
+	pyroscopeURL := startPyroscope(t)
 	appName := fmt.Sprintf("pyroscopers.python.test.atexit.%d", time.Now().UnixNano())
-	workload := startPythonTestContainer(t, net, wheelDir, "atexit_workload.py", map[string]string{
+	workload := startPythonWorkload(t, pyroscopeURL, "atexit_workload.py", map[string]string{
 		"PYROSCOPE_APPLICATION_NAME": appName,
 	})
 
-	requireContainerExit(t, workload, 0, 2*time.Minute)
+	requireProcessExit(t, workload, 0, 2*time.Minute)
 }
 
 func testPythonForkChild(t *testing.T) {
 	skipUnlessProfiler(t, "stack")
-	wheelDir := ensureWheel(t)
 
-	net := dockertest.CreateNetwork(t)
-	pyroscopeURL := startPyroscope(t, net)
+	pyroscopeURL := startPyroscope(t)
 	appName := fmt.Sprintf("pyroscopers.python.test.fork.%d", time.Now().UnixNano())
 	canary := randomHex(t, 16)
-	workload := startPythonTestContainer(t, net, wheelDir, "fork_workload.py", map[string]string{
+	workload := startPythonWorkload(t, pyroscopeURL, "fork_workload.py", map[string]string{
 		"PYROSCOPE_APPLICATION_NAME": appName,
 		"CANARY":                     canary,
 	})
@@ -378,19 +367,17 @@ func testPythonForkChild(t *testing.T) {
 		minTotal: int64(time.Second), minCoverage: 0.90,
 	}, 3*time.Minute)
 
-	requireContainerExit(t, workload, 0, 3*time.Minute)
+	requireProcessExit(t, workload, 0, 3*time.Minute)
 }
 
 func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 	t.Helper()
 	skipUnlessProfiler(t, cfg.profilerName())
-	wheelDir := ensureWheel(t)
 
-	net := dockertest.CreateNetwork(t)
-	pyroscopeURL := startPyroscope(t, net)
+	pyroscopeURL := startPyroscope(t)
 	appName := fmt.Sprintf("pyroscopers.python.test.%d", time.Now().UnixNano())
 	canary := randomHex(t, 16)
-	workload := startWorkload(t, net, appName, canary, cfg, wheelDir)
+	workload := startWorkload(t, pyroscopeURL, appName, canary, cfg)
 	t.Cleanup(func() {
 		requireCleanStop(t, workload)
 	})
@@ -410,7 +397,7 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 	require.Eventually(t, func() bool {
 		state, err := workload.State()
 		if err != nil {
-			t.Logf("failed to inspect workload container: %v", err)
+			t.Logf("failed to inspect workload process: %v", err)
 			return false
 		}
 		if !state.Running {
@@ -440,127 +427,69 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 		return true
 	}, 3*time.Minute, 5*time.Second, "expected exact stacks and sample proportions for %s", cfg)
 	if workloadExited {
-		t.Fatalf("workload container exited before producing the expected profile (exit code %d)", workloadExitCode)
+		t.Fatalf("workload process exited before producing the expected profile (exit code %d)", workloadExitCode)
 	}
 }
 
-func startPyroscope(t *testing.T, net *dockertest.Network) string {
+func startWorkload(t *testing.T, pyroscopeURL, appName, canary string, cfg profileConfig) *process {
 	t.Helper()
-	c := dockertest.StartContainer(t, dockertest.ContainerRequest{
-		Image:          envOrDefault("PYROSCOPE_IMAGE", "grafana/pyroscope:2.3.1"),
-		ExposedPorts:   []string{"4040/tcp"},
-		Network:        net.Name,
-		NetworkAliases: []string{"pyroscope"},
-		Cmd: []string{
-			"-config.file=/etc/pyroscope/config.yaml",
-			"-architecture.storage=v2",
-			"-segment-writer.min-ready-duration=0s",
-			"-metastore.min-ready-duration=0s",
-		},
-		WaitFor: dockertest.WaitForHTTP("/ready", "4040/tcp", 2*time.Minute),
-	})
-	return fmt.Sprintf("http://%s", c.HostPort(t, "4040/tcp"))
-}
-
-func startWorkload(t *testing.T, net *dockertest.Network, appName, canary string, cfg profileConfig, wheelDir string) *dockertest.Container {
-	t.Helper()
-	env := map[string]string{
-		"PYTHONUNBUFFERED":              "1",
-		"PYTHONDONTWRITEBYTECODE":       "1",
-		"PYROSCOPE_APPLICATION_NAME":    appName,
-		"PYROSCOPE_SERVER_ADDRESS":      "http://pyroscope:4040",
-		"ONCPU":                         boolString(cfg.onCPU),
-		"GIL_ONLY":                      boolString(cfg.gilOnly),
-		"CPU_IMPLEMENTATION":            cfg.implementation(),
-		"SIGNAL_TIMER":                  cfg.signalTimer,
-		"CANARY":                        canary,
-		"PIP_DISABLE_PIP_VERSION_CHECK": "1",
-	}
-	return dockertest.StartContainer(t, dockertest.ContainerRequest{
-		Image:    pythonImage(),
-		Platform: wheelDockerPlatform(),
-		Network:  net.Name,
-		Env:      env,
-		Volumes: []string{
-			repoRoot() + ":/pyroscope-python:ro",
-			wheelDir + ":/pyroscope-wheels:ro",
-		},
-		Cmd: []string{
-			"sh",
-			"-c",
-			"python -m pip install --no-cache-dir --no-index --find-links /pyroscope-wheels pyroscope-io && exec python /pyroscope-python/integration-test/testdata/workload.py",
-		},
+	return startPythonWorkload(t, pyroscopeURL, "workload.py", map[string]string{
+		"PYROSCOPE_APPLICATION_NAME": appName,
+		"ONCPU":                      boolString(cfg.onCPU),
+		"GIL_ONLY":                   boolString(cfg.gilOnly),
+		"CPU_IMPLEMENTATION":         cfg.implementation(),
+		"SIGNAL_TIMER":               cfg.signalTimer,
+		"CANARY":                     canary,
 	})
 }
 
-func startPythonTestContainer(t *testing.T, net *dockertest.Network, wheelDir, script string, env map[string]string) *dockertest.Container {
+func startPythonWorkload(t *testing.T, pyroscopeURL, script string, env map[string]string) *process {
 	t.Helper()
-	mergedEnv := map[string]string{
-		"PYTHONUNBUFFERED":              "1",
-		"PYTHONDONTWRITEBYTECODE":       "1",
-		"PYROSCOPE_SERVER_ADDRESS":      "http://pyroscope:4040",
-		"PIP_DISABLE_PIP_VERSION_CHECK": "1",
-	}
-	for k, v := range env {
-		mergedEnv[k] = v
-	}
-	return dockertest.StartContainer(t, dockertest.ContainerRequest{
-		Image:    pythonImage(),
-		Platform: wheelDockerPlatform(),
-		Network:  net.Name,
-		Env:      mergedEnv,
-		Volumes: []string{
-			repoRoot() + ":/pyroscope-python:ro",
-			wheelDir + ":/pyroscope-wheels:ro",
-		},
-		Cmd: []string{
-			"sh",
-			"-c",
-			fmt.Sprintf(
-				"python -m pip install --no-cache-dir --no-index --find-links /pyroscope-wheels pyroscope-io && exec python /pyroscope-python/integration-test/testdata/%s",
-				script,
-			),
-		},
-	})
+	env["PYTHONUNBUFFERED"] = "1"
+	env["PYTHONDONTWRITEBYTECODE"] = "1"
+	env["PYROSCOPE_SERVER_ADDRESS"] = pyroscopeURL
+	return startProcess(t, envOrDefault("PYTHON", "python3"), []string{
+		filepath.Join(repoRoot(), "integration-test", "testdata", script),
+	}, env)
 }
 
-func requireContainerExit(t *testing.T, container *dockertest.Container, expected int, timeout time.Duration) {
+func requireProcessExit(t *testing.T, workload *process, expected int, timeout time.Duration) {
 	t.Helper()
-	code := container.Wait(t, timeout)
+	code := workload.Wait(t, timeout)
 	if code != expected {
-		t.Fatalf("container exited with %d, expected %d\nlogs:\n%s", code, expected, container.Logs(t))
+		t.Fatalf("process exited with %d, expected %d\nlogs:\n%s", code, expected, workload.Logs(t))
 	}
-	requireNoSanitizerReport(t, container)
+	requireNoSanitizerReport(t, workload)
 }
 
-func requireCleanStop(t *testing.T, workload *dockertest.Container) {
+func requireCleanStop(t *testing.T, workload *process) {
 	t.Helper()
 	workload.Stop(t, 30*time.Second)
 	state, err := workload.State()
 	if err != nil {
-		t.Errorf("failed to inspect workload container after stop: %v", err)
+		t.Errorf("failed to inspect workload process after stop: %v", err)
 		return
 	}
 	if state.Running || state.ExitCode != 0 {
-		t.Errorf("workload container did not exit cleanly after stop (running=%t, exit code %d)\nlogs:\n%s",
+		t.Errorf("workload process did not exit cleanly after stop (running=%t, exit code %d)\nlogs:\n%s",
 			state.Running, state.ExitCode, workload.Logs(t))
 		return
 	}
 	requireNoSanitizerReport(t, workload)
 }
 
-func requireNoSanitizerReport(t *testing.T, container *dockertest.Container) {
+func requireNoSanitizerReport(t *testing.T, workload *process) {
 	t.Helper()
-	if logs := container.Logs(t); strings.Contains(logs, "ERROR: AddressSanitizer") {
-		t.Errorf("container logged an AddressSanitizer report\nlogs:\n%s", logs)
+	if logs := workload.Logs(t); strings.Contains(logs, "ERROR: AddressSanitizer") {
+		t.Errorf("process logged an AddressSanitizer report\nlogs:\n%s", logs)
 	}
 }
 
-// Wait for a substantial profile and check exact complete stacks and their weight.
-// A successful finite workload may exit before Pyroscope makes its data queryable.
+// The workload is expected to outlive the poll, so its exit means one of its
+// own assertions tripped rather than that the samples went missing.
 func requireProfileShape(
 	t *testing.T,
-	workload *dockertest.Container,
+	workload *process,
 	pyroscopeURL, profileTypeID, labelSelector string,
 	want profileShape,
 	timeout time.Duration,
@@ -569,11 +498,11 @@ func requireProfileShape(
 	require.Eventually(t, func() bool {
 		state, err := workload.State()
 		if err != nil {
-			t.Logf("failed to inspect workload container: %v", err)
+			t.Logf("failed to inspect workload process: %v", err)
 			return false
 		}
 		if !state.Running && state.ExitCode != 0 {
-			t.Fatalf("workload container exited with %d while waiting for profile %s\nlogs:\n%s",
+			t.Fatalf("workload process exited with %d while waiting for profile %s\nlogs:\n%s",
 				state.ExitCode, labelSelector, workload.Logs(t))
 		}
 		collapsed, err := queryProfile(pyroscopeURL, profileTypeID, labelSelector)
@@ -620,99 +549,6 @@ func queryProfile(pyroscopeURL string, profileTypeID string, labelSelector strin
 	buf := bytes.NewBuffer(nil)
 	tt.WriteCollapsed(buf)
 	return buf.String(), nil
-}
-
-func ensureWheel(t *testing.T) string {
-	t.Helper()
-
-	dir := wheelDir()
-	target := wheelBuildTarget()
-	pattern := wheelPattern()
-	matches, err := filepath.Glob(filepath.Join(dir, pattern))
-	if err != nil {
-		t.Fatalf("invalid integration test wheel pattern %q: %v", pattern, err)
-	}
-	if len(matches) == 0 {
-		t.Fatalf(
-			"missing prebuilt integration test wheel in %s; expected %q for target %q. Build it before running tests with `make -C %s %s`, or set PYROSCOPE_WHEEL_DIR to a directory containing the wheel.",
-			dir,
-			pattern,
-			target,
-			repoRoot(),
-			target,
-		)
-	}
-	t.Logf("using integration test wheel %s", strings.Join(matches, ", "))
-	return dir
-}
-
-func wheelDir() string {
-	if dir := os.Getenv("PYROSCOPE_WHEEL_DIR"); dir != "" {
-		return absPath(dir)
-	}
-	return filepath.Join(repoRoot(), "dist")
-}
-
-func wheelPattern() string {
-	if glob := os.Getenv("PYROSCOPE_WHEEL_GLOB"); glob != "" {
-		return glob
-	}
-	target := wheelBuildTarget()
-	platform := "manylinux"
-	if strings.HasPrefix(target, "musllinux/") {
-		platform = "musllinux"
-	}
-	return fmt.Sprintf("*%s*%s*.whl", platform, wheelArch(target))
-}
-
-func wheelBuildTarget() string {
-	if target := os.Getenv("PYROSCOPE_WHEEL_TARGET"); target != "" {
-		return target
-	}
-	target := "linux"
-	if strings.Contains(pythonImageSuffix(), "alpine") {
-		target = "musllinux"
-	}
-	return target + "/" + makeArch()
-}
-
-func wheelDockerPlatform() string {
-	parts := strings.Split(wheelBuildTarget(), "/")
-	if len(parts) != 2 {
-		return ""
-	}
-	return "linux/" + parts[1]
-}
-
-func wheelArch(target string) string {
-	if strings.HasSuffix(target, "/arm64") {
-		return "aarch64"
-	}
-	return "x86_64"
-}
-
-func makeArch() string {
-	switch runtime.GOARCH {
-	case "arm64":
-		return "arm64"
-	default:
-		return "amd64"
-	}
-}
-
-func pythonImage() string {
-	if image := os.Getenv("PYTHON_IMAGE"); image != "" {
-		return image
-	}
-	return fmt.Sprintf(
-		"python:%s-%s",
-		envOrDefault("PYTHON_VERSION", "3.11"),
-		pythonImageSuffix(),
-	)
-}
-
-func pythonImageSuffix() string {
-	return envOrDefault("PYTHON_IMAGE_SUFFIX", "slim")
 }
 
 func repoRoot() string {

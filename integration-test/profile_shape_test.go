@@ -13,16 +13,18 @@ type stackShare struct {
 	min, max float64
 }
 
-// Match the whole root-to-leaf path. CPython 3.11 introduced co_qualname.
-// Stack and Signal's CTimer use a bootstrap wrapper only on Python 3.10.
+// Match the whole root-to-leaf path. CPython 3.11 introduced co_qualname;
+// Stack and Signal's CTimer also install a Python thread registration wrapper.
 func threadStackPrefix(cfg profileConfig, minor int) string {
 	bootstrap, inner, run := "_bootstrap", "_bootstrap_inner", "run"
+	wrapper := "_bootstrap_inner"
 	if minor >= 11 {
 		bootstrap, inner, run = "Thread._bootstrap", "Thread._bootstrap_inner", "Thread.run"
+		wrapper = "_install_stack_threads.<locals>._bootstrap_inner"
 	}
 	prefix := bootstrap + ";"
-	if minor == 10 && (cfg.stack || cfg.signalTimer == "CTimer") {
-		prefix += "_bootstrap_inner;"
+	if cfg.stack || cfg.signalTimer == "CTimer" {
+		prefix += wrapper + ";"
 	}
 	return prefix + inner + ";" + run + ";"
 }
@@ -137,10 +139,8 @@ func TestConfigurationProfileShape(t *testing.T) {
 		{"wall", wall, profileConfig{}, 12, true},
 		{"python 310 gil only", strings.ReplaceAll(cpu, "Thread.", ""), profileConfig{onCPU: true, gilOnly: true}, 10, true},
 		{"python 310 idle heuristic", strings.ReplaceAll(strings.ReplaceAll(wall, ";<module>;main;Event.wait;Condition.wait 3000000000\n", ""), "Thread.", ""), profileConfig{onCPU: true}, 10, true},
-		{"stack 311+", cpu, profileConfig{onCPU: true, stack: true}, 12, true},
-		{"ctimer 311+", cpu, profileConfig{onCPU: true, signalTimer: "CTimer"}, 12, true},
-		{"stack 310 wrapper", strings.ReplaceAll(strings.ReplaceAll(cpu, "Thread.", ""), "_bootstrap_inner;", "_bootstrap_inner;_bootstrap_inner;"), profileConfig{onCPU: true, stack: true}, 10, true},
-		{"ctimer 310 wrapper", strings.ReplaceAll(strings.ReplaceAll(cpu, "Thread.", ""), "_bootstrap_inner;", "_bootstrap_inner;_bootstrap_inner;"), profileConfig{onCPU: true, signalTimer: "CTimer"}, 10, true},
+		{"stack wrapper", strings.ReplaceAll(cpu, "Thread._bootstrap_inner", "_install_stack_threads.<locals>._bootstrap_inner;Thread._bootstrap_inner"), profileConfig{onCPU: true, stack: true}, 12, true},
+		{"ctimer wrapper", strings.ReplaceAll(cpu, "Thread._bootstrap_inner", "_install_stack_threads.<locals>._bootstrap_inner;Thread._bootstrap_inner"), profileConfig{onCPU: true, signalTimer: "CTimer"}, 12, true},
 		{"itimer", cpu, profileConfig{onCPU: true, signalTimer: "ITimer"}, 12, true},
 		{"truncated stack", strings.ReplaceAll(cpu, "Thread._bootstrap;", ""), profileConfig{onCPU: true}, 12, false},
 		{"wrong order", strings.ReplaceAll(cpu, "multihash;hash_value", "hash_value;multihash"), profileConfig{onCPU: true}, 12, false},

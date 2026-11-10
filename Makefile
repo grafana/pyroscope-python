@@ -39,39 +39,36 @@ musllinux/arm64:
 		.
 
 ASAN_PYTHON_REF ?= 3.14
-ASAN_IMAGE ?= pyroscope-python-asan:$(ASAN_PYTHON_REF)
-ASAN_WHEEL_DIR := dist/asan
 PROFILER ?= all
+ASAN_BUILD_DIR ?= $(CURDIR)/.tmp/cpython-asan/$(subst .,,$(ASAN_PYTHON_REF))
+ASAN_CC ?= clang-18
+ASAN_CXX ?= clang++-18
 
-.PHONY: asan/image
-asan/image:
-	docker buildx build \
-		--build-arg=PYTHON_REF=$(ASAN_PYTHON_REF) \
-		--target=runtime \
-		--load \
-		-t $(ASAN_IMAGE) \
-		-f docker/asan.Dockerfile \
-		.
+asan/clone: $(ASAN_BUILD_DIR)/src/.cloned
 
-.PHONY: asan/wheel
-asan/wheel:
-	rm -rf $(ASAN_WHEEL_DIR)
-	docker buildx build \
-		--build-arg=PYTHON_REF=$(ASAN_PYTHON_REF) \
-		--target=wheel \
-		$(if $(ASAN_PYSPY_DIR),--build-context=pyspy=$(ASAN_PYSPY_DIR)) \
-		--output=$(ASAN_WHEEL_DIR) \
-		-f docker/asan.Dockerfile \
-		.
+$(ASAN_BUILD_DIR)/src/.cloned:
+	mkdir -p "$(ASAN_BUILD_DIR)"
+	git clone --depth 1 --branch "$(ASAN_PYTHON_REF)" https://github.com/python/cpython.git "$(ASAN_BUILD_DIR)/src"
+	touch "$@"
+
+asan/python: $(ASAN_BUILD_DIR)/install/.built
+
+$(ASAN_BUILD_DIR)/install/.built: $(ASAN_BUILD_DIR)/src/.cloned
+	export CC="$(ASAN_CC)" CXX="$(ASAN_CXX)" ASAN_OPTIONS=detect_leaks=0; \
+	export LD_LIBRARY_PATH="$(ASAN_BUILD_DIR)/install/lib$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}"; \
+	cd "$(ASAN_BUILD_DIR)/src" && \
+	./configure --prefix="$(ASAN_BUILD_DIR)/install" --enable-shared --with-address-sanitizer --without-pymalloc --with-ensurepip=install && \
+	$(MAKE) -j"$$(getconf _NPROCESSORS_ONLN)" && \
+	$(MAKE) install
+	touch "$@"
 
 .PHONY: asan/test
-asan/test: asan/image asan/wheel
-	cd integration-test && \
-		PYTHON_IMAGE=$(ASAN_IMAGE) \
-		PYTHON_VERSION=$(ASAN_PYTHON_REF) \
-		PYROSCOPE_WHEEL_DIR=../$(ASAN_WHEEL_DIR) \
-		PYROSCOPE_WHEEL_GLOB='*.whl' \
-		go test -v -timeout 60m -count=1 $(if $(RUN),-run '$(RUN)') . -profiler='$(PROFILER)'
+asan/test: asan/python
+	CC="$(ASAN_CC)" \
+		CXX="$(ASAN_CXX)" \
+		PROFILER='$(PROFILER)' \
+		RUN='$(RUN)' \
+		bash scripts/asan-test.sh "$(ASAN_BUILD_DIR)"
 
 PYTHON ?= python3
 
