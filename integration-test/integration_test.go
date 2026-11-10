@@ -38,6 +38,9 @@ func TestPythonProfilerOnCPUWithGILOnly(t *testing.T) {
 }
 
 func TestPythonProfilerOnCPUWithoutGILOnly(t *testing.T) {
+	if runtime.GOOS == "darwin" {
+		t.Skip("macOS py-spy thread-ID and idle-detection differences invalidate CPU profile expectations; pending https://github.com/benfred/py-spy/pull/906/")
+	}
 	testPythonProfilerConfiguration(t, profileConfig{onCPU: true, gilOnly: false})
 }
 
