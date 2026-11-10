@@ -49,33 +49,33 @@ def ctimer_shutdown_fork():
     assert os.waitstatus_to_exitcode(status) == 0, status
 
 
-def recovery_handlers_preserved():
+def recovery_handlers():
     libc = ctypes.CDLL(None)
+    result = []
+    for signum in (signal.SIGSEGV, signal.SIGBUS):
+        action = ctypes.create_string_buffer(256)
+        assert libc.sigaction(signum, None, action) == 0
+        result.append(ctypes.c_void_p.from_buffer(action).value)
+    return tuple(result)
 
-    def handlers():
-        result = []
-        for signum in (signal.SIGSEGV, signal.SIGBUS):
-            action = ctypes.create_string_buffer(256)
-            assert libc.sigaction(signum, None, action) == 0
-            result.append(ctypes.c_void_p.from_buffer(action).value)
-        return tuple(result)
 
+def recovery_handlers_preserved():
     # Install application handlers before initialization. Recovery handlers must
     # remain installed for the lifetime of the process, including across stops.
     faulthandler.enable()
-    previous = handlers()
+    previous = recovery_handlers()
     assert configure()
-    installed = handlers()
+    installed = recovery_handlers()
     assert all(installed)
     assert all(ours != earlier for ours, earlier in zip(installed, previous))
     signal.raise_signal(signal.SIGPROF)
     assert pyroscope.shutdown()
-    assert handlers() == installed
+    assert recovery_handlers() == installed
     assert configure()
-    assert handlers() == installed
+    assert recovery_handlers() == installed
     signal.raise_signal(signal.SIGPROF)
     assert pyroscope.shutdown()
-    assert handlers() == installed
+    assert recovery_handlers() == installed
     assert faulthandler.is_enabled()
 
 
@@ -113,6 +113,16 @@ def fault_fallback_child():
     signum = int(os.environ["FALLBACK_SIGNAL"])
     ignored = os.environ["FALLBACK_IGNORED"] == "1"
     signal.signal(signum, signal.SIG_IGN if ignored else signal.SIG_DFL)
+    if sys.platform == "darwin" and ignored:
+        # macOS cannot distinguish sent recovery signals from memory faults.
+        # Kindasafe rejects SIG_IGN: ignoring a real fault could loop forever,
+        # while terminating on a sent signal would violate SIG_IGN semantics.
+        # Failed initialization must leave both application handlers intact.
+        previous = recovery_handlers()
+        assert not configure()
+        assert recovery_handlers() == previous
+        signal.raise_signal(signum)
+        return
     assert configure()
     if os.environ["FALLBACK_STOPPED"] == "1":
         assert pyroscope.shutdown()
