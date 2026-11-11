@@ -1,0 +1,14 @@
+Using Python 3.13.7 environment at: /tmp/python-profiler-bench-mYMwfk/venv
+Resolved 8 packages in 1ms
+   Building pyroscope-io @ file:///home/korniltsev/.vibe/worktrees/pyroscope-python/vibe/task-de23
+      Built pyroscope-io @ file:///home/korniltsev/.vibe/worktrees/pyroscope-python/vibe/task-de23
+Prepared 1 package in 55.62s
+Installed 8 packages in 212ms
+ + asgiref==3.13.0
+ + django==5.2.8
+ + djangorestframework==3.16.1
+ + gunicorn==23.0.0
+ + packaging==26.3
+ + psutil==7.2.2
+ + pyroscope-io==1.4.0 (from file:///home/korniltsev/.vibe/worktrees/pyroscope-python/vibe/task-de23)
+ + sqlparse==0.6.1

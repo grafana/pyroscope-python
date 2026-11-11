@@ -1,0 +1,105 @@
+{
+  "implementation": "py-spy",
+  "loaded": true,
+  "repeat": 1,
+  "elapsed_s": 3.0005055049987277,
+  "measurement_start_unix": 1794195865.4130385,
+  "measurement_end_unix": 1794195868.423895,
+  "user_s": 4.32,
+  "system_s": 10.1,
+  "cpu_s": 14.42,
+  "cpu_cores": 4.805856871776049,
+  "requests": 31030,
+  "errors": 0,
+  "requests_per_s": 10341.590758059001,
+  "cpu_us_per_request": 464.7115694489204,
+  "rss_start_mib": 363.0625,
+  "rss_end_mib": 365.16015625,
+  "rss_mean_mib": 364.32855582121465,
+  "rss_peak_mib": 365.16015625,
+  "rss_samples": 31,
+  "pss_start_mib": 240.541015625,
+  "pss_end_mib": 251.20703125,
+  "worker_pids": [
+    11,
+    12,
+    13,
+    14,
+    30,
+    36
+  ],
+  "cgroup_cpu_delta": {
+    "usage_usec": 14433245,
+    "user_usec": 4362006,
+    "system_usec": 10071239,
+    "nice_usec": 0,
+    "core_sched.force_idle_usec": 0,
+    "nr_periods": 30,
+    "nr_throttled": 0,
+    "throttled_usec": 0,
+    "nr_bursts": 0,
+    "burst_usec": 0
+  },
+  "server_exit": 0,
+  "panics": 0,
+  "gil_only": false,
+  "signal_timer": "CTimer",
+  "lifecycle_cpu": [
+    {
+      "pid": 11,
+      "implementation": "py-spy",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.188394,
+      "cpu_after_configure": 0.20323499999999997,
+      "cpu_before_shutdown": 3.7435980000000004,
+      "cpu_after_shutdown": 3.747827
+    },
+    {
+      "pid": 36,
+      "implementation": "py-spy",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.11201599999999999,
+      "cpu_after_configure": 0.127422,
+      "cpu_before_shutdown": 3.4543090000000003,
+      "cpu_after_shutdown": 3.458221
+    },
+    {
+      "pid": 12,
+      "implementation": "py-spy",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.119735,
+      "cpu_after_configure": 0.13530599999999998,
+      "cpu_before_shutdown": 3.67322,
+      "cpu_after_shutdown": 3.677824
+    },
+    {
+      "pid": 14,
+      "implementation": "py-spy",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.10847499999999999,
+      "cpu_after_configure": 0.123612,
+      "cpu_before_shutdown": 3.5424979999999997,
+      "cpu_after_shutdown": 3.5469440000000003
+    },
+    {
+      "pid": 13,
+      "implementation": "py-spy",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.106702,
+      "cpu_after_configure": 0.12146199999999999,
+      "cpu_before_shutdown": 3.729704,
+      "cpu_after_shutdown": 3.73474
+    },
+    {
+      "pid": 30,
+      "implementation": "py-spy",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.109523,
+      "cpu_after_configure": 0.1255,
+      "cpu_before_shutdown": 3.506853,
+      "cpu_after_shutdown": 3.511555
+    }
+  ],
+  "profile_cpu_lower_bound_s": 20.813645,
+  "profile_cpu_upper_bound_s": 20.932266000000002
+}

@@ -1,0 +1,42 @@
+{
+  "python": "3.13.7 (main, Sep 30 2025, 00:38:51) [GCC 14.2.0]",
+  "platform": "Linux-7.0.0-42-generic-x86_64-with-glibc2.41",
+  "libc": [
+    "glibc",
+    "2.41"
+  ],
+  "source": {
+    "profiler_commit": "f6a0e3e25d91a4d7439f4027d11ee5aaf7f84956",
+    "benchmark_commit": "1cab57f098b7a0ece26ac98e9bcb358c52056522"
+  },
+  "affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "cpu_max": "600000 100000",
+  "cpuset": "0-5",
+  "workers": 6,
+  "clients": 6,
+  "sample_rate": 100,
+  "gil_only": false,
+  "signal_timer": "CTimer",
+  "wsgi_sha256": "1598c443ba364f652e6ce67c0eb900dd36476e9cf040065991d2b536a1391d5a",
+  "warmup_s": 15.0,
+  "duration_s": 30.0,
+  "packages": {
+    "pip": "25.2",
+    "Django": "5.2.8",
+    "sqlparse": "0.6.1",
+    "packaging": "26.3",
+    "asgiref": "3.13.0",
+    "psutil": "7.2.2",
+    "djangorestframework": "3.16.1",
+    "gunicorn": "23.0.0",
+    "pyroscope-io": "1.4.0"
+  },
+  "openssl": "OpenSSL 3.5.7 9 Jun 2026 (Library: OpenSSL 3.5.7 9 Jun 2026)"
+}

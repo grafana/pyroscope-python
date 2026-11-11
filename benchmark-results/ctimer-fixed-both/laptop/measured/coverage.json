@@ -1,0 +1,248 @@
+[
+  {
+    "case": "1-signal-idle",
+    "implementation": "signal",
+    "loaded": false,
+    "repeat": 1,
+    "uploaded_cpu_s": 0.22,
+    "worker_lifecycle_cpu_lower_s": 1.072336,
+    "worker_lifecycle_cpu_upper_s": 1.165181,
+    "uploaded_over_upper_percent": 18.881186699748795,
+    "uploaded_over_lower_percent": 20.51595768490473,
+    "recorded_drop_weight_s": 0.09,
+    "drop_reasons": {
+      "[dropped: resolve_error]": 0.09
+    }
+  },
+  {
+    "case": "1-stack-idle",
+    "implementation": "stack",
+    "loaded": false,
+    "repeat": 1,
+    "uploaded_cpu_s": 0.165934,
+    "worker_lifecycle_cpu_lower_s": 1.5427889999999997,
+    "worker_lifecycle_cpu_upper_s": 1.623638,
+    "uploaded_over_upper_percent": 10.219888916125392,
+    "uploaded_over_lower_percent": 10.755456514144191,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  },
+  {
+    "case": "1-stack-load",
+    "implementation": "stack",
+    "loaded": true,
+    "repeat": 1,
+    "uploaded_cpu_s": 229.294457,
+    "worker_lifecycle_cpu_lower_s": 231.81936000000002,
+    "worker_lifecycle_cpu_upper_s": 231.936598,
+    "uploaded_over_upper_percent": 98.86083480451843,
+    "uploaded_over_lower_percent": 98.91083169240049,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  },
+  {
+    "case": "1-signal-load",
+    "implementation": "signal",
+    "loaded": true,
+    "repeat": 1,
+    "uploaded_cpu_s": 224.79,
+    "worker_lifecycle_cpu_lower_s": 226.026312,
+    "worker_lifecycle_cpu_upper_s": 226.19399700000002,
+    "uploaded_over_upper_percent": 99.37929519853702,
+    "uploaded_over_lower_percent": 99.45302297371468,
+    "recorded_drop_weight_s": 0.16,
+    "drop_reasons": {
+      "[dropped: resolve_error]": 0.16
+    }
+  },
+  {
+    "case": "1-py-spy-load",
+    "implementation": "py-spy",
+    "loaded": true,
+    "repeat": 1,
+    "uploaded_cpu_s": 226.55,
+    "worker_lifecycle_cpu_lower_s": 237.940175,
+    "worker_lifecycle_cpu_upper_s": 238.092445,
+    "uploaded_over_upper_percent": 95.1521162294755,
+    "uploaded_over_lower_percent": 95.2130089002414,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  },
+  {
+    "case": "1-py-spy-idle",
+    "implementation": "py-spy",
+    "loaded": false,
+    "repeat": 1,
+    "uploaded_cpu_s": 0.26,
+    "worker_lifecycle_cpu_lower_s": 5.825006,
+    "worker_lifecycle_cpu_upper_s": 5.9104779999999995,
+    "uploaded_over_upper_percent": 4.398967393161771,
+    "uploaded_over_lower_percent": 4.463514715692996,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  },
+  {
+    "case": "2-signal-load",
+    "implementation": "signal",
+    "loaded": true,
+    "repeat": 2,
+    "uploaded_cpu_s": 228.82,
+    "worker_lifecycle_cpu_lower_s": 229.977108,
+    "worker_lifecycle_cpu_upper_s": 230.106985,
+    "uploaded_over_upper_percent": 99.44070146327805,
+    "uploaded_over_lower_percent": 99.49685948742342,
+    "recorded_drop_weight_s": 0.19,
+    "drop_reasons": {
+      "[dropped: resolve_error]": 0.19
+    }
+  },
+  {
+    "case": "2-stack-idle",
+    "implementation": "stack",
+    "loaded": false,
+    "repeat": 2,
+    "uploaded_cpu_s": 0.21615,
+    "worker_lifecycle_cpu_lower_s": 1.457681,
+    "worker_lifecycle_cpu_upper_s": 1.562411,
+    "uploaded_over_upper_percent": 13.834388006740864,
+    "uploaded_over_lower_percent": 14.828347217258099,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  },
+  {
+    "case": "2-stack-load",
+    "implementation": "stack",
+    "loaded": true,
+    "repeat": 2,
+    "uploaded_cpu_s": 228.384419,
+    "worker_lifecycle_cpu_lower_s": 230.897079,
+    "worker_lifecycle_cpu_upper_s": 231.005615,
+    "uploaded_over_upper_percent": 98.86531069818368,
+    "uploaded_over_lower_percent": 98.91178354837483,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  },
+  {
+    "case": "2-signal-idle",
+    "implementation": "signal",
+    "loaded": false,
+    "repeat": 2,
+    "uploaded_cpu_s": 0.23,
+    "worker_lifecycle_cpu_lower_s": 1.068969,
+    "worker_lifecycle_cpu_upper_s": 1.1579139999999999,
+    "uploaded_over_upper_percent": 19.86330591045622,
+    "uploaded_over_lower_percent": 21.51605893154993,
+    "recorded_drop_weight_s": 0.15,
+    "drop_reasons": {
+      "[dropped: resolve_error]": 0.15
+    }
+  },
+  {
+    "case": "2-py-spy-load",
+    "implementation": "py-spy",
+    "loaded": true,
+    "repeat": 2,
+    "uploaded_cpu_s": 218.52,
+    "worker_lifecycle_cpu_lower_s": 231.343484,
+    "worker_lifecycle_cpu_upper_s": 231.47858200000002,
+    "uploaded_over_upper_percent": 94.40182245457162,
+    "uploaded_over_lower_percent": 94.45695042787547,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  },
+  {
+    "case": "2-py-spy-idle",
+    "implementation": "py-spy",
+    "loaded": false,
+    "repeat": 2,
+    "uploaded_cpu_s": 0.15,
+    "worker_lifecycle_cpu_lower_s": 5.869533,
+    "worker_lifecycle_cpu_upper_s": 5.9457629999999995,
+    "uploaded_over_upper_percent": 2.5228048948469692,
+    "uploaded_over_lower_percent": 2.5555695827930434,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  },
+  {
+    "case": "3-py-spy-load",
+    "implementation": "py-spy",
+    "loaded": true,
+    "repeat": 3,
+    "uploaded_cpu_s": 218.12,
+    "worker_lifecycle_cpu_lower_s": 232.985136,
+    "worker_lifecycle_cpu_upper_s": 233.101863,
+    "uploaded_over_upper_percent": 93.57282571353794,
+    "uploaded_over_lower_percent": 93.61970628031824,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  },
+  {
+    "case": "3-signal-load",
+    "implementation": "signal",
+    "loaded": true,
+    "repeat": 3,
+    "uploaded_cpu_s": 229.02,
+    "worker_lifecycle_cpu_lower_s": 230.23977599999998,
+    "worker_lifecycle_cpu_upper_s": 230.395606,
+    "uploaded_over_upper_percent": 99.40293739803354,
+    "uploaded_over_lower_percent": 99.47021491195336,
+    "recorded_drop_weight_s": 0.19,
+    "drop_reasons": {
+      "[dropped: resolve_error]": 0.19
+    }
+  },
+  {
+    "case": "3-stack-idle",
+    "implementation": "stack",
+    "loaded": false,
+    "repeat": 3,
+    "uploaded_cpu_s": 0.176955,
+    "worker_lifecycle_cpu_lower_s": 1.355432,
+    "worker_lifecycle_cpu_upper_s": 1.437696,
+    "uploaded_over_upper_percent": 12.308234842414528,
+    "uploaded_over_lower_percent": 13.05524733074031,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  },
+  {
+    "case": "3-py-spy-idle",
+    "implementation": "py-spy",
+    "loaded": false,
+    "repeat": 3,
+    "uploaded_cpu_s": 0.23,
+    "worker_lifecycle_cpu_lower_s": 5.67163,
+    "worker_lifecycle_cpu_upper_s": 5.760949999999999,
+    "uploaded_over_upper_percent": 3.9923970872859518,
+    "uploaded_over_lower_percent": 4.055271588590934,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  },
+  {
+    "case": "3-signal-idle",
+    "implementation": "signal",
+    "loaded": false,
+    "repeat": 3,
+    "uploaded_cpu_s": 0.32,
+    "worker_lifecycle_cpu_lower_s": 1.06582,
+    "worker_lifecycle_cpu_upper_s": 1.1655319999999998,
+    "uploaded_over_upper_percent": 27.4552736432805,
+    "uploaded_over_lower_percent": 30.0238314161866,
+    "recorded_drop_weight_s": 0.15,
+    "drop_reasons": {
+      "[dropped: resolve_error]": 0.15
+    }
+  },
+  {
+    "case": "3-stack-load",
+    "implementation": "stack",
+    "loaded": true,
+    "repeat": 3,
+    "uploaded_cpu_s": 228.193594,
+    "worker_lifecycle_cpu_lower_s": 230.712797,
+    "worker_lifecycle_cpu_upper_s": 230.802231,
+    "uploaded_over_upper_percent": 98.8697522598904,
+    "uploaded_over_lower_percent": 98.90807834122872,
+    "recorded_drop_weight_s": 0,
+    "drop_reasons": {}
+  }
+]

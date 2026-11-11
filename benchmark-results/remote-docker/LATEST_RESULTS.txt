@@ -1,0 +1,3 @@
+Latest fixed-SDK results: ../ctimer-fixed-both/comparison.txt
+Tested commit3638f627472fd4f326c435b1c493a3d1227d81b7 (e60886c applied to f6a0e3e).
+VM first, then laptop; same binary, gil_only=False, SignalCTimer, six CPUs/sixworkers.

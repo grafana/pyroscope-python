@@ -1,0 +1,218 @@
+{
+  "1-signal-idle": {
+    "profiles": 6,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      220000000
+    ]
+  },
+  "1-stack-idle": {
+    "profiles": 6,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      165934000
+    ]
+  },
+  "1-stack-load": {
+    "profiles": 30,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      229294457000
+    ]
+  },
+  "1-signal-load": {
+    "profiles": 30,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      224790000000
+    ]
+  },
+  "1-py-spy-load": {
+    "profiles": 30,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      226550000000
+    ]
+  },
+  "1-py-spy-idle": {
+    "profiles": 5,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      260000000
+    ]
+  },
+  "2-signal-load": {
+    "profiles": 30,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      228820000000
+    ]
+  },
+  "2-stack-idle": {
+    "profiles": 6,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      216150000
+    ]
+  },
+  "2-stack-load": {
+    "profiles": 30,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      228384419000
+    ]
+  },
+  "2-signal-idle": {
+    "profiles": 6,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      230000000
+    ]
+  },
+  "2-py-spy-load": {
+    "profiles": 30,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      218520000000
+    ]
+  },
+  "2-py-spy-idle": {
+    "profiles": 6,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      150000000
+    ]
+  },
+  "3-py-spy-load": {
+    "profiles": 30,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      218120000000
+    ]
+  },
+  "3-signal-load": {
+    "profiles": 30,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      229020000000
+    ]
+  },
+  "3-stack-idle": {
+    "profiles": 6,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      176955000
+    ]
+  },
+  "3-py-spy-idle": {
+    "profiles": 8,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      230000000
+    ]
+  },
+  "3-signal-idle": {
+    "profiles": 6,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      320000000
+    ]
+  },
+  "3-stack-load": {
+    "profiles": 30,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      228193594000
+    ]
+  }
+}

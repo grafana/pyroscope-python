@@ -1,0 +1,9 @@
+commit f6a0e3e25d91a4d7439f4027d11ee5aaf7f84956
+Author:     Tolyan Korniltsev <anatoly.korniltsev@grafana.com>
+AuthorDate: Fri Nov 6 20:04:27 2026 +1000
+Commit:     GitHub <noreply@github.com>
+CommitDate: Fri Nov 6 20:04:27 2026 +1000
+
+    Clean up pre-existing signal profiler threads on Python 3.11+ (#266)
+    
+    Clean up pre-existing threads in signal profiler on Python 3.11+

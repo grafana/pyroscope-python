@@ -1,0 +1,16 @@
+{
+  "machine": "laptop",
+  "sdk_native_sha256": "a3ed49cb73f376658cf62e4e5238eef63e80ff70b44a60352e2928ccbb8e76df",
+  "completed_runs": 24,
+  "cpus": 6,
+  "workers": 6,
+  "gil_only": false,
+  "signal_timer": "CTimer",
+  "wsgi_sha256": "1598c443ba364f652e6ce67c0eb900dd36476e9cf040065991d2b536a1391d5a",
+  "nonempty_profile_sets": 18,
+  "successful_measured_requests": 4071640,
+  "http_errors": 0,
+  "detected_rust_panics": 0,
+  "worker_replacements": 0,
+  "maximum_cgroup_throttled_seconds": 0.0
+}

@@ -1,0 +1,65 @@
+[2026-11-09 09:45:23 +1000] [1043352] [INFO] Starting gunicorn 23.0.0
+[2026-11-09 09:45:23 +1000] [1043352] [INFO] Listening at: http://127.0.0.1:18080 (1043352)
+[2026-11-09 09:45:23 +1000] [1043352] [INFO] Using worker: sync
+[2026-11-09 09:45:23 +1000] [1043353] [INFO] Booting worker with pid: 1043353
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+[2026-11-09 09:45:23 +1000] [1043358] [INFO] Booting worker with pid: 1043358
+BENCH_WORKER_READY 1043353
+[2026-11-09 09:45:23 +1000] [1043359] [INFO] Booting worker with pid: 1043359
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+[2026-11-09 09:45:24 +1000] [1043361] [INFO] Booting worker with pid: 1043361
+[2026-11-09 09:45:24 +1000] [1043365] [INFO] Booting worker with pid: 1043365
+BENCH_WORKER_READY 1043358
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+[2026-11-09 09:45:24 +1000] [1043368] [INFO] Booting worker with pid: 1043368
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+[2026-11-09 09:45:24 +1000] [1043376] [INFO] Booting worker with pid: 1043376
+BENCH_WORKER_READY 1043359
+BENCH_WORKER_READY 1043361
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+[2026-11-09 09:45:24 +1000] [1043385] [INFO] Booting worker with pid: 1043385
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+BENCH_WORKER_READY 1043368
+BENCH_WORKER_READY 1043365
+BENCH_WORKER_READY 1043376
+[2026-11-09 09:45:24 +1000] [1043390] [INFO] Booting worker with pid: 1043390
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+[2026-11-09 09:45:24 +1000] [1043396] [INFO] Booting worker with pid: 1043396
+BENCH_WORKER_READY 1043385
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+[2026-11-09 09:45:24 +1000] [1043402] [INFO] Booting worker with pid: 1043402
+BENCH_WORKER_READY 1043390
+[2026-11-09 09:45:24 +1000] [1043403] [INFO] Booting worker with pid: 1043403
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+BENCH_WORKER_READY 1043396
+BENCH_WORKER_READY 1043402
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+BENCH_WORKER_READY 1043403
+[2026-11-09 09:45:59 +1000] [1043352] [INFO] Handling signal: term
+[2026-11-08 23:45:59 +0000] [1043358] [INFO] Worker exiting (pid: 1043358)
+[2026-11-08 23:45:59 +0000] [1043390] [INFO] Worker exiting (pid: 1043390)
+[2026-11-08 23:45:59 +0000] [1043402] [INFO] Worker exiting (pid: 1043402)
+[2026-11-08 23:45:59 +0000] [1043353] [INFO] Worker exiting (pid: 1043353)
+[2026-11-08 23:45:59 +0000] [1043365] [INFO] Worker exiting (pid: 1043365)
+[2026-11-08 23:45:59 +0000] [1043361] [INFO] Worker exiting (pid: 1043361)
+[2026-11-08 23:45:59 +0000] [1043359] [INFO] Worker exiting (pid: 1043359)
+[2026-11-08 23:45:59 +0000] [1043385] [INFO] Worker exiting (pid: 1043385)
+[2026-11-08 23:45:59 +0000] [1043403] [INFO] Worker exiting (pid: 1043403)
+[2026-11-08 23:45:59 +0000] [1043368] [INFO] Worker exiting (pid: 1043368)
+[2026-11-08 23:45:59 +0000] [1043396] [INFO] Worker exiting (pid: 1043396)
+[2026-11-08 23:45:59 +0000] [1043376] [INFO] Worker exiting (pid: 1043376)
+[2026-11-09 09:46:00 +1000] [1043352] [INFO] Shutting down: Master

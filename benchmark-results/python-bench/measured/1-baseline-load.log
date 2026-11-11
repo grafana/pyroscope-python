@@ -1,0 +1,53 @@
+[2026-11-09 09:47:13 +1000] [1046522] [INFO] Starting gunicorn 23.0.0
+[2026-11-09 09:47:13 +1000] [1046522] [INFO] Listening at: http://127.0.0.1:18080 (1046522)
+[2026-11-09 09:47:13 +1000] [1046522] [INFO] Using worker: sync
+[2026-11-09 09:47:13 +1000] [1046523] [INFO] Booting worker with pid: 1046523
+[2026-11-09 09:47:13 +1000] [1046524] [INFO] Booting worker with pid: 1046524
+not using pyroscope
+BENCH_WORKER_READY 1046523
+[2026-11-09 09:47:13 +1000] [1046525] [INFO] Booting worker with pid: 1046525
+not using pyroscope
+BENCH_WORKER_READY 1046524
+not using pyroscope
+[2026-11-09 09:47:14 +1000] [1046526] [INFO] Booting worker with pid: 1046526
+BENCH_WORKER_READY 1046525
+[2026-11-09 09:47:14 +1000] [1046527] [INFO] Booting worker with pid: 1046527
+not using pyroscope
+BENCH_WORKER_READY 1046526
+[2026-11-09 09:47:14 +1000] [1046528] [INFO] Booting worker with pid: 1046528
+not using pyroscope
+BENCH_WORKER_READY 1046527
+[2026-11-09 09:47:14 +1000] [1046529] [INFO] Booting worker with pid: 1046529
+not using pyroscope
+[2026-11-09 09:47:14 +1000] [1046530] [INFO] Booting worker with pid: 1046530
+BENCH_WORKER_READY 1046528
+[2026-11-09 09:47:14 +1000] [1046531] [INFO] Booting worker with pid: 1046531
+not using pyroscope
+[2026-11-09 09:47:14 +1000] [1046532] [INFO] Booting worker with pid: 1046532
+not using pyroscope
+BENCH_WORKER_READY 1046529
+[2026-11-09 09:47:14 +1000] [1046533] [INFO] Booting worker with pid: 1046533
+BENCH_WORKER_READY 1046530
+not using pyroscope
+not using pyroscope
+[2026-11-09 09:47:14 +1000] [1046534] [INFO] Booting worker with pid: 1046534
+not using pyroscope
+BENCH_WORKER_READY 1046531
+BENCH_WORKER_READY 1046533
+BENCH_WORKER_READY 1046532
+not using pyroscope
+BENCH_WORKER_READY 1046534
+[2026-11-09 09:47:49 +1000] [1046522] [INFO] Handling signal: term
+[2026-11-08 23:47:49 +0000] [1046527] [INFO] Worker exiting (pid: 1046527)
+[2026-11-08 23:47:49 +0000] [1046525] [INFO] Worker exiting (pid: 1046525)
+[2026-11-08 23:47:49 +0000] [1046532] [INFO] Worker exiting (pid: 1046532)
+[2026-11-08 23:47:49 +0000] [1046529] [INFO] Worker exiting (pid: 1046529)
+[2026-11-08 23:47:49 +0000] [1046534] [INFO] Worker exiting (pid: 1046534)
+[2026-11-08 23:47:49 +0000] [1046528] [INFO] Worker exiting (pid: 1046528)
+[2026-11-08 23:47:49 +0000] [1046523] [INFO] Worker exiting (pid: 1046523)
+[2026-11-08 23:47:49 +0000] [1046524] [INFO] Worker exiting (pid: 1046524)
+[2026-11-08 23:47:49 +0000] [1046526] [INFO] Worker exiting (pid: 1046526)
+[2026-11-08 23:47:49 +0000] [1046530] [INFO] Worker exiting (pid: 1046530)
+[2026-11-08 23:47:49 +0000] [1046533] [INFO] Worker exiting (pid: 1046533)
+[2026-11-08 23:47:49 +0000] [1046531] [INFO] Worker exiting (pid: 1046531)
+[2026-11-09 09:47:50 +1000] [1046522] [INFO] Shutting down: Master

@@ -1,0 +1,35 @@
+[2026-11-09 00:56:50 +0000] [10] [INFO] Starting gunicorn 23.0.0
+[2026-11-09 00:56:50 +0000] [10] [INFO] Listening at: http://127.0.0.1:18080 (10)
+[2026-11-09 00:56:50 +0000] [10] [INFO] Using worker: sync
+[2026-11-09 00:56:50 +0000] [11] [INFO] Booting worker with pid: 11
+[2026-11-09 00:56:50 +0000] [12] [INFO] Booting worker with pid: 12
+[2026-11-09 00:56:50 +0000] [13] [INFO] Booting worker with pid: 13
+[2026-11-09 00:56:50 +0000] [14] [INFO] Booting worker with pid: 14
+BENCH_PROFILER_SETTINGS {"implementation": "stack", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 11}
+BENCH_PROFILER_SETTINGS {"implementation": "stack", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 12}
+BENCH_PROFILER_SETTINGS {"implementation": "stack", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 13}
+BENCH_WORKER_READYBENCH_WORKER_READY  1311
+
+BENCH_WORKER_READY 12
+[2026-11-09 00:56:50 +0000] [27] [INFO] Booting worker with pid: 27
+BENCH_PROFILER_SETTINGS {"implementation": "stack", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 14}
+[2026-11-09 00:56:50 +0000] [30] [INFO] Booting worker with pid: 30
+BENCH_WORKER_READY 14
+BENCH_PROFILER_SETTINGS {"implementation": "stack", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 27}
+BENCH_PROFILER_SETTINGS {"implementation": "stack", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 30}
+BENCH_WORKER_READY 27
+BENCH_WORKER_READY 30
+[2026-11-09 00:57:35 +0000] [10] [INFO] Handling signal: term
+[2026-11-09 00:57:35 +0000] [13] [INFO] Worker exiting (pid: 13)
+[2026-11-09 00:57:35 +0000] [27] [INFO] Worker exiting (pid: 27)
+[2026-11-09 00:57:35 +0000] [14] [INFO] Worker exiting (pid: 14)
+[2026-11-09 00:57:35 +0000] [12] [INFO] Worker exiting (pid: 12)
+[2026-11-09 00:57:35 +0000] [30] [INFO] Worker exiting (pid: 30)
+[2026-11-09 00:57:35 +0000] [11] [INFO] Worker exiting (pid: 11)
+BENCH_PROFILE_CPU {"pid": 27, "implementation": "stack", "shutdown_succeeded": true, "cpu_before_configure": 0.112942, "cpu_after_configure": 0.129136, "cpu_before_shutdown": 35.358235, "cpu_after_shutdown": 35.361226}
+BENCH_PROFILE_CPU {"pid": 11, "implementation": "stack", "shutdown_succeeded": true, "cpu_before_configure": 0.177392, "cpu_after_configure": 0.193701, "cpu_before_shutdown": 35.515349, "cpu_after_shutdown": 35.518136}
+BENCH_PROFILE_CPU {"pid": 13, "implementation": "stack", "shutdown_succeeded": true, "cpu_before_configure": 0.104183, "cpu_after_configure": 0.12040999999999999, "cpu_before_shutdown": 35.425622000000004, "cpu_after_shutdown": 35.428369}
+BENCH_PROFILE_CPU {"pid": 12, "implementation": "stack", "shutdown_succeeded": true, "cpu_before_configure": 0.170412, "cpu_after_configure": 0.18664599999999998, "cpu_before_shutdown": 35.564228, "cpu_after_shutdown": 35.56702}
+BENCH_PROFILE_CPU {"pid": 30, "implementation": "stack", "shutdown_succeeded": true, "cpu_before_configure": 0.109848, "cpu_after_configure": 0.12639099999999998, "cpu_before_shutdown": 35.272436, "cpu_after_shutdown": 35.275221}
+BENCH_PROFILE_CPU {"pid": 14, "implementation": "stack", "shutdown_succeeded": true, "cpu_before_configure": 0.10874400000000001, "cpu_after_configure": 0.125825, "cpu_before_shutdown": 35.311351, "cpu_after_shutdown": 35.314105}
+[2026-11-09 00:57:36 +0000] [10] [INFO] Shutting down: Master

@@ -1,0 +1,10 @@
+{
+  "itimer": {
+    "worktree": "/home/korniltsev/.vibe/worktrees/pyroscope-python/vibe/investigate-itimer-cpu-loss",
+    "session": "6ed10599"
+  },
+  "ctimer": {
+    "worktree": "/home/korniltsev/.vibe/worktrees/pyroscope-python/vibe/investigate-ctimer-cpu-loss",
+    "session": "5ede9c3d"
+  }
+}

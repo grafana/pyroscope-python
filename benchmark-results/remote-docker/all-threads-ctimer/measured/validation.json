@@ -1,0 +1,14 @@
+{
+  "completed_runs": 24,
+  "cpus": 6,
+  "workers": 6,
+  "gil_only": false,
+  "signal_timer": "CTimer",
+  "wsgi_sha256": "1598c443ba364f652e6ce67c0eb900dd36476e9cf040065991d2b536a1391d5a",
+  "nonempty_profile_sets": 18,
+  "successful_measured_requests": 3760529,
+  "http_errors": 0,
+  "detected_rust_panics": 0,
+  "worker_replacements": 0,
+  "maximum_cgroup_throttled_seconds": 0.0
+}

@@ -1,0 +1,48 @@
+Remote Docker Python profiler benchmark
+
+Machine: vm — Linux 5950x-vm-vibe 7.0.0-42-generic #42-Ubuntu SMP PREEMPT_DYNAMIC Thu Oct 15 08:06:44 UTC 2026 x86_64 GNU/Linux
+Profiler commit: 3638f627472fd4f326c435b1c493a3d1227d81b7
+Applied fix: e60886ce78175c54732ac19e2d7283ae018c9f5b
+Benchmark python-bench: 1cab57f098b7a0ece26ac98e9bcb358c52056522
+Python: 3.13.7 (main, Sep 30 2025, 00:38:51) [GCC 14.2.0]
+libc: ['glibc', '2.41']; OpenSSL 3.5.7 9 Jun 2026 (Library: OpenSSL 3.5.7 9 Jun 2026)
+Image: sha256:2162c38250a33a20825b63bc6ff5790e4125b37845c1b82d168c97c2ceb7b932
+Each measurement: fresh Docker container, --cpus=6 --cpuset-cpus=0-5, 6 workers.
+Three repeats of each case, 15 s warmup then 30 s measured; 100 Hz SDK setting.
+
+Findings for this workload and configuration:
+- Lowest loaded average RSS: stack. Lowest idle CPU use: signal.
+- Loaded CPU cost per request versus baseline: py-spy: +5.25%, stack: +0.48%, signal: +1.02%.
+  Small differences should be read
+  alongside the between-run SDs below; three repetitions do not establish
+  statistical significance for the smaller deltas.
+- Loaded average RSS versus baseline: py-spy: +49.91 MiB, stack: +37.82 MiB, signal: +43.76 MiB.
+  These totals cover the master plus six workers.
+- Largest absolute mean throughput delta versus baseline: 0.91%.
+  Comparing small throughput differences requires more repetitions.
+
+Loaded comparison (mean across repetitions; SD is between-run standard deviation):
+Profiler       Requests/s (SD)      Throughput delta   CPU us/req (SD)   CPU cost delta
+baseline       10490.2 (  23.1)           +0.00%     439.87 ( 2.26)        +0.00%
+py-spy         10394.3 (  21.7)           -0.91%     462.96 ( 1.59)        +5.25%
+stack          10535.0 (  54.0)           +0.43%     441.96 ( 2.26)        +0.48%
+signal         10434.2 (   9.3)           -0.53%     444.34 ( 0.97)        +1.02%
+
+Idle memory comparison (MiB, master + six workers):
+Profiler       Average RSS (SD)    Extra RSS   Extra RSS %   Mean run peak   Highest peak   End PSS
+baseline       290.99 ( 1.47)      +0.00        +0.00%         290.99         291.94    198.50
+py-spy         348.04 ( 2.20)     +57.04       +19.60%         348.04         349.59    224.54
+stack          343.58 ( 4.11)     +52.58       +18.07%         343.61         348.29    229.00
+signal         338.26 ( 0.57)     +47.27       +16.24%         338.26         338.86    221.07
+
+Loaded memory comparison (MiB, master + six workers):
+Profiler       Average RSS (SD)    Extra RSS   Extra RSS %   Mean run peak   Highest peak   End PSS
+baseline       324.03 ( 2.17)      +0.00        +0.00%         324.40         325.71    231.20
+py-spy         373.94 ( 0.67)     +49.91       +15.40%         374.69         375.34    259.37
+stack          361.84 ( 0.31)     +37.82       +11.67%         362.69         363.23    257.19
+signal         367.79 ( 1.33)     +43.76       +13.51%         371.26         372.99    262.04
+
+Idle CPU use (CPU seconds per 30-second window, master + six workers):
+Profiler        User s    System s    Total s (SD)     Average CPU cores
+baseline        0.007       0.000      0.007 (0.006)           0.0002
+py-spy          0.000       4.673      4.673 (0.035)           0.1558

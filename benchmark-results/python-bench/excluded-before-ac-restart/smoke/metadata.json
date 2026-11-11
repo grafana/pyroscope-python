@@ -1,0 +1,43 @@
+{
+  "python": "3.13.7 (main, Oct 21 2025, 17:47:53) [GCC 15.2.1 20250808 (Red Hat 15.2.1-1)]",
+  "executable": "/tmp/python-profiler-bench-mYMwfk/venv/bin/python",
+  "platform": "Linux-7.2.15-200.fc44.x86_64-x86_64-with-glibc2.43",
+  "libc": [
+    "glibc",
+    "2.43"
+  ],
+  "affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "cpu_count": 12,
+  "workers": 12,
+  "clients": 12,
+  "sample_rate": 100,
+  "duration_s": 2.0,
+  "warmup_s": 1.0,
+  "repeats": 1,
+  "packages": {
+    "djangorestframework": "3.16.1",
+    "psutil": "7.2.2",
+    "asgiref": "3.13.0",
+    "sqlparse": "0.6.1",
+    "packaging": "26.3",
+    "pyroscope-io": "1.4.0",
+    "gunicorn": "23.0.0",
+    "Django": "5.2.8"
+  },
+  "profiler_commit": "f6a0e3e25d91a4d7439f4027d11ee5aaf7f84956",
+  "bench_commit": "1cab57f098b7a0ece26ac98e9bcb358c52056522",
+  "started_at": "2026-11-09T09:43:48+1000"
+}

@@ -1,0 +1,4 @@
+timer=itimer mode=user cpu=4.997009 user=4.997693 system=0.000000 signals=287 overruns=0 weighted=2.870000 ratio=0.5743
+timer=itimer mode=syscall cpu=4.997902 user=1.178114 system=3.821286 signals=289 overruns=0 weighted=2.890000 ratio=0.5782
+timer=ctimer mode=user cpu=4.998174 user=4.993622 system=0.004557 signals=499 overruns=0 weighted=4.990000 ratio=0.9984
+timer=ctimer mode=syscall cpu=4.998563 user=1.103613 system=3.894957 signals=499 overruns=0 weighted=4.990000 ratio=0.9983

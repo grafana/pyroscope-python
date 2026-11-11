@@ -1,0 +1,110 @@
+Remote Docker Python profiler benchmark
+
+Machine: laptop — Linux fedora 7.2.15-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Sun Nov  1 16:10:54 UTC 2026 x86_64 GNU/Linux
+Profiler commit: 3638f627472fd4f326c435b1c493a3d1227d81b7
+Applied fix: e60886ce78175c54732ac19e2d7283ae018c9f5b
+Benchmark python-bench: 1cab57f098b7a0ece26ac98e9bcb358c52056522
+Python: 3.13.7 (main, Sep 30 2025, 00:38:51) [GCC 14.2.0]
+libc: ['glibc', '2.41']; OpenSSL 3.5.7 9 Jun 2026 (Library: OpenSSL 3.5.7 9 Jun 2026)
+Image: sha256:0d0dbef27956749ea1d0c50eab0ef7e9c4a9119b4cbf6606e26741815e6a1409
+Each measurement: fresh Docker container, --cpus=6 --cpuset-cpus=0,2,4-7, 6 workers.
+Three repeats of each case, 15 s warmup then 30 s measured; 100 Hz SDK setting.
+
+Findings for this workload and configuration:
+- Lowest loaded average RSS: stack. Lowest idle CPU use: signal.
+- Loaded CPU cost per request versus baseline: py-spy: +27.25%, stack: +0.28%, signal: +0.36%.
+  Small differences should be read
+  alongside the between-run SDs below; three repetitions do not establish
+  statistical significance for the smaller deltas.
+- Loaded average RSS versus baseline: py-spy: +57.39 MiB, stack: +48.59 MiB, signal: +69.88 MiB.
+  These totals cover the master plus six workers.
+- Largest absolute mean throughput delta versus baseline: 12.93%.
+  Comparing small throughput differences requires more repetitions.
+
+Loaded comparison (mean across repetitions; SD is between-run standard deviation):
+Profiler       Requests/s (SD)      Throughput delta   CPU us/req (SD)   CPU cost delta
+baseline       11551.9 ( 419.2)           +0.00%     429.15 ( 9.18)        +0.00%
+py-spy         10058.5 (2665.8)          -12.93%     546.08 (181.29)       +27.25%
+stack          11953.7 (  20.1)           +3.48%     430.34 ( 0.59)        +0.28%
+signal         11675.2 ( 223.5)           +1.07%     430.70 ( 4.02)        +0.36%
+
+Idle memory comparison (MiB, master + six workers):
+Profiler       Average RSS (SD)    Extra RSS   Extra RSS %   Mean run peak   Highest peak   End PSS
+baseline       292.52 ( 2.28)      +0.00        +0.00%         292.52         293.93    199.99
+py-spy         350.36 ( 2.85)     +57.84       +19.77%         350.36         352.13    225.25
+stack          342.22 ( 0.80)     +49.70       +16.99%         342.26         342.95    226.83
+signal         342.57 ( 1.86)     +50.05       +17.11%         342.57         343.95    220.68
+
+Loaded memory comparison (MiB, master + six workers):
+Profiler       Average RSS (SD)    Extra RSS   Extra RSS %   Mean run peak   Highest peak   End PSS
+baseline       324.99 ( 0.94)      +0.00        +0.00%         325.53         326.50    228.98
+py-spy         382.39 ( 0.86)     +57.39       +17.66%         383.47         384.42    264.75
+stack          373.58 ( 1.67)     +48.59       +14.95%         376.01         377.98    268.72
+signal         394.88 ( 2.52)     +69.88       +21.50%         398.73         401.41    285.72
+
+Idle CPU use (CPU seconds per 30-second window, master + six workers):
+Profiler        User s    System s    Total s (SD)     Average CPU cores
+baseline        0.007       0.003      0.010 (0.000)           0.0003
+py-spy          1.303       2.403      3.707 (0.075)           0.1236
+stack           0.280       0.453      0.733 (0.015)           0.0244
+signal          0.197       0.323      0.520 (0.017)           0.0173
+
+All loaded repetitions:
+Repeat Profiler     Requests/s    CPU us/req    Average RSS MiB   Peak RSS MiB
+     1 baseline       11826.0        422.20             324.81         325.38
+     1 py-spy          6980.7        755.41             382.27         383.30
+     1 signal         11437.2        433.93             392.26         395.95
+     1 stack          11958.3        430.49             372.93         375.32
+     2 baseline       11760.4        425.69             324.16         324.72
+     2 py-spy         11637.0        439.51             381.59         382.69
+     2 signal         11880.8        426.20             395.07         398.84
+     2 stack          11971.2        429.69             375.48         377.98
+     3 baseline       11069.3        439.56             326.01         326.50
+     3 py-spy         11557.9        443.33             383.30         384.42
+     3 signal         11707.5        431.97             397.30         401.41
+     3 stack          11931.7        430.84             372.34         374.74
+
+Method and limitations:
+- All 24 measurements passed: zero HTTP errors, zero detected Rust panics,
+  no worker replacements, clean process exits. Every profiled case uploaded data.
+- Same Django home-page rendering workload as python-bench. Its old dependency
+  pins were replaced with CPython 3.13-compatible Django 5.2.8, REST Framework
+  3.16.1 and Gunicorn 23.0.0. All cases use the identical image and application.
+- Six concurrent Go HTTP clients run outside the container. The load generator
+  and receiver use CPUs 8-11; benchmark containers use 0,2,4-7.
+  Host networking avoids Docker port forwarding overhead. No extra capabilities
+  or privileged containers are used. CPU limits are saved in docker-inspect.json.
+- The container CPU quota covers the application, profiler threads and memory
+  monitor. Reported CPU/RSS cover only Gunicorn master and workers, excluding
+  the monitor, client and receiver. Cgroup throttling counters are in runs.jsonl.
+- RSS is summed process resident memory sampled every 100 ms during the measured
+  window. Average RSS is time-weighted; peak RSS is the highest sampled concurrent
+  sum (not the sum of each process lifetime high-water marks). Brief spikes between
+  samples can be missed. RSS counts shared pages per process; end-of-window PSS
+  apportions shared pages and is provided as a complementary measurement.
+- Profiler settings: sample_rate=100, oncpu=True, gil_only=False, no memory profiler,
+  10 s uploads. Signal explicitly uses CTimer; Stack uses default per-thread 10 ms
+  CPU timer and adaptive wall sampler. Sampling mechanisms are not identical.
+- Inspect uploaded CPU weights in profile-summary.json when comparing sampling
+  coverage. This overhead comparison does not establish equivalent coverage or
+  profile accuracy. Full profiles, frame sequences and weights are retained.
+- Profile uploads are acknowledged and saved by a local HTTP sink. Encoding and
+  transmission are enabled; backend ingestion costs are outside this benchmark.
+- Initialization happens in each worker after Gunicorn forks. Measurement starts
+  after all six workers initialize and the warmup finishes. Profiles also include
+  startup, warmup and shutdown, so their totals cover more than the timed window.
+- Case order is shuffled per repetition with seed 20261109. Runs are sequential.
+  Small differences within the observed spread are not a reliable ranking.
+- VM guest CPUs do not guarantee exclusive physical cores. Laptop uses six distinct
+  physical cores; hardware differences prevent direct isolation of kernel effects.
+  These results are specific to this application, Python version and configuration.
+- Only this machine and fixed SDK are included; pre-fix and smoke runs are excluded.
+
+Artifacts:
+  runs.jsonl / runs.csv: individual CPU, throughput and memory measurements
+  summary.json / summary.csv: means, medians, SDs, ranges and baseline deltas
+  <case>/rss-timeline.csv: every memory sample, including individual process RSS
+  <case>/metadata.json / docker-inspect.json: runtime and actual container limits
+  <case>/*.log: application, container and client output
+  profiles/: original compressed protobuf uploads
+  decoded-profiles.jsonl.gz / complete-stacks.json.gz: full frames and weights

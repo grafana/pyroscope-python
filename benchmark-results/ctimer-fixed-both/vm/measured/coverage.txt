@@ -1,0 +1,14 @@
+Uploaded CPU weight versus observed worker lifecycle CPU
+Lower bound: sum(cpu before shutdown - cpu after configure).
+Upper bound: sum(cpu after shutdown - cpu before configure).
+These bracket the active profiler lifetime and include all worker threads.
+They exclude the Gunicorn master and replace the earlier extrapolated estimates.
+Sampling filters or unregistered threads can still make profiler targets differ.
+
+Implementation Workload Uploaded CPU s  Lifecycle CPU lower-upper s  Ratio to upper-lower
+py-spy         idle             0.2500      7.4056-    7.5078      3.33%-    3.38%
+py-spy         loaded         177.4600    217.8497-  217.9661     81.42%-   81.46%
+signal         idle             0.2700      0.5993-    0.6982     38.67%-   45.05%
+signal         loaded         209.3700    210.1394-  210.2488     99.58%-   99.63%
+stack          idle             0.2664      0.8355-    0.9404     28.33%-   31.89%
+stack          loaded         208.5778    210.8027-  210.9205     98.89%-   98.94%

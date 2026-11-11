@@ -1,0 +1,35 @@
+[2026-11-09 00:18:15 +0000] [10] [INFO] Starting gunicorn 23.0.0
+[2026-11-09 00:18:15 +0000] [10] [INFO] Listening at: http://127.0.0.1:18080 (10)
+[2026-11-09 00:18:15 +0000] [10] [INFO] Using worker: sync
+[2026-11-09 00:18:15 +0000] [11] [INFO] Booting worker with pid: 11
+[2026-11-09 00:18:15 +0000] [12] [INFO] Booting worker with pid: 12
+[2026-11-09 00:18:15 +0000] [13] [INFO] Booting worker with pid: 13
+[2026-11-09 00:18:15 +0000] [14] [INFO] Booting worker with pid: 14
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+[2026-11-09 00:18:15 +0000] [24] [INFO] Booting worker with pid: 24
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+[2026-11-09 00:18:15 +0000] [32] [INFO] Booting worker with pid: 32
+BENCH_WORKER_READYBENCH_WORKER_READY  1211
+
+BENCH_WORKER_READY 13
+BENCH_WORKER_READY 14
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+using pyroscope with samplerate 100
+running python against http://127.0.0.1:18081
+BENCH_WORKER_READY 24
+BENCH_WORKER_READY 32
+[2026-11-09 00:19:00 +0000] [10] [INFO] Handling signal: term
+[2026-11-09 00:19:00 +0000] [24] [INFO] Worker exiting (pid: 24)
+[2026-11-09 00:19:00 +0000] [11] [INFO] Worker exiting (pid: 11)
+[2026-11-09 00:19:00 +0000] [14] [INFO] Worker exiting (pid: 14)
+[2026-11-09 00:19:00 +0000] [12] [INFO] Worker exiting (pid: 12)
+[2026-11-09 00:19:00 +0000] [13] [INFO] Worker exiting (pid: 13)
+[2026-11-09 00:19:00 +0000] [32] [INFO] Worker exiting (pid: 32)
+[2026-11-09 00:19:00 +0000] [10] [INFO] Shutting down: Master

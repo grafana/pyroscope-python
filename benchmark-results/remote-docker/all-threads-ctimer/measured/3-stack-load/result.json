@@ -1,0 +1,105 @@
+{
+  "implementation": "stack",
+  "loaded": true,
+  "repeat": 3,
+  "elapsed_s": 30.00076647300739,
+  "measurement_start_unix": 1794186425.0223467,
+  "measurement_end_unix": 1794186455.0340734,
+  "user_s": 28.830000000000002,
+  "system_s": 111.01999999999998,
+  "cpu_s": 139.85,
+  "cpu_cores": 4.6615475683205405,
+  "requests": 313533,
+  "errors": 0,
+  "requests_per_s": 10450.832990620265,
+  "cpu_us_per_request": 446.04555182389095,
+  "rss_start_mib": 357.1171875,
+  "rss_end_mib": 359.6875,
+  "rss_mean_mib": 358.9105793855095,
+  "rss_peak_mib": 359.6875,
+  "rss_samples": 300,
+  "pss_start_mib": 251.296875,
+  "pss_end_mib": 253.8671875,
+  "worker_pids": [
+    11,
+    12,
+    13,
+    20,
+    27,
+    32
+  ],
+  "cgroup_cpu_delta": {
+    "usage_usec": 139899498,
+    "user_usec": 28881978,
+    "system_usec": 111017519,
+    "nice_usec": 0,
+    "core_sched.force_idle_usec": 0,
+    "nr_periods": 300,
+    "nr_throttled": 0,
+    "throttled_usec": 0,
+    "nr_bursts": 0,
+    "burst_usec": 0
+  },
+  "server_exit": 0,
+  "panics": 0,
+  "gil_only": false,
+  "signal_timer": "CTimer",
+  "lifecycle_cpu": [
+    {
+      "pid": 12,
+      "implementation": "stack",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.1027,
+      "cpu_after_configure": 0.11939499999999999,
+      "cpu_before_shutdown": 35.345674,
+      "cpu_after_shutdown": 35.348565
+    },
+    {
+      "pid": 11,
+      "implementation": "stack",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.16934699999999997,
+      "cpu_after_configure": 0.185545,
+      "cpu_before_shutdown": 35.486912,
+      "cpu_after_shutdown": 35.489537
+    },
+    {
+      "pid": 20,
+      "implementation": "stack",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.10775599999999999,
+      "cpu_after_configure": 0.124565,
+      "cpu_before_shutdown": 35.323515,
+      "cpu_after_shutdown": 35.326377
+    },
+    {
+      "pid": 13,
+      "implementation": "stack",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.102758,
+      "cpu_after_configure": 0.119268,
+      "cpu_before_shutdown": 35.354484,
+      "cpu_after_shutdown": 35.357111
+    },
+    {
+      "pid": 32,
+      "implementation": "stack",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.11975699999999999,
+      "cpu_after_configure": 0.13674999999999998,
+      "cpu_before_shutdown": 35.206913,
+      "cpu_after_shutdown": 35.209656
+    },
+    {
+      "pid": 27,
+      "implementation": "stack",
+      "shutdown_succeeded": true,
+      "cpu_before_configure": 0.11101499999999999,
+      "cpu_after_configure": 0.127443,
+      "cpu_before_shutdown": 35.207788,
+      "cpu_after_shutdown": 35.210524
+    }
+  ],
+  "profile_cpu_lower_bound_s": 211.11232,
+  "profile_cpu_upper_bound_s": 211.22843699999999
+}

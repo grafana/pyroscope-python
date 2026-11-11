@@ -1,0 +1,35 @@
+[2026-11-09 03:55:19 +0000] [10] [INFO] Starting gunicorn 23.0.0
+[2026-11-09 03:55:19 +0000] [10] [INFO] Listening at: http://127.0.0.1:18080 (10)
+[2026-11-09 03:55:19 +0000] [10] [INFO] Using worker: sync
+[2026-11-09 03:55:19 +0000] [11] [INFO] Booting worker with pid: 11
+[2026-11-09 03:55:19 +0000] [12] [INFO] Booting worker with pid: 12
+[2026-11-09 03:55:19 +0000] [13] [INFO] Booting worker with pid: 13
+[2026-11-09 03:55:19 +0000] [14] [INFO] Booting worker with pid: 14
+[2026-11-09 03:55:19 +0000] [15] [INFO] Booting worker with pid: 15
+BENCH_PROFILER_SETTINGS {"implementation": "py-spy", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 12}
+BENCH_PROFILER_SETTINGS {"implementation": "py-spy", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 11}
+BENCH_PROFILER_SETTINGS {"implementation": "py-spy", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 13}
+BENCH_PROFILER_SETTINGS {"implementation": "py-spy", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 14}
+[2026-11-09 03:55:19 +0000] [20] [INFO] Booting worker with pid: 20
+BENCH_WORKER_READY 12
+BENCH_WORKER_READY 14
+BENCH_PROFILER_SETTINGS {"implementation": "py-spy", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 15}
+BENCH_WORKER_READY 13
+BENCH_WORKER_READY 11
+BENCH_PROFILER_SETTINGS {"implementation": "py-spy", "gil_only": false, "signal_timer": "CTimer", "sample_rate": 100, "pid": 20}
+BENCH_WORKER_READY 15
+BENCH_WORKER_READY 20
+[2026-11-09 03:56:05 +0000] [10] [INFO] Handling signal: term
+[2026-11-09 03:56:05 +0000] [20] [INFO] Worker exiting (pid: 20)
+[2026-11-09 03:56:05 +0000] [15] [INFO] Worker exiting (pid: 15)
+[2026-11-09 03:56:05 +0000] [14] [INFO] Worker exiting (pid: 14)
+[2026-11-09 03:56:05 +0000] [11] [INFO] Worker exiting (pid: 11)
+[2026-11-09 03:56:05 +0000] [13] [INFO] Worker exiting (pid: 13)
+[2026-11-09 03:56:05 +0000] [12] [INFO] Worker exiting (pid: 12)
+BENCH_PROFILE_CPU {"pid": 20, "implementation": "py-spy", "shutdown_succeeded": true, "cpu_before_configure": 0.11046399999999999, "cpu_after_configure": 0.125777, "cpu_before_shutdown": 36.571666, "cpu_after_shutdown": 36.575646}
+BENCH_PROFILE_CPU {"pid": 12, "implementation": "py-spy", "shutdown_succeeded": true, "cpu_before_configure": 0.158294, "cpu_after_configure": 0.173734, "cpu_before_shutdown": 36.635875999999996, "cpu_after_shutdown": 36.639568}
+BENCH_PROFILE_CPU {"pid": 11, "implementation": "py-spy", "shutdown_succeeded": true, "cpu_before_configure": 0.193988, "cpu_after_configure": 0.20920099999999997, "cpu_before_shutdown": 36.394417000000004, "cpu_after_shutdown": 36.398828}
+BENCH_PROFILE_CPU {"pid": 15, "implementation": "py-spy", "shutdown_succeeded": true, "cpu_before_configure": 0.113215, "cpu_after_configure": 0.12896, "cpu_before_shutdown": 36.404396, "cpu_after_shutdown": 36.408499}
+BENCH_PROFILE_CPU {"pid": 13, "implementation": "py-spy", "shutdown_succeeded": true, "cpu_before_configure": 0.112194, "cpu_after_configure": 0.127201, "cpu_before_shutdown": 36.414822, "cpu_after_shutdown": 36.41885}
+BENCH_PROFILE_CPU {"pid": 14, "implementation": "py-spy", "shutdown_succeeded": true, "cpu_before_configure": 0.10716999999999999, "cpu_after_configure": 0.12210499999999999, "cpu_before_shutdown": 36.680302999999995, "cpu_after_shutdown": 36.68464}
+[2026-11-09 03:56:05 +0000] [10] [INFO] Shutting down: Master

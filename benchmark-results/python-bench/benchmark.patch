@@ -1,0 +1,37 @@
+diff --git a/examples/language-sdk-instrumentation/python/rideshare/django/app/hello_django/wsgi.py b/examples/language-sdk-instrumentation/python/rideshare/django/app/hello_django/wsgi.py
+index b2ec29c..5dcad86 100644
+--- a/examples/language-sdk-instrumentation/python/rideshare/django/app/hello_django/wsgi.py
++++ b/examples/language-sdk-instrumentation/python/rideshare/django/app/hello_django/wsgi.py
+@@ -14,7 +14,7 @@ from django.core.wsgi import get_wsgi_application
+ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'hello_django.settings')
+ 
+ if os.environ.get('PYROSCOPE_BENCHMARK') == 'true':
+-	addr = "http://127.0.0.1:4040"
++	addr = os.environ["PYROSCOPE_BENCHMARK_SERVER"]
+ 	samplerate = os.environ.get('PYROSCOPE_BENCHMARK_SAMPLERATE')
+ 	if samplerate:
+ 		samplerate = int(samplerate)
+@@ -23,14 +23,22 @@ if os.environ.get('PYROSCOPE_BENCHMARK') == 'true':
+ 	print(f'using pyroscope with samplerate {samplerate}')
+ 	print(f'running python against {addr}')
+ 	import pyroscope
++	import atexit
++	implementation = {"py-spy": pyroscope.ProfilerImplementation.PySpy, "stack": pyroscope.ProfilerImplementation.Stack, "signal": pyroscope.ProfilerImplementation.Signal}[os.environ["PYROSCOPE_BENCHMARK_IMPL"]]
+ 	res = pyroscope.configure(
+ 		application_name = "django.app.opt",
+ 		server_address = addr,
+ 		enable_logging = False,
+-    sample_rate=samplerate,
++		sample_rate=samplerate,
++		cpu_implementation=implementation,
+ 	)
++	if not res:
++		raise RuntimeError("Profiler initialization failed")
++	atexit.register(pyroscope.shutdown)
+ 	
+ else:
+ 	print(f'not using pyroscope')
+ 
+ application = get_wsgi_application()
++
++print("BENCH_WORKER_READY", os.getpid(), flush=True)

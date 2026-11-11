@@ -1,0 +1,130 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  2.836MB
+Step 1/8 : FROM python:3.13.7-slim-trixie@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689
+ ---> 5f55cdf0c5d9
+Step 2/8 : RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 libssl3t64 openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+ ---> Running in 0e54ef8ba4ae
+Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
+Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9678 kB]
+Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [1108 B]
+Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [301 kB]
+Fetched 10.2 MB in 1s (12.1 MB/s)
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+libstdc++6 is already the newest version (14.2.0-19).
+libstdc++6 set to manually installed.
+The following packages will be upgraded:
+  ca-certificates libssl3t64 openssl openssl-provider-legacy
+4 upgraded, 0 newly installed, 0 to remove and 30 not upgraded.
+Need to get 4443 kB of archives.
+After this operation, 61.4 kB of additional disk space will be used.
+Get:1 http://deb.debian.org/debian-security trixie-security/main amd64 openssl-provider-legacy amd64 3.5.7-1~deb13u3 [316 kB]
+Get:2 http://deb.debian.org/debian-security trixie-security/main amd64 libssl3t64 amd64 3.5.7-1~deb13u3 [2458 kB]
+Get:3 http://deb.debian.org/debian-security trixie-security/main amd64 openssl amd64 3.5.7-1~deb13u3 [1508 kB]
+Get:4 http://deb.debian.org/debian-security trixie-security/main amd64 ca-certificates all 20250419+deb13u1 [161 kB]
+[91mdebconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+[0m[91mdebconf: unable to initialize frontend: Readline
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8, <STDIN> line 4.)
+debconf: falling back to frontend: Teletype
+[0m[91mdebconf: unable to initialize frontend: Teletype
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Noninteractive
+[0mPreconfiguring packages ...
+Fetched 4443 kB in 0s (19.4 MB/s)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 5644 files and directories currently installed.)
+Preparing to unpack .../openssl-provider-legacy_3.5.7-1~deb13u3_amd64.deb ...
+Unpacking openssl-provider-legacy (3.5.7-1~deb13u3) over (3.5.1-1) ...
+Setting up openssl-provider-legacy (3.5.7-1~deb13u3) ...
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 5644 files and directories currently installed.)
+Preparing to unpack .../libssl3t64_3.5.7-1~deb13u3_amd64.deb ...
+Unpacking libssl3t64:amd64 (3.5.7-1~deb13u3) over (3.5.1-1) ...
+Setting up libssl3t64:amd64 (3.5.7-1~deb13u3) ...
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 5644 files and directories currently installed.)
+Preparing to unpack .../openssl_3.5.7-1~deb13u3_amd64.deb ...
+Unpacking openssl (3.5.7-1~deb13u3) over (3.5.1-1) ...
+Preparing to unpack .../ca-certificates_20250419+deb13u1_all.deb ...
+Unpacking ca-certificates (20250419+deb13u1) over (20250419) ...
+Setting up openssl (3.5.7-1~deb13u3) ...
+Setting up ca-certificates (20250419+deb13u1) ...
+debconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8.)
+debconf: falling back to frontend: Teletype
+debconf: unable to initialize frontend: Teletype
+debconf: (This frontend requires a controlling tty.)
+debconf: falling back to frontend: Noninteractive
+Updating certificates in /etc/ssl/certs...
+rehash: warning: skipping ca-certificates.crt, it does not contain exactly one certificate or CRL
+0 added, 2 removed; done.
+Processing triggers for libc-bin (2.41-12) ...
+Processing triggers for ca-certificates (20250419+deb13u1) ...
+Updating certificates in /etc/ssl/certs...
+0 added, 0 removed; done.
+Running hooks in /etc/ca-certificates/update.d...
+done.
+ ---> Removed intermediate container 0e54ef8ba4ae
+ ---> f5bb3ede32a2
+Step 3/8 : COPY wheels/ /wheels/
+ ---> 79530a67854d
+Step 4/8 : RUN python -m pip install --no-cache-dir /wheels/*.whl Django==5.2.8 djangorestframework==3.16.1 gunicorn==23.0.0 asgiref==3.13.0 packaging==26.3 psutil==7.2.2 sqlparse==0.6.1
+ ---> Running in 627043e56230
+Processing /wheels/pyroscope_io-1.4.0-cp313-cp313-linux_x86_64.whl
+Collecting Django==5.2.8
+  Downloading django-5.2.8-py3-none-any.whl.metadata (4.1 kB)
+Collecting djangorestframework==3.16.1
+  Downloading djangorestframework-3.16.1-py3-none-any.whl.metadata (11 kB)
+Collecting gunicorn==23.0.0
+  Downloading gunicorn-23.0.0-py3-none-any.whl.metadata (4.4 kB)
+Collecting asgiref==3.13.0
+  Downloading asgiref-3.13.0-py3-none-any.whl.metadata (12 kB)
+Collecting packaging==26.3
+  Downloading packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+Collecting psutil==7.2.2
+  Downloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl.metadata (22 kB)
+Collecting sqlparse==0.6.1
+  Downloading sqlparse-0.6.1-py3-none-any.whl.metadata (6.9 kB)
+Downloading django-5.2.8-py3-none-any.whl (8.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.3/8.3 MB 33.0 MB/s  0:00:00
+Downloading djangorestframework-3.16.1-py3-none-any.whl (1.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 63.5 MB/s  0:00:00
+Downloading gunicorn-23.0.0-py3-none-any.whl (85 kB)
+Downloading asgiref-3.13.0-py3-none-any.whl (27 kB)
+Downloading packaging-26.3-py3-none-any.whl (129 kB)
+Downloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl (155 kB)
+Downloading sqlparse-0.6.1-py3-none-any.whl (51 kB)
+Installing collected packages: sqlparse, pyroscope-io, psutil, packaging, asgiref, gunicorn, Django, djangorestframework
+
+Successfully installed Django-5.2.8 asgiref-3.13.0 djangorestframework-3.16.1 gunicorn-23.0.0 packaging-26.3 psutil-7.2.2 pyroscope-io-1.4.0 sqlparse-0.6.1
+[91mWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+[0m[91m
+[notice] A new release of pip is available: 25.2 -> 26.3
+[notice] To update, run: pip install --upgrade pip
+[0m ---> Removed intermediate container 627043e56230
+ ---> b6a739eb5f64
+Step 5/8 : COPY app/ /app/
+ ---> a5a70cb3c81b
+Step 6/8 : WORKDIR /app
+ ---> Running in f2d69b8f34ce
+ ---> Removed intermediate container f2d69b8f34ce
+ ---> fbb1d25cedeb
+Step 7/8 : ENV PYTHONUNBUFFERED=1
+ ---> Running in 02bdae850002
+ ---> Removed intermediate container 02bdae850002
+ ---> 86d0e15a6bc7
+Step 8/8 : ENTRYPOINT ["python", "/harness/measure.py"]
+ ---> Running in b4d037839da3
+ ---> Removed intermediate container b4d037839da3
+ ---> 2162c38250a3
+Successfully built 2162c38250a3
+Successfully tagged pyroscope-python-bench:fixed-3638f62

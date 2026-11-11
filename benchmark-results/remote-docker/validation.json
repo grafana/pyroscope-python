@@ -1,0 +1,15 @@
+{
+  "completed_runs": 24,
+  "cpu_quota": 6,
+  "cpuset": "0-5",
+  "gunicorn_workers": 6,
+  "runtime": "CPython 3.13.7",
+  "successful_measured_requests": 3757766,
+  "http_errors": 0,
+  "detected_rust_panics": 0,
+  "worker_replacements": 0,
+  "nonempty_profile_sets": 18,
+  "max_cgroup_throttled_seconds": 0,
+  "archive_sha256": "ffb4d4e640d49edefced8ab0f1f3eac80e0d152ccabeedb85a89a0b09af4ab4d",
+  "benchmark_containers_remaining": 0
+}

@@ -1,0 +1,96 @@
+{
+  "host": "Linux fedora 7.2.15-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Sun Nov  1 16:10:54 UTC 2026 x86_64 GNU/Linux\n",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           46 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  12\nOn-line CPU(s) list:                     0-11\nVendor ID:                               GenuineIntel\nModel name:                              13th Gen Intel(R) Core(TM) i7-1365U\nCPU family:                              6\nModel:                                   186\nThread(s) per core:                      2\nCore(s) per socket:                      10\nSocket(s):                               1\nStepping:                                3\nCPU(s) scaling MHz:                      66%\nCPU max MHz:                             5200.0000\nCPU min MHz:                             400.0000\nBogoMIPS:                                5376.00\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize pconfig arch_lbr ibt flush_l1d arch_capabilities\nVirtualization:                          VT-x\nL1d cache:                               352 KiB (10 instances)\nL1i cache:                               576 KiB (10 instances)\nL2 cache:                                6.5 MiB (4 instances)\nL3 cache:                                12 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-11\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Mitigation; Clear Register File\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Not affected\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Enhanced / Automatic IBRS; IBPB conditional; PBRSB-eIBRS SW sequence; BHI BHI_DIS_S\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Not affected\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Mitigation; IBPB before exit to userspace\n",
+  "docker": "Client: Docker Engine - Community\n Version:           29.9.3\n API version:       1.56\n Go version:        go1.26.10\n Git commit:        5457199\n Built:             Tue Nov  3 21:44:34 2026\n OS/Arch:           linux/amd64\n Context:           default\n\nServer: Docker Engine - Community\n Engine:\n  Version:          29.9.3\n  API version:      1.56 (minimum version 1.40)\n  Go version:       go1.26.10\n  Git commit:       70efc0e\n  Built:            Tue Nov  3 21:39:45 2026\n  OS/Arch:          linux/amd64\n  Experimental:     false\n containerd:\n  Version:          v2.4.2\n  GitCommit:        b7a25261e029d68978bbf290df0a62fc819b3c51\n runc:\n  Version:          1.5.2\n  GitCommit:        v1.5.2-0-g29dd3dc2\n docker-init:\n  Version:          0.19.0\n  GitCommit:        de40ad0\n",
+  "image": [
+    {
+      "Id": "sha256:0d0dbef27956749ea1d0c50eab0ef7e9c4a9119b4cbf6606e26741815e6a1409",
+      "RepoTags": [
+        "pyroscope-python-bench:fixed-3638f62"
+      ],
+      "RepoDigests": [],
+      "Comment": "buildkit.dockerfile.v0",
+      "Created": "2026-11-09T13:43:57.535885394+10:00",
+      "Config": {
+        "Env": [
+          "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305",
+          "PYTHON_VERSION=3.13.7",
+          "PYTHON_SHA256=5462f9099dfd30e238def83c71d91897d8caa5ff6ebc7a50f14d4802cdaaa79a",
+          "PYTHONUNBUFFERED=1"
+        ],
+        "Entrypoint": [
+          "python",
+          "/harness/measure.py"
+        ],
+        "WorkingDir": "/app"
+      },
+      "Architecture": "amd64",
+      "Os": "linux",
+      "Size": 186101822,
+      "GraphDriver": {
+        "Data": {
+          "LowerDir": "/var/lib/docker/overlay2/rq4n9ynvu556l59qxs2hv49ol/diff:/var/lib/docker/overlay2/4d36bb6dz0y8gsby7vbgrezlh/diff:/var/lib/docker/overlay2/8zqsz2as5i13xhtgqizot12pe/diff:/var/lib/docker/overlay2/ryrenhv00726jivpn23lge1v6/diff:/var/lib/docker/overlay2/24cab8cab5e5c41e85ee7e0f1a3bf8204b964998c2aeae5bf978459329ad0c02/diff:/var/lib/docker/overlay2/523f4c46d8aa7563546525dfd25af1e0f4dc82a3e6771dd2fc42d30b9ed9d55d/diff:/var/lib/docker/overlay2/cda1956880c1df1cdda94878c038ac9878dd4f7485f5266dc36e5bf23edbc963/diff:/var/lib/docker/overlay2/bbb28892a60f58be90106a5c2ac8e5b40204cf0e7ab07fb6e6dc6a4b204c638f/diff",
+          "MergedDir": "/var/lib/docker/overlay2/jxhcc6j7t0onw89j5pe75hwly/merged",
+          "UpperDir": "/var/lib/docker/overlay2/jxhcc6j7t0onw89j5pe75hwly/diff",
+          "WorkDir": "/var/lib/docker/overlay2/jxhcc6j7t0onw89j5pe75hwly/work"
+        },
+        "Name": "overlay2"
+      },
+      "RootFS": {
+        "Type": "layers",
+        "Layers": [
+          "sha256:1d46119d249f7719e1820e24a311aa7c453f166f714969cffe89504678eaa447",
+          "sha256:719555a13b081583ca7e72d73a241a9d645ac7f9cc091e71a59a20440a68bd80",
+          "sha256:bf773f5071520d5506837835680b877584730be9a5fef09561d08edef505aebe",
+          "sha256:93945efa8b227b275f052ff615858752bc795063a64da631a0c016bc5771111a",
+          "sha256:a2bd7a2860e60c4b0aeec07d382bfe8a0d7e5232773d4fe57bd357547142d3ba",
+          "sha256:c54f44b35b869bc5a1cfcfd40697686afc525fdbbf2ff4919138bb5cfabe0e18",
+          "sha256:779ac2681d4535128256a98cdaffc70f1bdbe36c0a4996232f91840ec6f46823",
+          "sha256:32030637c87c772bd38c852ea73f164169ff09e2aa00d73bdf5964fe21f608c2",
+          "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef"
+        ]
+      },
+      "Metadata": {
+        "LastTagTime": "2026-11-09T13:43:57.925528853+10:00"
+      }
+    }
+  ],
+  "started": "2026-11-09T14:04:28+1000",
+  "controller_affinity": [
+    8,
+    9,
+    10,
+    11
+  ],
+  "machine": "laptop",
+  "power_start": {
+    "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+    "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+    "/sys/class/power_supply/AC/online": "1",
+    "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+    "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+    "/sys/class/power_supply/BAT0/status": "Not charging",
+    "/sys/class/thermal/thermal_zone2/temp": "43050",
+    "/sys/class/thermal/thermal_zone0/temp": "53000",
+    "/sys/class/thermal/thermal_zone9/temp": "30000",
+    "/sys/class/thermal/thermal_zone7/temp": "63000",
+    "/sys/class/thermal/thermal_zone5/temp": "43050",
+    "/sys/class/thermal/thermal_zone3/temp": "47050",
+    "/sys/class/thermal/thermal_zone1/temp": "20000",
+    "/sys/class/thermal/thermal_zone8/temp": "62000",
+    "/sys/class/thermal/thermal_zone6/temp": "53050",
+    "/sys/class/thermal/thermal_zone4/temp": "49050"
+  },
+  "cpus": 6,
+  "cpuset": "0,2,4-7",
+  "aux_cpus": "8-11",
+  "workers": 6,
+  "clients": 6,
+  "gil_only": false,
+  "signal_timer": "CTimer",
+  "warmup": 1,
+  "duration": 3,
+  "repeats": 1,
+  "shuffle_seed": 20261109
+}

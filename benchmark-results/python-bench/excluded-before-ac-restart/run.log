@@ -1,0 +1,11 @@
+START 1-signal-idle
+{"case": "1-signal-idle", "implementation": "signal", "loaded": false, "measurement_start_unix": 1794181469.4351037, "measurement_end_unix": 1794181499.4392698, "repeat": 1, "elapsed_s": 30.00049296900397, "user_s": 0.28, "system_s": 0.46, "cpu_s": 0.74, "cpu_cores": 0.02466626134325713, "requests": 0, "errors": 0, "requests_per_s": 0.0, "cpu_us_per_request": null, "rss_start_mib": 623.95703125, "rss_end_mib": 629.75390625, "loadavg_start": [4.92138671875, 3.05078125, 1.546875], "worker_pids": [1041578, 1041590, 1041594, 1041599, 1041600, 1041609, 1041614, 1041619, 1041624, 1041637, 1041642, 1041643], "profile_uploads": 47, "profile_bytes": 28797, "panics": 0, "server_exit": 0, "loadgen_exit": null}
+START 1-stack-idle
+Traceback (most recent call last):
+  File "/home/korniltsev/.vibe/worktrees/pyroscope-python/vibe/task-de23/benchmark-results/python-bench/run_benchmark.py", line 197, in <module>
+    results.append(run(impl, loaded, repeat))
+                   ~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/korniltsev/.vibe/worktrees/pyroscope-python/vibe/task-de23/benchmark-results/python-bench/run_benchmark.py", line 131, in run
+    time.sleep(args.duration)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^
+KeyboardInterrupt

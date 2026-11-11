@@ -1,0 +1,128 @@
+[
+  {
+    "time": 1794195848.0431166,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195849.0448272,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195850.0455139,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195851.0461724,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195852.0473475,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195853.0479004,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195854.0486772,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195855.0493753,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195856.0499837,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195857.0506163,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195858.0512626,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195859.0519617,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195860.052615,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195861.0536287,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195862.0543182,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195863.0551014,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195864.0561657,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195865.0569162,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195866.0574992,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195867.0583375,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195868.058959,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  }
+]

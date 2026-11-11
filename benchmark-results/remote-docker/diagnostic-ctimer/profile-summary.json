@@ -1,0 +1,14 @@
+{
+  "1-signal-load": {
+    "profiles": 18,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      100970000000
+    ]
+  }
+}

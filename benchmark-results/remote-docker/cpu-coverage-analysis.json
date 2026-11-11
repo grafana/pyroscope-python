@@ -1,0 +1,74 @@
+[
+  {
+    "case": "1-stack-load",
+    "cpu_seconds_measured_30s": 140.28,
+    "profile_duration_per_worker_s": 45.30597626583333,
+    "estimated_total_process_cpu_in_profile_window_s": 211.8437459700053,
+    "uploaded_cpu_s": 209.370314,
+    "ratio_to_process_cpu_estimate": 0.9883242624950773
+  },
+  {
+    "case": "1-signal-load",
+    "cpu_seconds_measured_30s": 138.89,
+    "profile_duration_per_worker_s": 45.27192785,
+    "estimated_total_process_cpu_in_profile_window_s": 209.5889179187649,
+    "uploaded_cpu_s": 41.37,
+    "ratio_to_process_cpu_estimate": 0.19738639051533582
+  },
+  {
+    "case": "1-py-spy-load",
+    "cpu_seconds_measured_30s": 142.70000000000002,
+    "profile_duration_per_worker_s": 45.357249168833334,
+    "estimated_total_process_cpu_in_profile_window_s": 215.74406862659833,
+    "uploaded_cpu_s": 87.06,
+    "ratio_to_process_cpu_estimate": 0.40353368949706864
+  },
+  {
+    "case": "2-signal-load",
+    "cpu_seconds_measured_30s": 139.35,
+    "profile_duration_per_worker_s": 45.175288804500006,
+    "estimated_total_process_cpu_in_profile_window_s": 209.83371409735813,
+    "uploaded_cpu_s": 41.19,
+    "ratio_to_process_cpu_estimate": 0.19629829351868958
+  },
+  {
+    "case": "2-stack-load",
+    "cpu_seconds_measured_30s": 140.32,
+    "profile_duration_per_worker_s": 45.348723308500006,
+    "estimated_total_process_cpu_in_profile_window_s": 212.10700183634316,
+    "uploaded_cpu_s": 209.933661,
+    "ratio_to_process_cpu_estimate": 0.9897535639204402
+  },
+  {
+    "case": "2-py-spy-load",
+    "cpu_seconds_measured_30s": 143.0,
+    "profile_duration_per_worker_s": 45.338086657,
+    "estimated_total_process_cpu_in_profile_window_s": 216.10660981021402,
+    "uploaded_cpu_s": 88.78999999999999,
+    "ratio_to_process_cpu_estimate": 0.4108620281349832
+  },
+  {
+    "case": "3-py-spy-load",
+    "cpu_seconds_measured_30s": 142.93,
+    "profile_duration_per_worker_s": 45.23706743066666,
+    "estimated_total_process_cpu_in_profile_window_s": 215.51482298245594,
+    "uploaded_cpu_s": 86.01,
+    "ratio_to_process_cpu_estimate": 0.3990908783429791
+  },
+  {
+    "case": "3-signal-load",
+    "cpu_seconds_measured_30s": 139.79,
+    "profile_duration_per_worker_s": 45.21345420666666,
+    "estimated_total_process_cpu_in_profile_window_s": 210.67559731317766,
+    "uploaded_cpu_s": 45.7,
+    "ratio_to_process_cpu_estimate": 0.21692118395689242
+  },
+  {
+    "case": "3-stack-load",
+    "cpu_seconds_measured_30s": 140.34000000000003,
+    "profile_duration_per_worker_s": 45.292621010000005,
+    "estimated_total_process_cpu_in_profile_window_s": 211.8750216329661,
+    "uploaded_cpu_s": 209.915227,
+    "ratio_to_process_cpu_estimate": 0.9907502327652332
+  }
+]

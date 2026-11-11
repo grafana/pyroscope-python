@@ -1,0 +1,4 @@
+__pycache__/
+*.py[cod]
+remote-docker/investigations/ctimer-fix-agent-prompt.txt
+ctimer-fixed-both/source-context.tar.gz

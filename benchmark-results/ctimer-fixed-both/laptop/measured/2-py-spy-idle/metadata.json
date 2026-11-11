@@ -1,0 +1,48 @@
+{
+  "sdk_native_sha256": "a3ed49cb73f376658cf62e4e5238eef63e80ff70b44a60352e2928ccbb8e76df",
+  "python": "3.13.7 (main, Sep 30 2025, 00:38:51) [GCC 14.2.0]",
+  "platform": "Linux-7.2.15-200.fc44.x86_64-x86_64-with-glibc2.41",
+  "libc": [
+    "glibc",
+    "2.41"
+  ],
+  "source": {
+    "profiler_commit": "3638f627472fd4f326c435b1c493a3d1227d81b7",
+    "base_commit": "f6a0e3e25d91a4d7439f4027d11ee5aaf7f84956",
+    "applied_fix_commit": "e60886ce78175c54732ac19e2d7283ae018c9f5b",
+    "benchmark_commit": "1cab57f098b7a0ece26ac98e9bcb358c52056522",
+    "wheel_filename": "pyroscope_io-1.4.0-cp313-cp313-linux_x86_64.whl",
+    "wheel_sha256": "a65d166736293e81f70fa4dafff517803e0892b6ade31e8df73fad9ea86a57ce",
+    "sdk_native_sha256": "a3ed49cb73f376658cf62e4e5238eef63e80ff70b44a60352e2928ccbb8e76df"
+  },
+  "affinity": [
+    0,
+    2,
+    4,
+    5,
+    6,
+    7
+  ],
+  "cpu_max": "600000 100000",
+  "cpuset": "0,2,4-7",
+  "workers": 6,
+  "clients": 6,
+  "sample_rate": 100,
+  "gil_only": false,
+  "signal_timer": "CTimer",
+  "wsgi_sha256": "1598c443ba364f652e6ce67c0eb900dd36476e9cf040065991d2b536a1391d5a",
+  "warmup_s": 15.0,
+  "duration_s": 30.0,
+  "packages": {
+    "pip": "25.2",
+    "sqlparse": "0.6.1",
+    "pyroscope-io": "1.4.0",
+    "psutil": "7.2.2",
+    "packaging": "26.3",
+    "asgiref": "3.13.0",
+    "gunicorn": "23.0.0",
+    "Django": "5.2.8",
+    "djangorestframework": "3.16.1"
+  },
+  "openssl": "OpenSSL 3.5.7 9 Jun 2026 (Library: OpenSSL 3.5.7 9 Jun 2026)"
+}

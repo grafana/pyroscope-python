@@ -1,0 +1,73 @@
+CTimer overrun fix: VM and laptop benchmark comparison
+
+Applied e60886ce78175c54732ac19e2d7283ae018c9f5b from vibe/task-0740
+to baseline f6a0e3e25d91a4d7439f4027d11ee5aaf7f84956.
+Tested commit: 3638f627472fd4f326c435b1c493a3d1227d81b7.
+Both hosts use the same CPython 3.13.7 SDK wheel and pinned Python dependencies.
+Every case: fresh Docker container, six-CPU quota, six workers, six HTTP clients.
+gil_only=False, Signal CTimer, sample_rate=100, memory profiler disabled.
+Three repetitions per idle/loaded case; 15s warmup plus 30s measurement.
+RSS sampled every 100ms; arithmetic means across repetitions are shown.
+
+Machine: vm; benchmark CPUs 0-5; client/receiver CPUs 6-9
+Implementation   Req/s (SD)       CPU us/req (SD)   CPU cost delta    Average RSS MiB (SD)   Highest peak RSS MiB
+baseline        10490.2 (  23.1)     439.87 (  2.26)        +0.00%         324.03 ( 2.17)             325.71
+py-spy          10394.3 (  21.7)     462.96 (  1.59)        +5.25%         373.94 ( 0.67)             375.34
+stack           10535.0 (  54.0)     441.96 (  2.26)        +0.48%         361.84 ( 0.31)             363.23
+signal          10434.2 (   9.3)     444.34 (  0.97)        +1.02%         367.79 ( 1.33)             372.99
+
+Idle: CPU seconds per 30s / average RSS MiB
+baseline       0.007 +/- 0.006 CPU s; 290.99 MiB
+py-spy         4.673 +/- 0.035 CPU s; 348.04 MiB
+stack          0.360 +/- 0.010 CPU s; 343.58 MiB
+signal         0.203 +/- 0.012 CPU s; 338.26 MiB
+
+Loaded profile weight versus observed worker lifecycle CPU (includes startup/warmup/shutdown):
+py-spy         uploaded 177.460s; worker CPU 217.850-217.966s; ratio 81.42-81.46%
+stack          uploaded 208.578s; worker CPU 210.803-210.921s; ratio 98.89-98.94%
+signal         uploaded 209.370s; worker CPU 210.139-210.249s; ratio 99.58-99.63%
+Validation: 24 completed runs; zero HTTP errors, panics or worker replacements.
+Measured successful requests: 3766920; maximum per-case quota throttling: 0.000000s.
+
+Machine: laptop; benchmark CPUs 0,2,4-7; client/receiver CPUs 8-11
+Implementation   Req/s (SD)       CPU us/req (SD)   CPU cost delta    Average RSS MiB (SD)   Highest peak RSS MiB
+baseline        11551.9 ( 419.2)     429.15 (  9.18)        +0.00%         324.99 ( 0.94)             326.50
+py-spy          10058.5 (2665.8)     546.08 (181.29)       +27.25%         382.39 ( 0.86)             384.42
+stack           11953.7 (  20.1)     430.34 (  0.59)        +0.28%         373.58 ( 1.67)             377.98
+signal          11675.2 ( 223.5)     430.70 (  4.02)        +0.36%         394.88 ( 2.52)             401.41
+
+Idle: CPU seconds per 30s / average RSS MiB
+baseline       0.010 +/- 0.000 CPU s; 292.52 MiB
+py-spy         3.707 +/- 0.075 CPU s; 350.36 MiB
+stack          0.733 +/- 0.015 CPU s; 342.22 MiB
+signal         0.520 +/- 0.017 CPU s; 342.57 MiB
+
+Loaded profile weight versus observed worker lifecycle CPU (includes startup/warmup/shutdown):
+py-spy         uploaded 221.063s; worker CPU 234.090-234.224s; ratio 94.38-94.44%
+stack          uploaded 228.624s; worker CPU 231.143-231.248s; ratio 98.87-98.91%
+signal         uploaded 227.543s; worker CPU 228.748-228.899s; ratio 99.41-99.47%
+Validation: 24 completed runs; zero HTTP errors, panics or worker replacements.
+Measured successful requests: 4071640; maximum per-case quota throttling: 0.000000s.
+
+Large run-to-run variation (all runs retained):
+py-spy: measured rates 6980.7, 11637.0, 11557.9 requests/s.
+Mean CPU-cost delta +27.25%; median CPU-cost delta +4.14%.
+An unexplained slow run affects the means; these data do not establish a stable overhead estimate.
+
+Identical native SDK SHA256 on both machines: a3ed49cb73f376658cf62e4e5238eef63e80ff70b44a60352e2928ccbb8e76df
+
+Interpretation and limitations:
+- CPU cost and memory deltas are calculated against each machine own baseline.
+  Do not pool machines or attribute absolute performance differences solely to virtualization.
+- The VM used six guest CPUs. The laptop used six distinct physical cores (two P cores
+  and four E cores), with the load generator on other physical cores. Neither host is
+  globally isolated from unrelated activity. The laptop remained on AC power.
+- The fixed native SDK binary is identical, and runtime library/package versions are
+  recorded per case. Host kernels, processors and timer event behavior differ.
+- Total weight coverage compares against all worker-thread CPU. Timers or sampling
+  filters may exclude some native threads. Correct totals do not establish correct
+  stack attribution; the previously demonstrated phase bias is not fixed by this patch.
+- RSS sums the master and workers and therefore counts shared pages per process.
+  PSS, per-process RSS samples, lifecycle counters and all raw profiles are retained.
+- The applied patch preserves overruns but leaves the existing shutdown ordering.
+- Only this fixed-SDK suite is included above; smoke and older runs are excluded.

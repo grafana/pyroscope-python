@@ -1,0 +1,337 @@
+CTIMER: missing CPU profile weight — findings complete
+Base: grafana/pyroscope-python f6a0e3e25d91a4d7439f4027d11ee5aaf7f84956
+Agent: 5ede9c3d; worktree: investigate-ctimer-cpu-loss
+Evidence root (abbreviated R below):
+/home/korniltsev/.vibe/worktrees/pyroscope-python/vibe/investigate-ctimer-cpu-loss/investigations/ctimer
+
+Finding
+CTimer's scheduling-runtime clock is accurate, but Linux only checks these CPU
+timer expirations on scheduler ticks while the target thread is current. Short
+CPU bursts separated by blocking can avoid those checks. The timer then fires
+several CPU periods late. Linux reports the missed periods in si_overrun, but
+signal_sampler.rs ignores siginfo and assigns just one 10ms sample per callback.
+
+This is established for the VM by native reproductions, SDK callback accounting,
+and kernel probes. It is not a generic pending-signal explanation: the traced
+Django timers were already late at cpu_timer_fire, before signal generation.
+All generated signals were delivered, normally within 2–4 microseconds.
+
+Counting 1+si_overrun restores almost all sampled-thread CPU weight in Django.
+It does not restore missing frames. A controlled Python workload proves severe
+attribution bias: elapsed CPU from a burst can be assigned to the following busy
+phase. Elapsed CPU weighting also cannot reconstruct that missing execution.
+
+What changed / scope
+All experiments ran after the parent's explicit grant, serialized with the same
+exclusive /tmp/pyroscope-cpu-loss-experiments.lock as the ITIMER agent. Remote
+files are under /home/user/ctimer-investigation-5ede9c3d, with independent ports
+19080–19082 and 19181, container names, and output. Parent harness/results and
+global kernel settings were not changed. No production changes were made or
+pushed. The sole diagnostic SDK build adds bounded normal-thread error logging.
+Recovery-handler installation, direct kindasafe reads and caller contracts are
+unchanged. The SIGPROF audit wrapper never changes SIGSEGV/SIGBUS handlers.
+
+Corrected benchmark baseline (supersedes the original extrapolation)
+Parent all-threads-ctimer/measured has explicit gil_only=False, Signal CTimer,
+CPython3.13.7, six Gunicorn workers, CPUs0–5/quota6,100Hz,15s warmup/30s measured.
+Loaded averages:
+  Signal: uploaded186.1500s / worker lifecycle210.4063–210.5171s =88.43–88.47%.
+  Stack:  uploaded209.3368s / worker lifecycle211.5556–211.6715s =98.90–98.95%.
+The lower CPU bound is sum(before_shutdown - after_configure); the upper is
+sum(after_shutdown - before_configure), using RUSAGE_SELF for each worker.
+They include every worker thread and exclude the Gunicorn master. Signal's
+handler does not implement the gil_only filter; CTimer arms registered Python
+threads, not every native thread in the process.
+The earlier100.97s/117.30s (~86.1%) used extrapolation. Its first two upload groups
+were both~85.6%, so shutdown was never a plausible explanation for the bulk.
+
+Exact measured loss ledger — R/results-01, audited Django
+A5s warmup/20s measurement reproduces the same mechanism. A matched unwrapped
+control uploaded103.40s against worker lifecycle117.151904–117.260845s. The audited
+run's lifecycle bounds were117.731999–117.843616s. Audit installation-to-removal
+clocks and callback counts give:
+
+  All worker CPU                              117.743822888s
+  Registered main-thread CPU                  117.343923902s
+  Other worker-thread CPU                       0.399898986s
+  OS callbacks                                 10,256
+  Additional periods in si_overrun               1,476
+  Callback fixed weight                       102.560000000s
+  Weight including overruns                   117.320000000s
+  Uploaded weight                             102.530000000s
+  Uploaded ordinary samples                    10,233 =102.33s
+  Uploaded resolver-drop samples                   20 =  0.20s
+  Delivered callbacks absent from uploads            3 =  0.03s
+  Measured handler-body CPU, including audit      0.040877803s
+
+The entire process/profile gap reconciles:
+  117.743822888 -102.53 =15.213822888s
+  =14.760000000 ignored overrun weight
+   +0.399898986 unregistered native-thread CPU
+   +0.030000000 delivered callbacks not uploaded
+   +0.023923902 timer phase/setup/terminal remainder.
+
+Overruns explain97.02% of this process/profile gap. Overrun-inclusive weight is
+99.9796% of registered-thread CPU. Native threads account for~0.34% of worker CPU;
+handler-body work accounts for~0.035%, and is included in the sampled thread clock.
+/proc/<pid>/timers confirms exactly one timer per worker, targeted to its main TID,
+with the SDK's CPUCLOCK_SCHED encoding. Per-task schedstat snapshots independently
+show~0.06s resolver CPU per worker and tiny other-native-thread CPU.
+There are no observed ring-full, producer-contention, unwinder, or other drop
+categories in these profiles. Their counters would be uploaded with sample weight.
+
+The three unuploaded callbacks are consistent with the final-snapshot-before-stop
+path described below. The audit does not distinguish callbacks occurring after
+the final profile boundary from already-buffered records left at shutdown; it
+would be incorrect to claim all three occurred inside the final profile interval.
+The residual23.9ms is across six workers and includes timer setup and final
+fractional intervals. Audit clocks bracket handler installation/removal rather
+than the exact timer_settime instruction. No larger residual is hidden here.
+
+Kernel-stage evidence — R/results-02 and kernel-trace-02.log
+The VM is Linux7.0.0-42-generic. Captured config has HZ=1000,
+POSIX_CPU_TIMERS_TASK_WORK=y, VIRT_CPU_ACCOUNTING_GEN=y, NO_HZ_FULL=y.
+Bpftrace observes the running kernel's actual functions and signal tracepoints:
+  Sampled-thread calls to run_posix_cpu_timers       24,690
+  cpu_timer_fire calls                              10,284
+  signal_generate events (all result0)              10,284
+  signal_deliver events                             10,284
+  Fires already >=10ms CPU past their expiry         1,161
+  Maximum CPU lateness at cpu_timer_fire            45.595ms
+  Generated-to-delivered latency maximum            54us
+  Generated-to-delivered latency2–4us                10,233/10,284 events
+  Remaining latency buckets:4–8us34;8–16us13;16–32us3;32–64us1.
+
+The SDK audit independently counted exactly10,284 callbacks and1,337 overruns.
+The comparison is not extrapolated: measured main-thread CPU116.235428593s,
+(callbacks+overruns)*10ms116.21s, uploaded102.77s. Seven callbacks were not uploaded.
+Only24,690 timer checks happened over116.235s sampled CPU, about212 checks per CPU
+second despite HZ1000. A check need not fire a timer; by the time a late check does
+fire, several10ms periods may have elapsed. This directly separates delayed
+expiry checking from delayed signal delivery after generation.
+
+Mask requests were traced too. Main workers made seven SIG_BLOCK requests with
+SIGPROF present and eight SIG_SETMASK requests clearing it, plus a SIG_UNBLOCK
+request without SIGPROF. Native thread setup/teardown also changes masks. These
+counts alone are not a duration measurement. However, all generated SIGPROF
+signals reached delivery within54us, excluding long pending-signal masking as the
+bulk cause in this run. SIGPROF is automatically blocked inside its own handler;
+the measured total handler-body CPU is far too small to explain13.37s of overruns.
+There is no evidence of queue-level signal loss: fire/generate/deliver/callback
+counts match exactly. The missed intervals already exist before queueing.
+
+Exact source paths
+SDK at the base SHA:
+  rust/crates/signal-timer/src/ctimer.rs:8–10,19–42 computes
+    ((~tid <<3)|6) =MAKE_THREAD_CPUCLOCK(tid,CPUCLOCK_SCHED), then timer_create with
+    SIGEV_THREAD_ID/SIGPROF and periodic timer_settime.
+  rust/src/signal_backend.rs:threads::attach/register_thread chooses registered
+    Python threads. Native resolver/uploader threads have no timers.
+  rust/src/signal_sampler.rs:22–24 discards siginfo, hence every overrun count.
+  rust/crates/signal-timer/src/lib.rs:SignalHandler::install uses
+    SA_SIGINFO|SA_RESTART, an empty additional mask, and no SA_NODEFER.
+  rust/crates/python-unwind/src/lib.rs:handler/unwind records one stack or one
+    failure counter. Ring capacity/producer failures are counted, not silent.
+  rust/src/signal_sampler.rs:135–150 drains up to64 records at a time.
+  rust/src/pyspy_backend.rs:137–153 appends all drop counters to the final samples.
+  rust/src/encode/pprof.rs multiplies Signal counts by1e9/sample_rate.
+
+Upstream Linuxv7.0 reference source, captured in R/linux-v7.0-*:
+  https://raw.githubusercontent.com/torvalds/linux/v7.0/kernel/time/timer.c
+    update_process_times -> sched_tick -> run_posix_cpu_timers.
+  https://raw.githubusercontent.com/torvalds/linux/v7.0/kernel/time/posix-cpu-timers.c
+    fastpath_timer_check -> task_sample_cputime uses se.sum_exec_runtime for SCHED;
+    task_cputimers_expired compares it with the saved expiry. Task work then runs
+    handle_posix_cpu_timers -> check_thread_timers/collect_posix_cputimers ->
+    cpu_timer_fire -> posix_timer_queue_signal.
+    posix_cpu_timer_rearm -> cpu_clock_sample(CPUCLOCK_SCHED) uses
+    task_sched_runtime; bump_cpu_timer advances the ORIGINAL expiry by whole
+    intervals and increments it_overrun. It does not reset expiry to now+10ms.
+    arm_timer sets the task's POSIX-timer tick dependency, but expiry still needs
+    a tick while that task is current. A sequence of short runs can evade checks.
+  https://raw.githubusercontent.com/torvalds/linux/v7.0/kernel/time/posix-timers.c
+    __posixtimer_deliver_signal rearms, copies it_overrun to si_overrun, resets the
+    accumulator to-1. The subtraction accounts for the delivered interval itself.
+  https://raw.githubusercontent.com/torvalds/linux/v7.0/kernel/signal.c
+    dequeue_signal invokes posixtimer_deliver_signal before userspace delivery.
+The public reference is upstreamv7.0, not a reconstructed Ubuntu source tree;
+running-kernel BTF/kprobes validate the relevant functions, fields and behavior.
+
+Native counterexample: why the original busy loop looked healthy
+R/ctimer_probe.c uses the SDK's exact dynamic thread-clock encoding and target.
+VM results in native-probes.jsonl:
+  user loop:4.997442239s CPU,499 callbacks,0 overruns,4.99s fixed weight.
+  getppid syscall loop:4.997276927s CPU,499 callbacks,0 overruns,4.99s fixed weight.
+  200us CPU bursts /100us requested sleeps:1.520665536s CPU,6 callbacks,
+    119 overruns. Fixed weight0.06s; overrun weight1.25s.
+    Last callback at1.259595330s CPU; terminal CPU tail261.070206ms.
+    timer_gettime reports1ns remaining (expired), but SIGPROF is not pending.
+    Raw thread PROF advanced just6ms. This is a direct pre-signal failure to check
+    the expired timer, with no Python, unwinder, ring, resolver or uploader.
+  Explicit25ms CPU masking control:5.001340689s CPU,200 callbacks,300 overruns.
+    Fixed weight2s; overrun weight5s. This validates counter interpretation.
+
+Raw CPUCLOCK_PROF clock readings (-4 thread/-8 process) were captured for the
+ITIMER agent. They undercount on this VM:2.930s/2.909s for the continuous native
+runs and23.924s in the117.744s Django audit window. CTimer does NOT schedule on
+that raw clock. Its loss here is delayed checks plus discarded overrun weight,
+not substituting raw PROF for scheduler runtime. Both mechanisms involve ticks,
+but they are distinct stages and were measured independently.
+
+Validated aggregate correction — R/results-03
+Diagnostic-only CTIMER_REPLAY_OVERRUNS=1 invokes the original SDK callback an
+additional si_overrun times, capturing the same paused Python stack. This makes
+unchanged fixed-weight encoding represent1+overrun intervals. It is an experiment,
+not the proposed implementation; production should attach a weight to ONE stack.
+  OS callbacks9,969; overruns1,632; represented intervals11,601=116.01s.
+  Uploaded intervals11,596=115.96s; five represented intervals absent at shutdown.
+  Measured main-thread CPU116.043345885s ->99.9282% uploaded coverage.
+  Worker lifecycle116.433964–116.542752s ->99.50–99.59% uploaded coverage.
+  Other native-thread CPU0.402081977s; main timer/setup/tail remainder33.345885ms.
+No ring/unwinder drop category appears. This intervention establishes that ignored
+overruns, not downstream handling, cause the large aggregate weight deficit.
+
+Frame-distribution bias — R/phase-results-01
+CPython3.13.7 workload alternates ten100ms CPU busy phases and ten100ms CPU bursty
+phases. Actual CPU is measured inside each function using time.thread_time():
+  fixed run: busy1.000491662s; burst1.001341780s (approximately50:50).
+  weighted run: busy1.000590684s; burst1.000820088s (approximately50:50).
+All observed complete root-to-leaf sequences and weights are below. Every frame
+is in /audit/phase_workload.py; line numbers are part of the sequence:
+  <module>:42 -> run_phases:32 -> busy_phase:13    fixed0.95s; weighted1.53s
+  <module>:42 -> run_phases:32 -> busy_phase:12    fixed0.11s; weighted0.24s
+  <module>:42 -> run_phases:32 -> busy_phase:11    fixed0.01s; weighted0.01s
+  <module>:42 -> run_phases:33 -> burst_phase:24   fixed0.03s; weighted0.12s
+These four sequences account for100% of each observed profile. Full frame objects,
+filenames, line numbers and values are retained in complete-stacks.json.gz.
+Fixed weighting gives97.27% of weight to busy_phase; overrun weighting gives93.68%,
+although its measured CPU share is49.99%. This is far beyond a generous15-point
+sampling-noise tolerance for~200 expected periods; it is also a~78% absolute CPU
+over-attribution to busy_phase in the weighted run. Bursty CPU accrues without
+checks; the next busy phase triggers a tick and receives the overdue weight.
+The final burst leaves~101ms CPU after the last callback; weighted total is1.90s
+instead of~2.00s. No delivered-event weighting can recover that missing tail.
+
+Thus correcting total CPU does not establish an unbiased flame graph. We did not
+measure an independent ground-truth stack distribution for Django, so its exact
+attribution error remains unquantified. Control/audited Django full-stack total
+variation was0.1192, with the leading full send_headers stack at59.77% vs64.08%.
+Separate repeats vary; these differences alone cannot be assigned to the audit
+or the weighting change. The controlled phase experiment supplies the causal
+counterexample. Only CPython3.13.7 was exercised remotely; do not generalize its
+exact frame sequences to other supported Python versions without observing them.
+
+Resolver failures — now diagnosed separately
+All17 resolver-drop samples in the original run occur in its first upload group.
+All19/21/20 resolver drops in the corrected loaded runs also occur in their first
+group, with none in later steady-state uploads. Their weights are already included.
+A separate diagnostic image adds the bounded error logger in
+R/resolver-error-diagnostics.patch (normal resolver thread only). Its5s Django run
+captured20 errors; ALL20 were exactly:
+  Object is not a code object
+See R/resolver-results-01/error-summary.json and audited/gunicorn.log (raw recorded
+frames included). The profile contains the corresponding20 drop samples=0.20s.
+The exact failing check is pinned py-spy src/python_process_info.rs,
+TypeChecks::check_code, called from src/stack_trace.rs:resolve_frames after copying
+the recorded PyCodeObject. The deferred copy succeeds, but its ob_type differs
+from PyCode_Type. These are not recovered-memory-read faults in this reproduction.
+The handler had validated the code address at capture. A stale, freed or reused
+code-object allocation is the supported explanation for its later changed type;
+we did not trace the allocator event and cannot prove the precise object lifetime.
+The original17 errors lack detailed logs and cannot be retroactively identified.
+Failure to copy a filename/function name instead skips that frame in py-spy's
+resolver; a line-table error uses line0. Those paths can change shape without
+incrementing resolve_error. Kindasafe handles inaccessible memory, not object
+identity/coherence; the documented deferred-resolution contract remains necessary.
+
+Shutdown and proposed fixes
+PyroscopeAgent::stop in rust/src/pyroscope.rs first joins the reporting thread,
+which emits the final snapshot; only afterward does shutdown stop the sampler.
+Signal's worker drains while running and then drops timers/session, with no
+explicit full drain after disarming. Records can therefore exist after the last
+report. Observed gaps are3 callbacks in the primary audit,7 in the traced audit,
+and5 weighted intervals in the correction run. These are small in Django but
+must be treated separately from an undelivered timer tail, which can be large.
+
+Recommended implementation direction:
+1. Preserve1+si_overrun for CTimer SI_TIMER events and carry that weight through
+   the captured record, every unwind/ring/resolver failure counter and encoding.
+   Preserve a single unwind per event. Do not emulate the diagnostic replay loop.
+   Treat non-timer SIGPROF independently; don't read an overrun field as if valid
+   for arbitrary signal origins. Use sufficiently wide/saturating accounting.
+2. Stop timers, quiesce callbacks, fully drain records/drop weights, and only then
+   emit the final snapshot. Observe thread lifetime/timer teardown races. If full
+   CPU accounting is required, measure an armed thread's final CPU delta and
+   expose otherwise-unsampled time explicitly rather than silently assigning it
+   to its last stack or scaling Python stacks to include unrelated native threads.
+3. Elapsed thread CPU weighting is NOT required to fix the measured bulk CTimer
+   deficit: kernel overruns already encode those periods. It can represent exact
+   fractions/tails with appropriate lifecycle baselines, but do not combine both
+   methods and double-count. Neither method fixes pre-delivery stack bias. A
+   sampling source whose trigger does not depend on the target receiving scheduler
+   ticks is needed if this bursty workload's attribution must be reliable.
+4. Validate total weight AND complete-stack proportions. Repeat native continuous,
+   bursty, masked and long-handler controls; lifecycle/callback/overrun ledgers;
+   known-CPU phase tests; concurrent/short-lived threads and shutdown boundaries.
+   Exercise every supported Python3.10–3.14 layout and both Linux timer modes with
+   their observed full frame sequences and documented noise tolerance. The phase
+   bias test above is intentionally a failure of attribution, not a passing shape
+   test after the aggregate correction.
+5. Keep the recovery contract intact: successful cached initialization, preserved
+   SIGSEGV/SIGBUS handlers, unblocked recovery signals on sampled and resolver
+   threads, direct successful memory loads without per-read syscalls, and the
+   documented deferred-read lifetime/borrow assumptions. No runtime ownership
+   polling, automatic handler reclamation or unwinder mask/init checks are needed.
+
+Reproduction/artifacts
+R/README.txt indexes scripts and results. ctimer_probe.c, sigprof_audit.c,
+ctimer_trace.bt, prepare_harness.py, measure-audit.py, wsgi-audit.py,
+run_django_audit.py, phase_workload.py and run_phase_audit.py are standalone
+reproducible diagnostic code. remote-batch-01.sh through04.sh record exact locked
+commands. Dockerfile.resolver and resolver-error-diagnostics.patch recreate the
+logging-only image ctimer-resolver-diag:5ede9c3d. analyze_audit.py reconstructs the
+ledgers from raw side-channel records plus complete decoded profiles; the parent's
+decode_profiles.py decodes retained upload protobufs. kernel-trace-02-summary.json
+contains parsed probe counts. Original/source and local native control artifacts
+are retained alongside the remote results, not substituted for them.
+Both C diagnostics compile with -Wall -Wextra -Werror; Python scripts compile;
+the wrapper's native lifetime test verifies exact callback counts, transparent
+SIGPROF queries, explicit missing-thread-clock null/errno values, and unchanged
+SIGSEGV/SIGBUS handlers/masks. No local golangci-lint, deployment or push occurred.
+
+Independent corroboration from ITIMER agent 6ed10599
+Copied that agent's completed vm-matrix/results.jsonl read-only to
+R/independent-itimer-agent-matrix.jsonl; no new experiment was run. Its tsched mode
+is the thread scheduling-clock timer. All rows use a 10ms period and CPU0:
+  100us CPU /25us requested sleep: scheduler0.885825839s,2 callbacks,46 overruns;
+    fixed0.02s, overrun-inclusive0.48s, residual0.405825839s.
+  500us /100us: scheduler2.454026029s,243 callbacks,1 overrun;
+    fixed2.43s, overrun-inclusive2.44s.
+  1000us /250us: scheduler3.284785737s,218 callbacks,107 overruns;
+    fixed2.18s, overrun-inclusive3.25s.
+  5000us /1000us: scheduler3.971062186s,396 callbacks,0 overruns;
+    fixed3.96s.
+These independently reproduce strong sensitivity to burst/sleep timing, including
+large undelivered terminal time. They reinforce why a continuous busy loop's
+99.8% coverage does not predict Django or short-burst coverage.
+The ITIMER agent also reports the active nohz_full CPU list is empty, despite
+CONFIG_NO_HZ_FULL=y. The CTimer finding does not require active full-tickless CPUs;
+it is about when scheduler-tick-driven checks actually execute on the target.
+Its separate ITIMER trace identifies skipped hrtimer deadlines and raw tick
+underaccounting; refer to that agent's report for that additional causal stage.
+
+Independent Django scheduling evidence
+ITIMER agent's gated, container-filtered Django trace was attached before timer
+arming and tracked armed worker groups. Its source and raw output were read from
+that agent's local worktree and copied as R/independent-django-stages.bt and .log.
+It observed457,837 scheduling slices totaling116.414839168s CPU. Of those,
+231,268 were256–512us and129,143 were32–64us; only1,374 (~0.300%) were>=1024us.
+This directly confirms that the HTTP workload spends most scheduling slices below
+one configured1ms tick. It corroborates the short-burst condition demonstrated by
+the CTimer native/phase probes and the low check frequency in the CTimer trace.
+The ITIMER trace separately measured23,183 raw accounting ticks/23.183s raw PROF
+and2,315 expiry=successful queue=delivery events, all on time in that raw clock;
+2,314 samples uploaded. These are that agent's measurements, not additional
+CTimer runs. ITIMER loses raw-clock progress; CTimer retains scheduler-clock
+progress but can reach expiry checking late and discard the resulting overruns.
+No VM commands or experiments were needed for this final evidence integration.

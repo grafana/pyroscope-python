@@ -1,0 +1,44 @@
+[
+    {
+        "Id": "sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689",
+        "RepoTags": [
+            "python:3.13.7-slim-trixie"
+        ],
+        "RepoDigests": [
+            "python@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689"
+        ],
+        "Comment": "buildkit.dockerfile.v0",
+        "Created": "2025-08-14T21:49:23Z",
+        "Config": {
+            "Env": [
+                "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305",
+                "PYTHON_VERSION=3.13.7",
+                "PYTHON_SHA256=5462f9099dfd30e238def83c71d91897d8caa5ff6ebc7a50f14d4802cdaaa79a"
+            ],
+            "Cmd": [
+                "python3"
+            ]
+        },
+        "Architecture": "amd64",
+        "Os": "linux",
+        "Size": 42823747,
+        "RootFS": {
+            "Type": "layers",
+            "Layers": [
+                "sha256:1d46119d249f7719e1820e24a311aa7c453f166f714969cffe89504678eaa447",
+                "sha256:719555a13b081583ca7e72d73a241a9d645ac7f9cc091e71a59a20440a68bd80",
+                "sha256:bf773f5071520d5506837835680b877584730be9a5fef09561d08edef505aebe",
+                "sha256:93945efa8b227b275f052ff615858752bc795063a64da631a0c016bc5771111a"
+            ]
+        },
+        "Metadata": {
+            "LastTagTime": "2026-11-09T00:01:24.641089704Z"
+        },
+        "Descriptor": {
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "digest": "sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689",
+            "size": 10365
+        }
+    }
+]

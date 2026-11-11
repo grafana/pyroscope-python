@@ -1,0 +1,6638 @@
+[
+  {
+    "time": 1794195920.0276625,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195921.0285442,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195922.0294514,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195923.0304306,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195924.0310848,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195925.0319035,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195926.0324128,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195927.033137,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195928.0337512,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195929.034601,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195930.0354643,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195931.0361671,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195932.0367682,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195933.0376375,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195934.0382302,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195935.0388553,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195936.0396614,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195937.0403366,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195938.041412,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195939.0424752,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195940.0430534,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195941.0440466,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195942.0447445,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195943.0453799,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195944.046468,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195945.047445,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195946.0485253,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195947.0490346,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195948.049918,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195949.0507505,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195950.0518858,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195951.0525837,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195952.053192,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195953.0539982,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195954.0550423,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195955.0555575,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195956.0561166,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195957.0568361,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195958.057841,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195959.0585659,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195960.0594635,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195961.060092,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195962.0612044,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195963.0620682,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195964.0628772,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195965.063671,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195966.0647285,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195967.0655189,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195968.066136,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195969.0669115,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195970.067463,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195971.0680587,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195972.0685775,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195973.0691857,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195974.0701356,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195975.071078,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195976.0720892,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195977.0731256,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195978.0739996,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195979.0745974,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195980.075521,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195981.07603,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195982.0770135,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195983.077565,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195984.0784223,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195985.0789642,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195986.0798633,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195987.0804455,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195988.0814857,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195989.0820029,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195990.082592,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195991.0836122,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195992.0845652,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195993.0859852,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195994.0870786,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195995.0877643,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195996.0885549,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195997.0891047,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195998.0898094,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794195999.090803,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196000.091511,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196001.0925612,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196002.0934677,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196003.094101,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196004.0947676,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196005.095643,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196006.096428,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196007.0971713,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196008.0981586,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196009.0991564,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196010.0998333,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196011.1008074,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196012.1015663,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196013.1022868,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196014.1029217,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196015.1036422,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196016.104237,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196017.1048646,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196018.1057062,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196019.1065183,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196020.1073437,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196021.1080847,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196022.1087756,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196023.1095383,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196024.1104286,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196025.1112003,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196026.1124284,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196027.1131628,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196028.113865,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196029.1146913,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196030.1153128,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196031.1158848,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196032.1165524,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196033.1173182,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196034.117975,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196035.1186771,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196036.11927,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196037.1199043,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196038.1210933,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196039.121949,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196040.122555,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196041.1233206,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196042.1239202,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196043.124701,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196044.1255002,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196045.1264598,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196046.1271267,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196047.1280365,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196048.1286087,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196049.1294117,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196050.130023,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196051.1306777,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196052.1313443,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196053.1320214,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196054.1326423,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196055.133764,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196056.1345274,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196057.1354935,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196058.136096,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196059.136798,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196060.137482,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196061.1382325,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196062.1388416,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196063.1394749,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196064.1401262,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196065.1409235,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196066.1416535,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196067.1425178,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196068.143291,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196069.143894,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196070.1445844,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196071.1454387,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196072.1460288,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196073.1466486,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196074.1472647,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196075.1478744,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196076.1485333,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196077.149248,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196078.149849,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196079.1510386,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196080.151676,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196081.1523948,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196082.1531045,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196083.1537848,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196084.1545992,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196085.155223,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196086.1558971,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196087.156556,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196088.1572213,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196089.1583107,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196090.158936,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196091.15984,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196092.1604636,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196093.1610825,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196094.1620107,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196095.1628077,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196096.1635072,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196097.164164,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196098.1652145,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196099.1661084,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196100.1667335,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196101.1673524,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196102.168096,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196103.1687992,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196104.169687,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196105.1704023,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196106.1710913,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196107.1717696,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196108.1723475,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196109.1732235,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196110.1739128,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196111.1746209,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196112.1752589,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196113.1758862,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196114.176891,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196115.1774724,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196116.1782737,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196117.1789017,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196118.1795986,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196119.1802418,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196120.1809032,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196121.1816792,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196122.1823745,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196123.1829708,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196124.1836836,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196125.1847124,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196126.1852684,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196127.1860235,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196128.186837,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196129.1875165,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196130.1881378,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196131.1888676,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196132.1896312,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196133.1902833,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196134.19098,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196135.1917012,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196136.192555,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196137.1932912,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196138.1939056,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196139.194577,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196140.1952522,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196141.195938,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196142.19662,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196143.197328,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196144.1980417,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196145.198658,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196146.1993518,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196147.2004287,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196148.2010603,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196149.2017179,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196150.2026916,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196151.2035866,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196152.2045534,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196153.2051547,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196154.2058969,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196155.2065635,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196156.2073524,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196157.2079742,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196158.2086732,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196159.2093475,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196160.2102156,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196161.2108593,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196162.2117567,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196163.212458,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196164.2133412,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196165.214055,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196166.2148378,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196167.2154102,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196168.216059,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196169.2166705,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196170.2172863,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196171.2182124,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196172.2189066,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196173.2195036,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196174.2203271,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196175.221115,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196176.221786,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196177.2225258,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196178.2231252,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196179.223819,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196180.224435,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196181.2250373,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196182.2257571,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196183.226423,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196184.2270455,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196185.2276359,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196186.2282815,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196187.2291298,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196188.2297397,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196189.230409,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196190.2310581,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196191.2318285,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196192.2329314,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196193.233509,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196194.2342925,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196195.2349763,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196196.2356505,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196197.2365382,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196198.237273,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196199.2382574,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196200.2394905,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196201.2404773,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196202.241153,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196203.2418692,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196204.2430515,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196205.244,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196206.244677,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196207.2453713,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196208.2464907,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196209.247193,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196210.2481167,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196211.2491395,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196212.2498372,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196213.2505171,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196214.2515202,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196215.2523136,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196216.2534747,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196217.2546718,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196218.2555497,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196219.2563977,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196220.2572691,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196221.2580116,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196222.2587204,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196223.259398,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196224.260509,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196225.261638,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196226.2625842,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196227.2633731,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196228.264445,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196229.2654405,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196230.2665138,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196231.2675004,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196232.268457,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196233.2691507,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196234.269846,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196235.2705498,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196236.2716708,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196237.2724116,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196238.273232,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196239.2743537,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196240.275057,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196241.2760782,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196242.2770877,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196243.2783542,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196244.2793396,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196245.2800236,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196246.2809274,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196247.2814474,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196248.2820382,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196249.2827463,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196250.2837696,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196251.2847865,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196252.2854776,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196253.2860281,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196254.2867754,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196255.2873123,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196256.288473,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196257.289099,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196258.289721,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196259.2902498,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196260.2909343,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196261.2915792,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196262.292498,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196263.2934892,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196264.2943144,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196265.295425,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196266.2962837,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196267.296979,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196268.2975464,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196269.2986383,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196270.2994328,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196271.3002672,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196272.3009212,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196273.3020294,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196274.3029377,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196275.3036158,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196276.3045206,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196277.305282,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196278.3062036,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196279.3071682,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196280.307747,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196281.3082352,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196282.3092523,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196283.3109806,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196284.311812,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196285.312485,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196286.3131769,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196287.3140564,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196288.315182,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196289.3162348,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196290.317556,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196291.3182814,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196292.3189392,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196293.319491,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196294.3202431,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196295.3209677,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196296.3216627,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196297.3224144,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196298.3229835,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196299.3236089,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196300.3242075,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196301.3250027,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196302.3256052,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196303.326257,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196304.3269267,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196305.3276536,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196306.3282645,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196307.3289208,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196308.3295903,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196309.330195,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196310.3307548,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196311.331378,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196312.3322253,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196313.3331957,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196314.3341742,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196315.3348653,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196316.3357384,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196317.336625,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196318.337382,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196319.338175,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196320.3387654,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196321.339528,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196322.3405616,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196323.3412762,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196324.3420203,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196325.3426263,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196326.3433585,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196327.3440945,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196328.3447678,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196329.3454075,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196330.3462443,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196331.3470457,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196332.3478305,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196333.3485088,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196334.3491442,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196335.3502214,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196336.3509781,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196337.3521018,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196338.35314,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196339.3540483,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196340.3551104,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196341.3555794,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196342.3565373,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196343.3574493,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196344.3584971,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196345.3591201,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196346.3601577,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196347.361062,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196348.3619568,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196349.3625531,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196350.363422,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196351.364045,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196352.364913,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196353.365787,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196354.3663905,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196355.3673787,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196356.3681004,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196357.3686755,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196358.3696399,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196359.3703532,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196360.3709512,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196361.3721426,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196362.3733225,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196363.3739898,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196364.3746417,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196365.3755612,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196366.3764284,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196367.3771193,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196368.3781214,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196369.3787622,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196370.379477,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196371.3805566,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196372.3816984,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196373.3824935,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196374.3833504,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196375.3842385,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196376.3851562,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196377.3861372,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196378.386672,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196379.3877075,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196380.3884635,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196381.3890698,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196382.3896983,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196383.3908489,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196384.3914833,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196385.3921614,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196386.3928535,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196387.3936,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196388.3943326,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196389.3954642,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196390.3961663,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196391.3969476,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196392.3975503,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196393.398925,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196394.3996384,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196395.4002056,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196396.4008253,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196397.4015505,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196398.4023244,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196399.4030414,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196400.403844,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196401.404512,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196402.4051762,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196403.4058783,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196404.406855,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196405.4075463,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196406.4082527,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196407.40948,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196408.4100902,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196409.410714,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196410.4113688,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196411.412186,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196412.412847,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196413.413527,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196414.414399,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196415.4153264,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196416.415976,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196417.4165974,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196418.4172237,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196419.4179657,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196420.4185345,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196421.4192598,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196422.4201436,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196423.4207814,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196424.4213862,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196425.422268,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196426.4236898,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196427.424292,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196428.4249907,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196429.4257083,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196430.426471,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196431.4274657,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196432.4281218,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196433.4288418,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196434.4295833,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196435.4303544,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196436.4317718,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196437.4324825,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196438.4332983,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196439.4342387,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196440.4347975,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196441.435509,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196442.4365199,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196443.437235,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196444.4378967,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196445.4388208,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196446.439544,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196447.4401464,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196448.4410968,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196449.4417272,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196450.442306,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196451.4430463,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196452.4438362,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196453.4444442,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196454.4451072,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196455.4457402,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196456.4463644,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196457.4469695,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196458.4476118,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196459.4483278,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196460.448927,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196461.4496105,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196462.4503937,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196463.4510434,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196464.4519799,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196465.4526763,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196466.453312,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196467.454144,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196468.4549508,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196469.4555833,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196470.4564116,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196471.4573355,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196472.4579928,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196473.4586184,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196474.4594069,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196475.460432,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196476.460978,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196477.4615002,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196478.4622219,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196479.4628243,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196480.463435,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196481.4644058,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196482.4652648,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196483.466162,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196484.4672332,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196485.468043,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196486.4689596,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196487.47001,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196488.470983,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196489.4716227,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196490.4725573,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196491.4732056,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196492.473756,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196493.4747028,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196494.4753842,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196495.4760678,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196496.477066,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196497.4780693,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196498.4788709,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196499.4794323,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196500.480015,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196501.4805703,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196502.4813516,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196503.4824176,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196504.4829967,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196505.4841006,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196506.4846404,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196507.485173,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196508.4862208,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196509.48684,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196510.4874363,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196511.488481,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196512.4890375,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196513.490018,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196514.4910443,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196515.4918873,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196516.4926424,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196517.493286,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196518.4939725,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196519.4945323,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196520.4950876,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196521.496109,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196522.4968343,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196523.497413,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196524.4980521,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196525.4989884,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196526.4996982,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196527.5003424,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196528.5009708,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196529.5017085,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196530.5025578,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196531.5033572,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196532.5039332,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196533.5046759,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196534.5053868,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196535.506234,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196536.5069635,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196537.5077498,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196538.508342,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196539.5091362,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196540.5106125,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196541.5112543,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196542.5119076,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196543.5125191,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196544.5131083,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196545.5136979,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196546.5143354,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196547.5150032,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196548.5157423,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196549.5165048,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196550.5170786,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196551.5178373,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196552.5185905,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196553.5192347,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196554.5198946,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196555.520594,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196556.5212226,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196557.5219154,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196558.5226111,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196559.5232174,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196560.5239873,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196561.5245645,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196562.5252733,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196563.526051,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196564.5266283,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196565.5276954,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196566.5282848,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196567.5289996,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196568.5300622,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196569.530973,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196570.5318239,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196571.5326126,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196572.5335124,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196573.5346801,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196574.536004,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196575.5370872,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196576.5380242,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196577.5390315,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196578.5398333,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196579.540884,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196580.5416377,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196581.5426052,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196582.5438643,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196583.5445101,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196584.545457,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196585.5463436,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196586.547202,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196587.5479617,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196588.5486681,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196589.5494304,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196590.5501814,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196591.5509768,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196592.5516908,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196593.552764,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196594.55347,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196595.5544965,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196596.55557,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196597.5564518,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196598.5577369,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196599.558916,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196600.5596125,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196601.5603948,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196602.5617173,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196603.562699,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196604.5638936,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196605.564645,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196606.5658057,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196607.566537,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196608.5671914,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196609.5684009,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196610.5696447,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196611.5706801,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196612.5715146,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196613.5728426,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196614.573667,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196615.5742307,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196616.5751028,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196617.5761175,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196618.576977,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196619.5780606,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196620.5788085,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196621.5797215,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196622.580463,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196623.5810788,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196624.5817075,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196625.582266,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196626.5830886,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196627.5841255,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196628.5847962,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196629.5856085,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196630.5864623,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196631.587304,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196632.588149,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196633.5889373,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196634.5894647,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196635.5900278,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196636.5910382,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196637.5918052,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196638.5923984,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196639.5932267,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196640.5941234,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196641.5947418,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196642.5958118,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196643.5964856,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196644.5971332,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196645.598235,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196646.598789,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196647.5997179,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196648.6006064,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196649.601325,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196650.6026738,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196651.6035445,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196652.6040893,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196653.6049635,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196654.6059682,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196655.6064727,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196656.6073909,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196657.6085246,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196658.6092048,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196659.6099443,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196660.6111054,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196661.611726,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196662.6124735,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196663.613122,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196664.6137137,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196665.6144302,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196666.615286,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196667.616027,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196668.617005,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196669.6175454,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196670.6181827,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196671.6189132,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196672.6194856,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196673.62022,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196674.6208947,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196675.621653,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196676.6224568,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196677.6231198,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196678.623691,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196679.624323,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196680.6249557,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196681.626197,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196682.6268945,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196683.627498,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196684.628126,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196685.6288755,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196686.6295004,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196687.6301363,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196688.630843,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196689.6315644,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196690.6324947,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196691.6333146,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196692.633972,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196693.634594,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196694.6352315,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196695.6358435,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196696.636522,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196697.637165,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196698.6378036,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196699.63844,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196700.6390796,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196701.6397896,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196702.640797,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196703.6415052,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196704.6420846,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196705.6427002,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196706.6442738,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196707.6449487,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196708.645948,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196709.6465442,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196710.6472902,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196711.647914,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196712.6485512,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196713.6492977,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196714.649882,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196715.6508708,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196716.6515105,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196717.6524243,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196718.653211,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196719.6538498,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196720.6545782,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196721.6557536,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196722.6568017,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196723.6577506,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196724.6585543,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196725.6591964,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196726.6598241,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196727.6604376,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196728.661183,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196729.661861,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196730.6626782,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196731.6635103,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196732.6642306,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196733.6648302,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196734.665528,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196735.6665974,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196736.6673944,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196737.6682365,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196738.668889,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196739.669546,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196740.6702976,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196741.6708808,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196742.6715057,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196743.6721666,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196744.672888,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196745.6735764,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196746.6741703,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196747.6748264,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196748.6758006,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196749.6765447,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196750.6772301,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196751.6782262,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196752.6793716,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196753.6804647,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196754.6818073,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196755.683137,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196756.684003,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196757.685155,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196758.686074,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196759.687274,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196760.6884363,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196761.6894202,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196762.6906288,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196763.6913376,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196764.6924322,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196765.6933944,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196766.6945817,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196767.6953917,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196768.6961956,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196769.697032,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196770.6980486,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196771.6996648,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196772.7008984,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196773.701665,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196774.7024548,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196775.7033067,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196776.704079,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196777.705077,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196778.7061691,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196779.7070725,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196780.7078452,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196781.7091475,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196782.7099786,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196783.7110806,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196784.7120042,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196785.712983,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196786.7141604,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196787.7150712,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196788.7160568,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196789.7167745,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196790.7178335,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196791.7188423,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196792.7195532,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196793.7203426,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196794.7210915,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196795.7218425,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196796.722555,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196797.723449,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196798.72451,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196799.7254028,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196800.7261536,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196801.727014,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196802.727961,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196803.7286675,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196804.7294106,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196805.730563,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196806.7311184,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196807.7320411,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196808.7331917,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196809.7338688,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196810.7343957,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196811.7350805,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196812.7357187,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196813.7363138,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196814.737201,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196815.737943,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196816.738963,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196817.7399461,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196818.740505,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196819.7414722,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196820.741956,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196821.7425208,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196822.743149,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196823.7439964,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196824.7448041,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196825.7453954,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196826.7463434,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196827.7471373,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196828.7478027,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196829.7486794,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196830.749516,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196831.750431,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196832.7513947,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196833.7520537,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196834.7526958,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196835.7535427,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196836.754482,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196837.755381,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196838.7561953,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196839.7571878,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196840.7579873,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196841.7586772,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196842.7597506,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196843.7605002,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196844.761521,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196845.7622294,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196846.763104,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196847.764036,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196848.7653167,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196849.7659957,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196850.7666607,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196851.7674928,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196852.7684135,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196853.7689342,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196854.7697926,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196855.7703161,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196856.7709765,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196857.7715738,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196858.7725716,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196859.7732487,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196860.7740247,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196861.7746823,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196862.775305,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196863.776313,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196864.7769768,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196865.7777665,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196866.7782762,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196867.7788851,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196868.7796884,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196869.7803984,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196870.7811253,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196871.7816322,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196872.782378,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196873.783198,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196874.7841747,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196875.7852063,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196876.78592,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196877.786431,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196878.787296,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196879.7883599,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196880.7893543,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196881.79015,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196882.7906222,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196883.7914767,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196884.7923894,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196885.7932124,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196886.7938879,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196887.7948675,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196888.7957065,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196889.796495,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196890.7972832,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196891.7980282,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196892.7987435,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196893.799411,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196894.800459,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196895.8011274,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196896.8018298,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196897.8025439,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196898.8031387,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196899.8038335,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196900.8045805,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196901.80515,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196902.8061914,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196903.806858,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196904.8075283,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196905.808178,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196906.808962,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196907.8095655,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196908.8101904,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196909.8108222,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196910.8114853,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196911.8123846,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196912.8130205,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196913.813674,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196914.8145392,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196915.815391,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196916.8163168,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196917.816936,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196918.8175526,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196919.8182807,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196920.818927,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196921.8195274,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196922.8203251,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196923.8209753,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196924.8217394,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196925.822768,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196926.8235908,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196927.8244257,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196928.8252523,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196929.8259149,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196930.8265631,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196931.8273168,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196932.8280973,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196933.828814,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196934.8297396,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196935.830376,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196936.8314452,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196937.8322418,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196938.8332877,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196939.8340755,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196940.8345795,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196941.8353682,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196942.8361826,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196943.8367586,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196944.8375242,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196945.8384817,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196946.839139,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196947.8402953,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196948.8412657,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196949.8419569,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196950.8429253,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196951.8438184,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196952.8445663,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196953.8455467,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196954.8462455,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196955.8470185,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196956.8480623,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196957.848722,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196958.8494678,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196959.8505142,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196960.8514683,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196961.8521392,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196962.8533268,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196963.8540523,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196964.8552065,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196965.8559165,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196966.857147,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196967.8577466,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196968.8583333,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196969.8591073,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196970.859725,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196971.860776,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196972.8614497,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196973.8624349,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196974.8630388,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196975.8639705,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196976.8649127,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196977.8655627,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196978.8661869,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196979.8671594,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196980.8678818,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196981.8684928,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196982.8692331,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196983.8699124,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196984.8708043,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196985.871405,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196986.8721292,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196987.8727157,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196988.8733726,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196989.8740528,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196990.8747177,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196991.8753135,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196992.8759663,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196993.8766794,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196994.877506,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196995.8781562,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196996.8789017,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196997.8795826,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196998.8804204,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794196999.881509,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197000.8821602,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197001.8831215,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197002.8838074,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197003.8845236,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197004.885167,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197005.885872,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197006.886495,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197007.8871737,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197008.8879294,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197009.8885443,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197010.889227,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197011.8900456,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197012.8907106,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197013.891476,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197014.8921418,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197015.8932745,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197016.894024,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197017.8947377,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197018.8955383,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197019.8962266,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197020.8968937,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197021.8974845,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197022.8981574,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197023.898907,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197024.8995852,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  },
+  {
+    "time": 1794197025.9003136,
+    "state": {
+      "/sys/class/power_supply/ACAD/online": "1"
+    }
+  }
+]

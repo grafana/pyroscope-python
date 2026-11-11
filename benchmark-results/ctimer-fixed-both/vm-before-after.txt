@@ -1,0 +1,8 @@
+Signal CTimer uploaded weight before and after the fix on the VM
+Same six-worker/six-CPU configuration with gil_only=False. All three loaded runs included.
+
+Before: f6a0e3e: uploaded 186.15000s / worker CPU 210.40629-210.51711s = 88.425-88.472%
+After: 3638f62: uploaded 209.37000s / worker CPU 210.13939-210.24885s = 99.582-99.634%
+
+The same SDK wheel was used for both new machine suites. The earlier VM suite used the pre-fix SDK.
+This validates aggregate CPU weight, not stack-attribution accuracy.

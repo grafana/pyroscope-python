@@ -1,0 +1,38 @@
+{
+  "1-stack-load": {
+    "profiles": 12,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      26210719000
+    ]
+  },
+  "1-signal-load": {
+    "profiles": 12,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      22500000000
+    ]
+  },
+  "1-py-spy-load": {
+    "profiles": 12,
+    "sample_types": [
+      {
+        "type": "cpu",
+        "unit": "nanoseconds"
+      }
+    ],
+    "totals": [
+      18290000000
+    ]
+  }
+}

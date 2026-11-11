@@ -1,0 +1,404 @@
+ITIMER_PROF CPU-weight loss: completed investigation
+2026-11-09
+
+Repository: grafana/pyroscope-python at f6a0e3e25d91a4d7439f4027d11ee5aaf7f84956
+Dedicated Vibe agent: 6ed10599
+Worktree: /home/korniltsev/.vibe/worktrees/pyroscope-python/vibe/investigate-itimer-cpu-loss
+Diagnostic sources and evidence: diagnostics/itimer/ in that worktree.
+Remote evidence: /home/user/itimer-investigation-6ed10599
+
+CONCLUSION
+
+The missing ITIMER weight is overwhelmingly CPU accounting loss BEFORE timer
+expiration, not missing signals or Python unwinding. ITIMER_PROF advances on
+Linux's raw CPUCLOCK_PROF user+system counters. On this VM those counters add
+one millisecond per accounting tick that actually runs while the task is
+current. They do not recover all elapsed task CPU when ticks arrive late or
+land while the task is asleep. The scheduler runtime clock still advances;
+getrusage rescales reported user/system CPU to that runtime, concealing the
+raw-clock shortfall from ordinary CPU measurements.
+
+Continuous native execution: virtual scheduler timer callbacks frequently
+arrive more than 1 ms late. Linux forwards the periodic deadline over skipped
+intervals but charges only one accounting tick. Raw PROF advances about
+57–58% as far as scheduler CPU, and ITIMER samples faithfully represent that
+smaller number.
+
+Django: workers run many short CPU bursts separated by sleeps/scheduling.
+In the traced run 99.70% of 457,837 scheduler slices were shorter than 1.024 ms
+(the boundary of the recorded histogram bin).
+Only 23,183 accounting ticks hit the workers during 116.4157 scheduler CPU
+seconds. Raw PROF therefore advanced only 23.183 seconds (19.914%). Every
+expected ITIMER expiration was generated and delivered. This is why applying
+a universal 1/0.57 multiplier would not fix the approximately 20% Django result.
+
+In the complete Django kernel/auditor/upload reconciliation, 99.9539% of the
+missing CPU weight is explained by raw CPU accounting. Six initial timer
+offsets and final partial intervals explain another 33 ms; one delivered
+callback, worth 10 ms, is not represented in the uploaded profiles.
+
+SCOPE, PERMISSION, AND CONTROLS
+
+No VM commands ran before the parent's explicit grant after all 24 corrected
+benchmark cases finished. Every remote build/probe/measurement shell held
+flock -x /tmp/pyroscope-cpu-loss-experiments.lock. The experiment used its own
+directory, container names itimer-diag-6ed10599-*, and ports 28080–28082.
+Parent harness/results and global kernel settings were not changed.
+
+The Django harness is a private copy of all-threads-ctimer with Signal ITimer,
+gil_only=False, six workers, CPUs 0–5, quota six CPUs, 100 Hz, the same image,
+five seconds warmup and twenty seconds measured load. There was no cgroup CPU
+throttling in the plain, audit, or traced runs. Each captures the complete
+configure/shutdown lifecycle, not a measured-window extrapolation.
+
+Three controls were run: raw-clock snapshots with no handler auditor; the
+shared SIGPROF auditor; and auditor plus kernel tracing. For the last run,
+workers waited before configure until BPF was attached to their specific
+container cgroup. All timer arms and disarms were captured. Tracing perturbs
+the precise coverage ratio, so report all three controls rather than treating
+the traced percentage as the only estimate.
+
+The preload auditor was supplied by CTimer agent 5ede9c3d, rebuilt inside the
+benchmark image, and only wraps SIGPROF. Its current source reports failed
+exited-thread clocks as null plus errno. No SIGSEGV/SIGBUS handler or mask
+changes, recovery ownership checks, initialization changes, or per-read
+syscalls were introduced. No production code, deployment, push, or commit.
+
+EXACT DJANGO LOSS BUDGET
+
+The gated trace measured all six worker timers from arm through disarm:
+
+  Scheduler CPU clock                         116.415711678 s
+  Raw PROF clock                               23.183000000 s
+  Accounting ticks                             23,183
+  Raw user credit                               5.282000000 s
+  Raw system credit                            17.901000000 s
+  Expected ITIMER expirations                    2,315
+  Observed ITIMER expirations                    2,315
+  Successfully queued SIGPROF signals            2,315
+  Signals merged with an already pending one         0
+  Kernel signal deliveries                      2,315
+  Userspace auditor callback entries             2,315
+  Fixed callback weight                         23.150000000 s
+  Uploaded weight, including explicit drops      23.140000000 s
+
+All 2,315 expiration events had zero lateness IN THE RAW PROF CLOCK. This
+does not say task work or signal delivery has zero scheduler/wall latency;
+it proves no expected intervals were lost at that stage in this run.
+
+Per-worker kernel counts (host PIDs):
+  PID      raw PROF ms   ticks   expected/expired/queued/delivered
+  1396388       3832     3832             383 / 383 / 383 / 383
+  1396389       3835     3835             383 / 383 / 383 / 383
+  1396392       3874     3874             387 / 387 / 387 / 387
+  1396393       3853     3853             385 / 385 / 385 / 385
+  1396396       3960     3960             395 / 395 / 395 / 395
+  1396399       3829     3829             382 / 382 / 382 / 382
+
+For each worker E = floor((raw_PROF_ns - 1,000,000) / 10,000,000).
+The kernel adds 1 ms to the first expiry only. Across six workers the
+unrepresented 33 ms is exactly 6 ms initial offsets + 27 ms final fractions.
+
+Decomposing the 93.275711678 s gap between scheduler CPU and upload:
+  Scheduler CPU minus raw accounting           93.232711678 s
+  Raw accounting minus delivered fixed weight   0.033000000 s
+  Delivered fixed weight minus upload            0.010000000 s
+
+Thus raw accounting explains 99.9539% of the gap. There is no measured
+coalescing loss, lost expected expiration, or handler-entry loss. The last
+10 ms is one callback not represented by any uploaded ordinary/drop sample.
+Its exact buffer/report location is not identified. The existing final-report
+before-sampler-stop ordering is a plausible explanation, not an event-level
+proof of where that record went.
+
+Unwrapped and auditor-only controls:
+  Mode    uploaded s   lifecycle worker CPU bounds s    coverage bounds
+  plain     24.070       116.958040–117.066486           20.56097–20.58003%
+  audit     24.370       117.103913–117.208883           20.79194–20.81058%
+  traced    23.140       116.408666–116.510436           19.86088–19.87825%
+
+Plain raw PROF lifecycle bounds were 24.111–24.185 s. Uploaded weight covers
+99.5245–99.8300% of that raw time. The auditor-only run measured 117.111440060 s
+scheduler CPU and 24.418 s raw PROF between handler installation/removal;
+2,439 callbacks represented 24.39 s, versus 24.37 s uploaded. Handler CPU in
+the auditor was 0.01226 s total, far too small to explain the CPU shortfall.
+
+Uploaded drop weight is included: plain/audit each have 0.16 s resolve_error
+and 0.03 s no_thread_state; traced has 0.09 s and 0.02 s respectively. These
+are full single-frame drop sequences with empty filename and line/start_line
+zero. Complete ordinary and dropped root-to-leaf sequences, exact weights,
+all raw upload bodies, and decoded profiles are retained for each run. No
+function-substring or single-sample test was used as evidence of coverage.
+
+NATIVE VM PROOF: SKIPPED TICK DEADLINES
+
+The six-clock native matrix crosses ITIMER, POSIX process PROF/SCHED,
+POSIX thread PROF/SCHED, and no timer, with user/syscall and burst workloads.
+It directly reads raw PROF (-8 process, -4 thread) and scheduler CPU clocks.
+
+Representative five-second continuous native results, pinned to CPU 0:
+  Mode/work       scheduler s    raw PROF s    callbacks  weight/scheduler
+  no timer/user    4.997074387      2.922          —             —
+  ITIMER/user      4.996862720      2.914         291          58.2365%
+  ITIMER/syscall   4.997216174      2.912         291          58.2324%
+  process SCHED    4.996702891      2.907         499          99.8659%
+  thread SCHED     4.997971075      2.904         499          99.8405%
+
+The traced continuous ITIMER control measured scheduler CPU 4.996877796 s,
+raw PROF 2.912 s, and 291 handlers. Kernel counters were:
+  2,916 accounting ticks and 2.916 s credit, including about 4 ms setup;
+  828 hrtimer forwards by one interval and 2,088 forwards by two intervals;
+  therefore 2,088 skipped one-millisecond deadlines, 5,004 total periods;
+  291 expirations = 291 successful queues = 291 deliveries = 291 callbacks.
+No already-pending result occurred. Skipped deadlines explain the missing
+raw credit; there is no corresponding signal-stage shortfall to explain.
+
+A second trace included timer expiry deadlines: 2,007 of 2,930 scheduler
+timer callbacks were 1,024–2,047 microseconds late; 2,072 deadlines were skipped.
+It again delivered every one of 292 ITIMER expirations. The first trace and
+the probe use slightly different setup/teardown windows, hence their few-ms
+difference; the gated Django trace eliminates that window difference.
+
+Timing is not a universal constant. Two continuously running POSIX PROF
+matrix cases happened to get raw/scheduler ratios near 100%; most continuous
+cases were near 58%. In every case the PROF-timer callback count follows the
+measured raw clock. Existing captured 57.4–57.8% native results and the new
+58.2% ITIMER controls are different observations of the same accounting path.
+
+WHY DJANGO IS WORSE THAN A BUSY LOOP
+
+Django's traced scheduler slices:
+  total 457,837; 456,463 (99.6999%) shorter than 1,024 us;
+  231,268 in 256–511 us; 129,143 in 32–63 us;
+  summed scheduler slice CPU 116.414839168 s, agreeing closely with the
+  116.415711678 s group scheduler-clock difference.
+The average application CPU cost was about 441 us per HTTP request.
+Many short scheduled intervals do not encounter an accounting tick at all.
+Neither user/kernel mode nor GIL ownership makes their scheduler CPU vanish.
+
+A controlled 100 us running / 25 us requested sleep native workload isolates
+that scheduling effect. In one gated five-second trace:
+  scheduler CPU 0.891086190 s; raw PROF 0.001 s; zero ITIMER expirations;
+  8,115 runs, of which 8,110 lasted 64–127 us;
+  8,114 runs received zero accounting ticks and one run received one;
+  CPU 0 accounting ticks: 4,990 while idle, seven in other tasks, one in probe;
+  938 successful idle tick-stop events.
+The timer retained 10 ms after starting at 11 ms: it had consumed precisely
+one raw tick, regardless of almost 0.9 s of scheduler CPU. This is direct
+evidence of task/tick scheduling bias, beyond the late-deadline loss in a
+continuously running task. Other burst sizes give other ratios; there is no
+single correct constant rescaling factor.
+
+Sparse tick checks can also delay SCHED timers even though their clocks are
+accurate. The native thread-SCHED 1,000/250 us burst control produced 218
+callbacks + 107 overruns for 3.284785737 CPU seconds. This is relevant to the
+separate CTimer investigation; it is not the ITIMER loss mechanism measured
+above. The most extreme short-burst SCHED control retained a large unchecked
+tail as well. Overrun values only cover periods accounted at actual delivery.
+
+Subsequent corroboration from CTimer agent 5ede9c3d's locked VM batch:
+  exact SDK thread-SCHED timer, user: 4.99744 s CPU, 499 hits, zero overruns,
+  raw PROF 2.930 s; syscall: 4.99728 s CPU, 499 hits, zero overruns,
+  raw PROF 2.909 s.
+  With 200 us CPU / 100 us requested sleep: 1.520665536 s CPU, six hits,
+  119 overruns, raw PROF 0.006 s, and a 261.070206 ms CPU tail after the last
+  callback. timer_gettime returned 1 ns remaining with no SIGPROF pending.
+These are the companion agent's measurements, not an additional ITIMER run.
+An overdue timer with no pending signal distinguishes expiration-check
+starvation before queuing from a signal waiting for delivery. The six hits
+plus 119 overruns represent 1.25 s; the remaining approximately 0.271 s is
+the unchecked tail plus endpoint phase. Overrun weighting alone cannot
+recover periods for which a final callback never occurs. This reinforces
+the need to distinguish clock undercounting (ITIMER) from sparse expiration
+checks on an otherwise accurate SCHED clock (CTimer).
+
+FINAL COMPANION CTIMER FINDINGS
+
+The completed companion report, parent investigations/ctimer.txt, establishes
+a distinct loss after the accurate SCHED clock but before signal queuing:
+10,284 fires = successful queues = deliveries = auditor callbacks. At fire,
+1,161 events were already at least 10 ms CPU overdue, with maximum 45.595 ms;
+maximum queue-to-delivery latency was only 54 us. The primary Django audit's
+raw process PROF was 23.924 s versus 117.743822888 s scheduler CPU, independently
+corroborating ITIMER's raw-clock discrepancy on the same workload.
+
+In the companion primary audit, 1,476 ignored overruns explain 14.76 s, or
+97.02% of the CTimer process/profile gap. A diagnostic overrun replay then
+uploaded 115.96 s against 116.043345885 s registered main-thread CPU: 99.9282%.
+Coverage of ALL worker CPU was 99.50–99.59%, not 99.93%; the remaining native
+threads are not armed by that CTimer registration scheme. These measurements
+belong to the companion experiments, not the ITIMER runs above.
+
+Aggregate correction demonstrably does not fix attribution. The companion's
+measured approximately 50:50 busy/bursty Python phase workload assigned
+93.68% of overrun-weighted profile weight to the busy phase (97.27% before
+correction). The report retains all four complete observed root-to-leaf frame
+sequences, line numbers and exact weights. Overdue burst CPU was attributed
+to a later busy-phase stack. Thus a SCHED clock and proper overrun weight fix
+the measured total-weight defects but are insufficient for reliable profiles
+of these bursts. That requires a trigger independent of the target receiving
+a scheduler tick, plus validation against known CPU and complete stack shares.
+
+The companion's resolver-only diagnostic build also observed 20/20 startup
+failures at the code-object type check. Those are already weighted drop samples
+and cannot explain the large timer losses. The original ITIMER drop records
+have no error-chain evidence, so this does not retroactively identify their
+specific cause or prove an allocator lifetime event.
+
+The shared auditor's latest version offers optional CTIMER_REPLAY_OVERRUNS=1,
+default off. No replay mode was enabled for any ITIMER measurement here. The
+auditor source snapshot used for those measurements is preserved in django/;
+it is not overwritten with a later diagnostic implementation.
+
+KERNEL CONFIGURATION AND CAUSAL SOURCE PATH
+
+Actual VM: Ubuntu 7.0.0-42.42-generic, base 7.0.14, VMware; HZ=1000;
+CONFIG_POSIX_CPU_TIMERS_TASK_WORK=y; CONFIG_VIRT_CPU_ACCOUNTING_GEN=y;
+CONFIG_NO_HZ_FULL=y but /sys/devices/system/cpu/nohz_full is empty;
+CONFIG_CONTEXT_TRACKING_USER_FORCE and CONFIG_IRQ_TIME_ACCOUNTING are unset;
+clocksource tsc, clockevent lapic. No nohz_full boot parameter.
+
+NO_HZ_FULL being compiled does not enable virtual user accounting everywhere.
+include/linux/vtime.h gates it on per-CPU context tracking. Idle tick stopping
+still occurs, as the burst trace proves. Here the observed credit is exactly
+1 ms per tick; IRQ-time accounting cannot explain it because it is disabled.
+No steal deduction is apparent in the measured tick/credit reconciliation.
+
+Source chain, cross-checked against running function/tracepoint behavior:
+  rust/crates/signal-timer/src/itimer.rs:
+    ITimer::start -> setitimer(ITIMER_PROF), interval/value both 10 ms.
+  kernel/time/itimer.c:set_cpu_itimer:
+    CPUCLOCK_PROF; initial expiry receives one extra TICK_NSEC.
+  kernel/time/tick-sched.c:tick_nohz_handler:
+    handles the tick once, then hrtimer_forward advances over late deadlines.
+  kernel/time/timer.c:update_process_times:
+    account_process_tick -> scheduler tick -> run_posix_cpu_timers.
+  kernel/sched/cputime.c:account_process_tick:
+    with virtual accounting inactive, credits TICK_NSEC, not all elapsed
+    scheduler time since the last tick. account_group_user_time/system_time
+    update the process raw counters. Scheduler runtime is updated separately.
+  kernel/time/posix-cpu-timers.c:
+    proc_sample_cputime_atomic sets PROF=utime+stime, SCHED=sum_exec_runtime;
+    fastpath_timer_check -> task work (TWA_RESUME) -> handle_posix_cpu_timers
+    -> check_process_timers -> check_cpu_itimer -> send_signal_locked.
+    Periodic ITIMER expiry advances by the interval, not now+interval.
+  kernel/signal.c:legacy_queue / __send_signal_locked:
+    ordinary pending signals can merge, but trace result 2 never occurred here.
+  kernel/sched/cputime.c:cputime_adjust:
+    scales reported user/system CPU to scheduler runtime, explaining accurate
+    getrusage/process CPU totals alongside a badly undercounting raw timer.
+  rust/src/signal_sampler.rs -> rust/src/signal_backend.rs -> pprof encoding:
+    one callback contributes one nominal 10 ms sample or one counted drop.
+    None of these stages can restore CPU omitted by the raw clock.
+
+Primary source references:
+  https://github.com/torvalds/linux/blob/v7.0/kernel/time/itimer.c#L186
+  https://github.com/torvalds/linux/blob/v7.0/kernel/time/tick-sched.c#L306
+  https://github.com/torvalds/linux/blob/v7.0/kernel/time/timer.c#L2467
+  https://github.com/torvalds/linux/blob/v7.0/kernel/sched/cputime.c#L479
+  https://github.com/torvalds/linux/blob/v7.0/kernel/sched/cputime.c#L532
+  https://github.com/torvalds/linux/blob/v7.0/kernel/time/posix-cpu-timers.c#L194
+  https://github.com/torvalds/linux/blob/v7.0/kernel/time/posix-cpu-timers.c#L915
+  https://github.com/torvalds/linux/blob/v7.0/kernel/time/posix-cpu-timers.c#L1216
+  https://github.com/torvalds/linux/blob/v7.0/kernel/signal.c#L1037
+  https://github.com/torvalds/linux/blob/v7.0/include/linux/vtime.h#L70
+
+Cached sources and hashes are in kernel/sources.json. The four central files
+itimer.c, posix-cpu-timers.c, cputime.c and tick-sched.c were also downloaded
+from gregkh/linux v7.0.14 and are byte-identical to the inspected v7.0 files.
+The Ubuntu patch set itself was not downloaded; BPF verified the relevant
+running paths and numerical behavior rather than assuming source identity.
+
+LIMITS OF THE VM FINDING
+
+We proved guest timer deadlines are serviced late and Linux skips accounting
+periods, plus strong task/tick attribution bias for short-running tasks. We
+did not instrument the physical VMware host. Guest evidence cannot uniquely
+identify why virtual LAPIC delivery is late: host vCPU scheduling, virtual
+timer policy, and other hypervisor behavior remain possibilities. Scheduler
+CPU is guest-observed runtime, not an independent physical-host CPU measure.
+The SDK conclusion does not depend on choosing an unmeasured host mechanism.
+
+Similarly, the exact 57% and 20% numbers are workload/run-dependent. The
+underlying path and the loss budget are proven; a universal ratio is not.
+No trace can reconstruct stacks for unsampled execution. Improved total
+weight alone is not proof of improved frame attribution.
+
+SUGGESTED FIX AND VALIDATION
+
+Avoid relying on raw ITIMER_PROF periods as scheduler CPU nanoseconds on
+Linux. Use a scheduler-clock timer, or explicitly weight sampled intervals
+from the intended scheduler CPU clock with a documented attribution policy.
+Existing CTimer already uses per-thread CPUCLOCK_SCHED. The native process-
+SCHED and thread-SCHED controls validate that changing clock basis removes
+the continuous-loop raw-accounting loss on this VM.
+
+A process-wide POSIX CLOCK_PROCESS_CPUTIME_ID timer is another candidate for
+ITIMER's process-wide scope, but is not a drop-in production change: validate
+signal routing/coalescing, POSIX overruns, concurrent threads, timer lifecycle
+and fork behavior. For CTimer, include registered-thread scope and missed
+periods; the companion investigation owns those details. Do not multiply all
+Python stacks to absorb unrelated native-thread CPU.
+
+The parent's corrected lifecycle benchmark now reports loaded CTimer about
+186.15 s / 210.4063–210.5171 s worker CPU (~88.4%), Stack about 98.9%, and
+py-spy about 81.2%. These replace the older extrapolated CTimer estimates.
+They show that using SCHED addresses most of ITIMER's deficit but do not prove
+that the remaining CTimer gap is fixed. Read investigations/ctimer.txt for
+the independent CTimer delivery/overrun investigation.
+
+Do not apply a fixed 1.74x or 5x correction. Preserve overrun/elapsed weights
+through successful and dropped records if adopting them. Neither weighting
+method recreates unsampled frames, and ITIMER's process-wide time cannot be
+naively assigned from only the currently interrupted thread's clock.
+
+Separately reconcile shutdown: stop timers, quiesce callbacks and fully drain
+before the final snapshot, within the existing recovery-handler contract.
+The current report-before-sampler-stop ordering can lose late records, but
+it is a tiny residual here and not the explanation for missing 80% CPU.
+
+For any candidate, validate exact aligned CPU/arm/disarm intervals, native
+continuous and sub-tick bursts, Python multi-phase workloads with measured
+phase CPU, one/multiple workers, all supported Python versions, and complete
+root-to-leaf profile sequences with weight shares and noise tolerance.
+Keep the full observed profile in diagnostics. No production fix is claimed
+implemented or ready for deployment by this investigation.
+
+REPRODUCIBILITY AND ARTIFACT INDEX
+
+All paths below are relative to this worktree's diagnostics/itimer/:
+  clock_probe.c, run_matrix.py: six-clock native comparison and event timelines.
+  stages.bt: accounting/expiry/delivery and hrtimer skipped-deadline counters.
+  burst_ticks.bt: armed-window CPU0 scheduling/tick/idle control.
+  lifecycle_clocks.py, observe_process_clocks.py: raw and scheduler snapshots.
+  prepare_django.py: private corrected-harness copy, own ports/names, raw clocks.
+  django/: exact diagnostic harness and shared auditor source copy.
+  django_stages.bt, trace_django.sh: pre-configure gate, cgroup-filtered trace.
+  analyze_django.py, analyze_kernel.py: independently recompute loss budgets.
+  results/vm-matrix/: all 20 native cases, exact commands and per-event clocks.
+  results/vm-kernel-environment.txt: actual kernel/config/clock/VM evidence.
+  results/remote/trace-*.log: full BPF counters and histograms.
+  results/remote/django/{plain,audit,traced}/: complete uploads, decoded stacks,
+    lifecycle clocks, metadata, server logs, load results and auditor records.
+  results/django-analysis.json, results/kernel-loss-budget.json: computed totals.
+  results/vm-django-and-traces.tar.gz, vm-django-traced.tar.gz: downloaded evidence.
+  results/clock_probe-measured.c: source used for the captured VM native binary.
+    Current clock_probe.c only changes a zero-denominator ratio from NaN to
+    JSON null, after one zero-raw-clock control exposed the formatting issue.
+
+Recompute locally without touching the VM:
+  python3 diagnostics/itimer/analyze_django.py diagnostics/itimer/results/remote/django
+  python3 diagnostics/itimer/analyze_kernel.py diagnostics/itimer/results/remote/trace-django.log diagnostics/itimer/results/django-analysis.json
+
+Run additional remote experiments only with the parent's scheduling approval,
+using the shared lock for the whole batch. Example native invocation:
+  exec 9< /tmp/pyroscope-cpu-loss-experiments.lock
+  flock -x 9
+  python3 run_matrix.py NEW_OUTPUT --seconds 5 --cpu 0
+Opening the existing lock read-only also works from root: protected_regular
+can reject root opening a user-owned file in /tmp with O_CREAT. Keep fd 9
+inherited through the complete harness so the exclusive lock remains held.
+The trace_django.sh runner likewise expects the lock to be held externally.
+The private paths and latest shared-auditor source are retained; no package
+installation, kernel parameter change, production patch or deployment is
+required to reproduce this investigation.

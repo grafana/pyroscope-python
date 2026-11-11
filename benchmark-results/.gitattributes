@@ -1,0 +1,2 @@
+# Preserve benchmark evidence and bundled inputs byte-for-byte.
+* -text -whitespace

@@ -1,0 +1,23 @@
+[2026-11-09 04:22:05 +0000] [10] [INFO] Starting gunicorn 23.0.0
+[2026-11-09 04:22:05 +0000] [10] [INFO] Listening at: http://127.0.0.1:18080 (10)
+[2026-11-09 04:22:05 +0000] [10] [INFO] Using worker: sync
+[2026-11-09 04:22:05 +0000] [11] [INFO] Booting worker with pid: 11
+[2026-11-09 04:22:05 +0000] [12] [INFO] Booting worker with pid: 12
+[2026-11-09 04:22:05 +0000] [13] [INFO] Booting worker with pid: 13
+[2026-11-09 04:22:05 +0000] [14] [INFO] Booting worker with pid: 14
+[2026-11-09 04:22:05 +0000] [15] [INFO] Booting worker with pid: 15
+[2026-11-09 04:22:05 +0000] [16] [INFO] Booting worker with pid: 16
+BENCH_WORKER_READY 11
+BENCH_WORKER_READY 13
+BENCH_WORKER_READY 12
+BENCH_WORKER_READY 15
+BENCH_WORKER_READY 14
+BENCH_WORKER_READY 16
+[2026-11-09 04:22:50 +0000] [10] [INFO] Handling signal: term
+[2026-11-09 04:22:50 +0000] [12] [INFO] Worker exiting (pid: 12)
+[2026-11-09 04:22:50 +0000] [16] [INFO] Worker exiting (pid: 16)
+[2026-11-09 04:22:50 +0000] [14] [INFO] Worker exiting (pid: 14)
+[2026-11-09 04:22:50 +0000] [15] [INFO] Worker exiting (pid: 15)
+[2026-11-09 04:22:50 +0000] [13] [INFO] Worker exiting (pid: 13)
+[2026-11-09 04:22:50 +0000] [11] [INFO] Worker exiting (pid: 11)
+[2026-11-09 04:22:51 +0000] [10] [INFO] Shutting down: Master

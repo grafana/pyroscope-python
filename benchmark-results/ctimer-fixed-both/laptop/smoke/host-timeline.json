@@ -1,0 +1,443 @@
+[
+  {
+    "time": 1794197068.3370335,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "43050",
+      "/sys/class/thermal/thermal_zone0/temp": "53000",
+      "/sys/class/thermal/thermal_zone9/temp": "30000",
+      "/sys/class/thermal/thermal_zone7/temp": "61000",
+      "/sys/class/thermal/thermal_zone5/temp": "43050",
+      "/sys/class/thermal/thermal_zone3/temp": "47050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "60000",
+      "/sys/class/thermal/thermal_zone6/temp": "53050",
+      "/sys/class/thermal/thermal_zone4/temp": "49050"
+    }
+  },
+  {
+    "time": 1794197069.3525894,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "44050",
+      "/sys/class/thermal/thermal_zone0/temp": "53000",
+      "/sys/class/thermal/thermal_zone9/temp": "30000",
+      "/sys/class/thermal/thermal_zone7/temp": "95000",
+      "/sys/class/thermal/thermal_zone5/temp": "42050",
+      "/sys/class/thermal/thermal_zone3/temp": "47050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "94000",
+      "/sys/class/thermal/thermal_zone6/temp": "53050",
+      "/sys/class/thermal/thermal_zone4/temp": "49050"
+    }
+  },
+  {
+    "time": 1794197070.3781657,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "44050",
+      "/sys/class/thermal/thermal_zone0/temp": "53000",
+      "/sys/class/thermal/thermal_zone9/temp": "30000",
+      "/sys/class/thermal/thermal_zone7/temp": "95000",
+      "/sys/class/thermal/thermal_zone5/temp": "42050",
+      "/sys/class/thermal/thermal_zone3/temp": "47050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "95000",
+      "/sys/class/thermal/thermal_zone6/temp": "53050",
+      "/sys/class/thermal/thermal_zone4/temp": "49050"
+    }
+  },
+  {
+    "time": 1794197071.403122,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "43050",
+      "/sys/class/thermal/thermal_zone0/temp": "60000",
+      "/sys/class/thermal/thermal_zone9/temp": "29000",
+      "/sys/class/thermal/thermal_zone7/temp": "100000",
+      "/sys/class/thermal/thermal_zone5/temp": "43050",
+      "/sys/class/thermal/thermal_zone3/temp": "48050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "96000",
+      "/sys/class/thermal/thermal_zone6/temp": "60050",
+      "/sys/class/thermal/thermal_zone4/temp": "50050"
+    }
+  },
+  {
+    "time": 1794197072.4287105,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "43050",
+      "/sys/class/thermal/thermal_zone0/temp": "60000",
+      "/sys/class/thermal/thermal_zone9/temp": "30000",
+      "/sys/class/thermal/thermal_zone7/temp": "99000",
+      "/sys/class/thermal/thermal_zone5/temp": "43050",
+      "/sys/class/thermal/thermal_zone3/temp": "48050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "97000",
+      "/sys/class/thermal/thermal_zone6/temp": "60050",
+      "/sys/class/thermal/thermal_zone4/temp": "50050"
+    }
+  },
+  {
+    "time": 1794197073.4544568,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "44050",
+      "/sys/class/thermal/thermal_zone0/temp": "74000",
+      "/sys/class/thermal/thermal_zone9/temp": "30000",
+      "/sys/class/thermal/thermal_zone7/temp": "90000",
+      "/sys/class/thermal/thermal_zone5/temp": "43050",
+      "/sys/class/thermal/thermal_zone3/temp": "50050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "90000",
+      "/sys/class/thermal/thermal_zone6/temp": "74050",
+      "/sys/class/thermal/thermal_zone4/temp": "52050"
+    }
+  },
+  {
+    "time": 1794197074.480147,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "44050",
+      "/sys/class/thermal/thermal_zone0/temp": "74000",
+      "/sys/class/thermal/thermal_zone9/temp": "30000",
+      "/sys/class/thermal/thermal_zone7/temp": "101000",
+      "/sys/class/thermal/thermal_zone5/temp": "43050",
+      "/sys/class/thermal/thermal_zone3/temp": "50050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "96000",
+      "/sys/class/thermal/thermal_zone6/temp": "74050",
+      "/sys/class/thermal/thermal_zone4/temp": "52050"
+    }
+  },
+  {
+    "time": 1794197075.5071266,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "45050",
+      "/sys/class/thermal/thermal_zone0/temp": "89000",
+      "/sys/class/thermal/thermal_zone9/temp": "30000",
+      "/sys/class/thermal/thermal_zone7/temp": "99000",
+      "/sys/class/thermal/thermal_zone5/temp": "44050",
+      "/sys/class/thermal/thermal_zone3/temp": "51050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "99000",
+      "/sys/class/thermal/thermal_zone6/temp": "89050",
+      "/sys/class/thermal/thermal_zone4/temp": "54050"
+    }
+  },
+  {
+    "time": 1794197076.534188,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "45050",
+      "/sys/class/thermal/thermal_zone0/temp": "89000",
+      "/sys/class/thermal/thermal_zone9/temp": "29000",
+      "/sys/class/thermal/thermal_zone7/temp": "99000",
+      "/sys/class/thermal/thermal_zone5/temp": "44050",
+      "/sys/class/thermal/thermal_zone3/temp": "51050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "99000",
+      "/sys/class/thermal/thermal_zone6/temp": "89050",
+      "/sys/class/thermal/thermal_zone4/temp": "54050"
+    }
+  },
+  {
+    "time": 1794197077.561661,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "45050",
+      "/sys/class/thermal/thermal_zone0/temp": "97000",
+      "/sys/class/thermal/thermal_zone9/temp": "32000",
+      "/sys/class/thermal/thermal_zone7/temp": "100000",
+      "/sys/class/thermal/thermal_zone5/temp": "44050",
+      "/sys/class/thermal/thermal_zone3/temp": "52050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "99000",
+      "/sys/class/thermal/thermal_zone6/temp": "97050",
+      "/sys/class/thermal/thermal_zone4/temp": "55050"
+    }
+  },
+  {
+    "time": 1794197078.5903168,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "45050",
+      "/sys/class/thermal/thermal_zone0/temp": "97000",
+      "/sys/class/thermal/thermal_zone9/temp": "30000",
+      "/sys/class/thermal/thermal_zone7/temp": "90000",
+      "/sys/class/thermal/thermal_zone5/temp": "44050",
+      "/sys/class/thermal/thermal_zone3/temp": "52050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "90000",
+      "/sys/class/thermal/thermal_zone6/temp": "97050",
+      "/sys/class/thermal/thermal_zone4/temp": "55050"
+    }
+  },
+  {
+    "time": 1794197079.617076,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "45050",
+      "/sys/class/thermal/thermal_zone0/temp": "98000",
+      "/sys/class/thermal/thermal_zone9/temp": "29000",
+      "/sys/class/thermal/thermal_zone7/temp": "96000",
+      "/sys/class/thermal/thermal_zone5/temp": "44050",
+      "/sys/class/thermal/thermal_zone3/temp": "53050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "99000",
+      "/sys/class/thermal/thermal_zone6/temp": "98050",
+      "/sys/class/thermal/thermal_zone4/temp": "57050"
+    }
+  },
+  {
+    "time": 1794197080.6454613,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "45050",
+      "/sys/class/thermal/thermal_zone0/temp": "98000",
+      "/sys/class/thermal/thermal_zone9/temp": "28000",
+      "/sys/class/thermal/thermal_zone7/temp": "99000",
+      "/sys/class/thermal/thermal_zone5/temp": "44050",
+      "/sys/class/thermal/thermal_zone3/temp": "53050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "97000",
+      "/sys/class/thermal/thermal_zone6/temp": "98050",
+      "/sys/class/thermal/thermal_zone4/temp": "57050"
+    }
+  },
+  {
+    "time": 1794197081.6721904,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "46050",
+      "/sys/class/thermal/thermal_zone0/temp": "98000",
+      "/sys/class/thermal/thermal_zone9/temp": "29000",
+      "/sys/class/thermal/thermal_zone7/temp": "100000",
+      "/sys/class/thermal/thermal_zone5/temp": "45050",
+      "/sys/class/thermal/thermal_zone3/temp": "53050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "100000",
+      "/sys/class/thermal/thermal_zone6/temp": "98050",
+      "/sys/class/thermal/thermal_zone4/temp": "58050"
+    }
+  },
+  {
+    "time": 1794197082.6995463,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "46050",
+      "/sys/class/thermal/thermal_zone0/temp": "98000",
+      "/sys/class/thermal/thermal_zone9/temp": "32000",
+      "/sys/class/thermal/thermal_zone7/temp": "99000",
+      "/sys/class/thermal/thermal_zone5/temp": "45050",
+      "/sys/class/thermal/thermal_zone3/temp": "53050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "96000",
+      "/sys/class/thermal/thermal_zone6/temp": "98050",
+      "/sys/class/thermal/thermal_zone4/temp": "58050"
+    }
+  },
+  {
+    "time": 1794197083.7276146,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "47050",
+      "/sys/class/thermal/thermal_zone0/temp": "99000",
+      "/sys/class/thermal/thermal_zone9/temp": "32000",
+      "/sys/class/thermal/thermal_zone7/temp": "90000",
+      "/sys/class/thermal/thermal_zone5/temp": "46050",
+      "/sys/class/thermal/thermal_zone3/temp": "54050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "93000",
+      "/sys/class/thermal/thermal_zone6/temp": "99050",
+      "/sys/class/thermal/thermal_zone4/temp": "59050"
+    }
+  },
+  {
+    "time": 1794197084.7544358,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "47050",
+      "/sys/class/thermal/thermal_zone0/temp": "99000",
+      "/sys/class/thermal/thermal_zone9/temp": "33000",
+      "/sys/class/thermal/thermal_zone7/temp": "101000",
+      "/sys/class/thermal/thermal_zone5/temp": "46050",
+      "/sys/class/thermal/thermal_zone3/temp": "54050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "100000",
+      "/sys/class/thermal/thermal_zone6/temp": "99050",
+      "/sys/class/thermal/thermal_zone4/temp": "59050"
+    }
+  },
+  {
+    "time": 1794197085.782898,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "48050",
+      "/sys/class/thermal/thermal_zone0/temp": "98000",
+      "/sys/class/thermal/thermal_zone9/temp": "30000",
+      "/sys/class/thermal/thermal_zone7/temp": "99000",
+      "/sys/class/thermal/thermal_zone5/temp": "47050",
+      "/sys/class/thermal/thermal_zone3/temp": "55050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "99000",
+      "/sys/class/thermal/thermal_zone6/temp": "98050",
+      "/sys/class/thermal/thermal_zone4/temp": "60050"
+    }
+  },
+  {
+    "time": 1794197086.8105142,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "48050",
+      "/sys/class/thermal/thermal_zone0/temp": "98000",
+      "/sys/class/thermal/thermal_zone9/temp": "29000",
+      "/sys/class/thermal/thermal_zone7/temp": "100000",
+      "/sys/class/thermal/thermal_zone5/temp": "47050",
+      "/sys/class/thermal/thermal_zone3/temp": "55050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "97000",
+      "/sys/class/thermal/thermal_zone6/temp": "98050",
+      "/sys/class/thermal/thermal_zone4/temp": "60050"
+    }
+  },
+  {
+    "time": 1794197087.8394854,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "48050",
+      "/sys/class/thermal/thermal_zone0/temp": "98000",
+      "/sys/class/thermal/thermal_zone9/temp": "30000",
+      "/sys/class/thermal/thermal_zone7/temp": "99000",
+      "/sys/class/thermal/thermal_zone5/temp": "47050",
+      "/sys/class/thermal/thermal_zone3/temp": "55050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "96000",
+      "/sys/class/thermal/thermal_zone6/temp": "98050",
+      "/sys/class/thermal/thermal_zone4/temp": "62050"
+    }
+  },
+  {
+    "time": 1794197088.868601,
+    "state": {
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/online": "0",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/online": "1",
+      "/sys/class/power_supply/AC/online": "1",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:002/status": "Discharging",
+      "/sys/class/power_supply/ucsi-source-psy-USBC000:001/status": "Charging",
+      "/sys/class/power_supply/BAT0/status": "Not charging",
+      "/sys/class/thermal/thermal_zone2/temp": "48050",
+      "/sys/class/thermal/thermal_zone0/temp": "98000",
+      "/sys/class/thermal/thermal_zone9/temp": "28000",
+      "/sys/class/thermal/thermal_zone7/temp": "100000",
+      "/sys/class/thermal/thermal_zone5/temp": "47050",
+      "/sys/class/thermal/thermal_zone3/temp": "55050",
+      "/sys/class/thermal/thermal_zone1/temp": "20000",
+      "/sys/class/thermal/thermal_zone8/temp": "99000",
+      "/sys/class/thermal/thermal_zone6/temp": "98050",
+      "/sys/class/thermal/thermal_zone4/temp": "62050"
+    }
+  }
+]

@@ -1,0 +1,2 @@
+mode=user cpu=4.996543 user=4.994784 system=0.003018 signals=287 weighted=2.870000 ratio=0.5744
+mode=syscall cpu=4.997122 user=1.204956 system=3.793319 signals=286 weighted=2.860000 ratio=0.5723

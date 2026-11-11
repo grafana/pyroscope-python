@@ -1,0 +1,184 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 579B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.13.7-slim-trixie@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689
+#2 ...
+
+#3 [auth] library/python:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.13.7-slim-trixie@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689
+#2 DONE 2.8s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 2.80MB 0.0s done
+#5 DONE 0.0s
+
+#6 [1/6] FROM docker.io/library/python:3.13.7-slim-trixie@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689
+#6 resolve docker.io/library/python:3.13.7-slim-trixie@sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689 0.0s done
+#6 sha256:2be5d3cb08aa616c6e38d922bd7072975166b2de772004f79ee1bae59fe983dc 1.75kB / 1.75kB done
+#6 sha256:7b444340715da1bb14bdb39c8557e0195455f5f281297723c693a51bc38a2c4a 5.44kB / 5.44kB done
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 0B / 29.78MB 0.1s
+#6 sha256:31fd2a94d72338ac6bbe103da6448d7e4cb7e7a29b9f56fa61d307b4395edf86 0B / 1.29MB 0.1s
+#6 sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 0B / 11.74MB 0.1s
+#6 sha256:5f55cdf0c5d9dc1a415637a5ccc4a9e18663ad203673173b8cda8f8dcacef689 10.37kB / 10.37kB done
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 2.10MB / 29.78MB 0.7s
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 4.19MB / 29.78MB 1.1s
+#6 sha256:31fd2a94d72338ac6bbe103da6448d7e4cb7e7a29b9f56fa61d307b4395edf86 1.05MB / 1.29MB 1.4s
+#6 sha256:31fd2a94d72338ac6bbe103da6448d7e4cb7e7a29b9f56fa61d307b4395edf86 1.29MB / 1.29MB 1.5s done
+#6 sha256:7d456e82f89bfe09aec396e93d830ba74fe0257fe2454506902adf46fb4377b3 0B / 250B 1.5s
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 6.29MB / 29.78MB 1.8s
+#6 sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 1.05MB / 11.74MB 1.8s
+#6 sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 2.10MB / 11.74MB 2.1s
+#6 sha256:7d456e82f89bfe09aec396e93d830ba74fe0257fe2454506902adf46fb4377b3 250B / 250B 2.0s done
+#6 sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 3.15MB / 11.74MB 2.4s
+#6 sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 4.19MB / 11.74MB 2.5s
+#6 sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 5.24MB / 11.74MB 2.9s
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 8.39MB / 29.78MB 3.1s
+#6 sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 7.34MB / 11.74MB 3.1s
+#6 sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 8.39MB / 11.74MB 3.3s
+#6 sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 9.44MB / 11.74MB 3.5s
+#6 sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 10.49MB / 11.74MB 3.6s
+#6 sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 11.74MB / 11.74MB 3.8s done
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 10.49MB / 29.78MB 4.2s
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 12.58MB / 29.78MB 4.5s
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 14.68MB / 29.78MB 4.9s
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 16.78MB / 29.78MB 5.1s
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 18.87MB / 29.78MB 5.5s
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 22.02MB / 29.78MB 5.9s
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 25.17MB / 29.78MB 6.4s
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 27.26MB / 29.78MB 6.7s
+#6 sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 29.78MB / 29.78MB 7.1s done
+#6 extracting sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 0.1s
+#6 extracting sha256:8c7716127147648c1751940b9709b6325f2256290d3201662eca2701cadb2cdf 0.4s done
+#6 extracting sha256:31fd2a94d72338ac6bbe103da6448d7e4cb7e7a29b9f56fa61d307b4395edf86 0.1s done
+#6 extracting sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60
+#6 extracting sha256:66b685f2f76ba4e1e04b26b98a2aca385ea829c3b1ec637fbd82df8755973a60 0.3s done
+#6 extracting sha256:7d456e82f89bfe09aec396e93d830ba74fe0257fe2454506902adf46fb4377b3 done
+#6 DONE 8.0s
+
+#7 [2/6] RUN apt-get update && apt-get install -y --no-install-recommends libstdc++6 libssl3t64 openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+#7 0.225 Get:1 http://deb.debian.org/debian trixie InRelease [140 kB]
+#7 0.290 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#7 0.315 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#7 0.342 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9678 kB]
+#7 1.762 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [1108 B]
+#7 1.783 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [301 kB]
+#7 2.219 Fetched 10.2 MB in 2s (4917 kB/s)
+#7 2.219 Reading package lists...
+#7 2.530 Reading package lists...
+#7 2.836 Building dependency tree...
+#7 2.920 Reading state information...
+#7 3.045 libstdc++6 is already the newest version (14.2.0-19).
+#7 3.045 libstdc++6 set to manually installed.
+#7 3.045 The following packages will be upgraded:
+#7 3.046   ca-certificates libssl3t64 openssl openssl-provider-legacy
+#7 3.141 4 upgraded, 0 newly installed, 0 to remove and 30 not upgraded.
+#7 3.141 Need to get 4443 kB of archives.
+#7 3.141 After this operation, 61.4 kB of additional disk space will be used.
+#7 3.141 Get:1 http://deb.debian.org/debian-security trixie-security/main amd64 openssl-provider-legacy amd64 3.5.7-1~deb13u3 [316 kB]
+#7 3.234 Get:2 http://deb.debian.org/debian-security trixie-security/main amd64 libssl3t64 amd64 3.5.7-1~deb13u3 [2458 kB]
+#7 3.613 Get:3 http://deb.debian.org/debian-security trixie-security/main amd64 openssl amd64 3.5.7-1~deb13u3 [1508 kB]
+#7 3.856 Get:4 http://deb.debian.org/debian-security trixie-security/main amd64 ca-certificates all 20250419+deb13u1 [161 kB]
+#7 3.937 debconf: unable to initialize frontend: Dialog
+#7 3.937 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#7 3.937 debconf: falling back to frontend: Readline
+#7 3.937 debconf: unable to initialize frontend: Readline
+#7 3.937 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8, <STDIN> line 4.)
+#7 3.937 debconf: falling back to frontend: Teletype
+#7 3.940 debconf: unable to initialize frontend: Teletype
+#7 3.940 debconf: (This frontend requires a controlling tty.)
+#7 3.940 debconf: falling back to frontend: Noninteractive
+#7 4.252 Preconfiguring packages ...
+#7 4.543 Fetched 4443 kB in 1s (5548 kB/s)
+#7 4.554 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 5644 files and directories currently installed.)
+#7 4.558 Preparing to unpack .../openssl-provider-legacy_3.5.7-1~deb13u3_amd64.deb ...
+#7 4.619 Unpacking openssl-provider-legacy (3.5.7-1~deb13u3) over (3.5.1-1) ...
+#7 4.643 Setting up openssl-provider-legacy (3.5.7-1~deb13u3) ...
+#7 4.663 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 5644 files and directories currently installed.)
+#7 4.665 Preparing to unpack .../libssl3t64_3.5.7-1~deb13u3_amd64.deb ...
+#7 4.671 Unpacking libssl3t64:amd64 (3.5.7-1~deb13u3) over (3.5.1-1) ...
+#7 4.763 Setting up libssl3t64:amd64 (3.5.7-1~deb13u3) ...
+#7 4.783 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 5644 files and directories currently installed.)
+#7 4.785 Preparing to unpack .../openssl_3.5.7-1~deb13u3_amd64.deb ...
+#7 4.790 Unpacking openssl (3.5.7-1~deb13u3) over (3.5.1-1) ...
+#7 4.849 Preparing to unpack .../ca-certificates_20250419+deb13u1_all.deb ...
+#7 4.854 Unpacking ca-certificates (20250419+deb13u1) over (20250419) ...
+#7 4.913 Setting up openssl (3.5.7-1~deb13u3) ...
+#7 4.920 Setting up ca-certificates (20250419+deb13u1) ...
+#7 4.962 debconf: unable to initialize frontend: Dialog
+#7 4.962 debconf: (TERM is not set, so the dialog frontend is not usable.)
+#7 4.962 debconf: falling back to frontend: Readline
+#7 4.962 debconf: unable to initialize frontend: Readline
+#7 4.962 debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checked: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.40.1 /usr/local/share/perl/5.40.1 /usr/lib/x86_64-linux-gnu/perl5/5.40 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.40 /usr/share/perl/5.40 /usr/local/lib/site_perl) at /usr/share/perl5/Debconf/FrontEnd/Readline.pm line 8.)
+#7 4.962 debconf: falling back to frontend: Teletype
+#7 4.965 debconf: unable to initialize frontend: Teletype
+#7 4.965 debconf: (This frontend requires a controlling tty.)
+#7 4.965 debconf: falling back to frontend: Noninteractive
+#7 5.758 Updating certificates in /etc/ssl/certs...
+#7 6.214 rehash: warning: skipping ca-certificates.crt, it does not contain exactly one certificate or CRL
+#7 6.216 0 added, 2 removed; done.
+#7 6.247 Processing triggers for libc-bin (2.41-12) ...
+#7 6.264 Processing triggers for ca-certificates (20250419+deb13u1) ...
+#7 6.269 Updating certificates in /etc/ssl/certs...
+#7 6.583 0 added, 0 removed; done.
+#7 6.583 Running hooks in /etc/ca-certificates/update.d...
+#7 6.583 done.
+#7 DONE 6.9s
+
+#8 [3/6] COPY wheels/ /wheels/
+#8 DONE 0.0s
+
+#9 [4/6] RUN python -m pip install --no-cache-dir /wheels/*.whl Django==5.2.8 djangorestframework==3.16.1 gunicorn==23.0.0 asgiref==3.13.0 packaging==26.3 psutil==7.2.2 sqlparse==0.6.1
+#9 0.858 Processing /wheels/pyroscope_io-1.4.0-cp313-cp313-linux_x86_64.whl
+#9 1.026 Collecting Django==5.2.8
+#9 1.114   Downloading django-5.2.8-py3-none-any.whl.metadata (4.1 kB)
+#9 1.151 Collecting djangorestframework==3.16.1
+#9 1.171   Downloading djangorestframework-3.16.1-py3-none-any.whl.metadata (11 kB)
+#9 1.203 Collecting gunicorn==23.0.0
+#9 1.222   Downloading gunicorn-23.0.0-py3-none-any.whl.metadata (4.4 kB)
+#9 1.255 Collecting asgiref==3.13.0
+#9 1.277   Downloading asgiref-3.13.0-py3-none-any.whl.metadata (12 kB)
+#9 1.306 Collecting packaging==26.3
+#9 1.327   Downloading packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+#9 1.400 Collecting psutil==7.2.2
+#9 1.421   Downloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl.metadata (22 kB)
+#9 1.454 Collecting sqlparse==0.6.1
+#9 1.475   Downloading sqlparse-0.6.1-py3-none-any.whl.metadata (6.9 kB)
+#9 1.513 Downloading django-5.2.8-py3-none-any.whl (8.3 MB)
+#9 2.745    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 8.3/8.3 MB 6.8 MB/s  0:00:01
+#9 2.766 Downloading djangorestframework-3.16.1-py3-none-any.whl (1.1 MB)
+#9 2.925    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 7.0 MB/s  0:00:00
+#9 2.946 Downloading gunicorn-23.0.0-py3-none-any.whl (85 kB)
+#9 2.978 Downloading asgiref-3.13.0-py3-none-any.whl (27 kB)
+#9 3.002 Downloading packaging-26.3-py3-none-any.whl (129 kB)
+#9 3.043 Downloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl (155 kB)
+#9 3.088 Downloading sqlparse-0.6.1-py3-none-any.whl (51 kB)
+#9 3.130 Installing collected packages: sqlparse, pyroscope-io, psutil, packaging, asgiref, gunicorn, Django, djangorestframework
+#9 4.253 
+#9 4.254 Successfully installed Django-5.2.8 asgiref-3.13.0 djangorestframework-3.16.1 gunicorn-23.0.0 packaging-26.3 psutil-7.2.2 pyroscope-io-1.4.0 sqlparse-0.6.1
+#9 4.254 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+#9 4.365 
+#9 4.365 [notice] A new release of pip is available: 25.2 -> 26.3
+#9 4.365 [notice] To update, run: pip install --upgrade pip
+#9 DONE 4.7s
+
+#10 [5/6] COPY app/ /app/
+#10 DONE 0.0s
+
+#11 [6/6] WORKDIR /app
+#11 DONE 0.0s
+
+#12 exporting to image
+#12 exporting layers
+#12 exporting layers 0.4s done
+#12 writing image sha256:0d0dbef27956749ea1d0c50eab0ef7e9c4a9119b4cbf6606e26741815e6a1409 done
+#12 naming to docker.io/library/pyroscope-python-bench:fixed-3638f62 done
+#12 DONE 0.4s

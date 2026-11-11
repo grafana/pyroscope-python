@@ -1,0 +1,78 @@
+{
+  "host": "Linux 5950x-vm-vibe 7.0.0-42-generic #42-Ubuntu SMP PREEMPT_DYNAMIC Thu Oct 15 08:06:44 UTC 2026 x86_64 GNU/Linux\n",
+  "cpu": "Architecture:                            x86_64\nCPU op-mode(s):                          32-bit, 64-bit\nAddress sizes:                           45 bits physical, 48 bits virtual\nByte Order:                              Little Endian\nCPU(s):                                  16\nOn-line CPU(s) list:                     0-15\nVendor ID:                               AuthenticAMD\nModel name:                              AMD Ryzen 9 5950X 16-Core Processor\nCPU family:                              25\nModel:                                   33\nThread(s) per core:                      1\nCore(s) per socket:                      16\nSocket(s):                               1\nStepping:                                0\nBogoMIPS:                                6787.26\nFlags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid extd_apicid tsc_known_freq pni pclmulqdq ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm cmp_legacy extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw topoext ssbd ibrs ibpb vmmcall fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves user_shstk clzero wbnoinvd arat umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor fsrm\nHypervisor vendor:                       VMware\nVirtualization type:                     full\nL1d cache:                               512 KiB (16 instances)\nL1i cache:                               512 KiB (16 instances)\nL2 cache:                                8 MiB (16 instances)\nL3 cache:                                32 MiB (1 instance)\nNUMA node(s):                            1\nNUMA node0 CPU(s):                       0-15\nVulnerability Gather data sampling:      Not affected\nVulnerability Ghostwrite:                Not affected\nVulnerability Indirect target selection: Not affected\nVulnerability Itlb multihit:             Not affected\nVulnerability L1tf:                      Not affected\nVulnerability Mds:                       Not affected\nVulnerability Meltdown:                  Not affected\nVulnerability Mmio stale data:           Not affected\nVulnerability Old microcode:             Not affected\nVulnerability Reg file data sampling:    Not affected\nVulnerability Retbleed:                  Not affected\nVulnerability Spec rstack overflow:      Vulnerable: Safe RET, no microcode\nVulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl\nVulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization\nVulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP disabled; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected\nVulnerability Srbds:                     Not affected\nVulnerability Tsa:                       Mitigation; Clear CPU buffers\nVulnerability Tsx async abort:           Not affected\nVulnerability Vmscape:                   Not affected\n",
+  "docker": "Client:\n Version:           29.1.3\n API version:       1.52\n Go version:        go1.24.13\n Git commit:        29.1.3-0ubuntu4.1\n Built:             Wed Apr 29 16:40:20 2026\n OS/Arch:           linux/amd64\n Context:           default\n\nServer:\n Engine:\n  Version:          29.1.3\n  API version:      1.52 (minimum version 1.44)\n  Go version:       go1.24.13\n  Git commit:       29.1.3-0ubuntu4.1\n  Built:            Wed Apr 29 16:40:20 2026\n  OS/Arch:          linux/amd64\n  Experimental:     false\n containerd:\n  Version:          2.2.2\n  GitCommit:        \n runc:\n  Version:          1.4.0-0ubuntu1\n  GitCommit:        \n docker-init:\n  Version:          0.19.0\n  GitCommit:        \n",
+  "image": [
+    {
+      "Architecture": "amd64",
+      "Config": {
+        "Entrypoint": [
+          "python",
+          "/harness/measure.py"
+        ],
+        "Env": [
+          "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "GPG_KEY=7169605F62C751356D054A26A821E680E5FA6305",
+          "PYTHON_VERSION=3.13.7",
+          "PYTHON_SHA256=5462f9099dfd30e238def83c71d91897d8caa5ff6ebc7a50f14d4802cdaaa79a",
+          "PYTHONUNBUFFERED=1"
+        ],
+        "WorkingDir": "/app"
+      },
+      "Created": "2026-11-09T03:43:00.550379775Z",
+      "Descriptor": {
+        "digest": "sha256:2162c38250a33a20825b63bc6ff5790e4125b37845c1b82d168c97c2ceb7b932",
+        "mediaType": "application/vnd.oci.image.manifest.v1+json",
+        "size": 2065
+      },
+      "Id": "sha256:2162c38250a33a20825b63bc6ff5790e4125b37845c1b82d168c97c2ceb7b932",
+      "Metadata": {
+        "LastTagTime": "2026-11-09T03:43:00.580141353Z"
+      },
+      "Os": "linux",
+      "Parent": "sha256:86d0e15a6bc72826bef0b9c0fa1ead0061f4313f32bbfcdf623e8c11f2de2768",
+      "RepoDigests": [
+        "pyroscope-python-bench@sha256:2162c38250a33a20825b63bc6ff5790e4125b37845c1b82d168c97c2ceb7b932"
+      ],
+      "RepoTags": [
+        "pyroscope-python-bench:fixed-3638f62"
+      ],
+      "RootFS": {
+        "Layers": [
+          "sha256:1d46119d249f7719e1820e24a311aa7c453f166f714969cffe89504678eaa447",
+          "sha256:719555a13b081583ca7e72d73a241a9d645ac7f9cc091e71a59a20440a68bd80",
+          "sha256:bf773f5071520d5506837835680b877584730be9a5fef09561d08edef505aebe",
+          "sha256:93945efa8b227b275f052ff615858752bc795063a64da631a0c016bc5771111a",
+          "sha256:56903a6dcfb9abec531dd4c83fdb887f8f355e7e3b2e485d77423b47bf4f1926",
+          "sha256:dbab7d13ddce795b45c57d23472839a280da978c5a7766b91fccaea6c0c6a72d",
+          "sha256:026a418f6759f71a504049b80988e7fecaf06496ee1cb609cedcdd2e499fc2f3",
+          "sha256:329152c7ffbb24e13d503d2c648a0d8ee6a9cc84671905b368b0145d1398e3d5"
+        ],
+        "Type": "layers"
+      },
+      "Size": 66361000
+    }
+  ],
+  "started": "2026-11-09T03:45:20+0000",
+  "controller_affinity": [
+    6,
+    7,
+    8,
+    9
+  ],
+  "machine": "vm",
+  "power_start": {
+    "/sys/class/power_supply/ACAD/online": "1"
+  },
+  "cpus": 6,
+  "cpuset": "0-5",
+  "aux_cpus": "6-9",
+  "workers": 6,
+  "clients": 6,
+  "gil_only": false,
+  "signal_timer": "CTimer",
+  "warmup": 15,
+  "duration": 30,
+  "repeats": 3,
+  "shuffle_seed": 20261109
+}

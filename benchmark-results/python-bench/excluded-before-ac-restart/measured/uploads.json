@@ -1,0 +1,887 @@
+[
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00000.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1297",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1297,
+    "time": 1794181473.8326004
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00001.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1393",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1393,
+    "time": 1794181473.90584
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00002.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1641",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1641,
+    "time": 1794181473.9152322
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00003.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1376",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1376,
+    "time": 1794181473.9536676
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00004.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1750",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1750,
+    "time": 1794181473.9859464
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00005.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1371",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1371,
+    "time": 1794181474.0393195
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00006.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1260",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1260,
+    "time": 1794181474.087194
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00007.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1948",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1948,
+    "time": 1794181474.1016717
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00008.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1704",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1704,
+    "time": 1794181474.1741986
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00009.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1525",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1525,
+    "time": 1794181474.2661397
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00010.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1353",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1353,
+    "time": 1794181474.3701682
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00011.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1256",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1256,
+    "time": 1794181474.3825998
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00012.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "314",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 314,
+    "time": 1794181483.8325167
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00013.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "314",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 314,
+    "time": 1794181483.9053698
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00014.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "314",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 314,
+    "time": 1794181483.915055
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00015.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "311",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 311,
+    "time": 1794181483.9534628
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00016.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "311",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 311,
+    "time": 1794181483.9857867
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00017.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "314",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 314,
+    "time": 1794181484.0392373
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00018.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "310",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 310,
+    "time": 1794181484.0869844
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00019.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "314",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 314,
+    "time": 1794181484.101045
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00020.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "310",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 310,
+    "time": 1794181484.173881
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00021.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "310",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 310,
+    "time": 1794181484.2665048
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00022.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "314",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 314,
+    "time": 1794181484.3698728
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00023.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "313",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 313,
+    "time": 1794181484.382505
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00024.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "315",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 315,
+    "time": 1794181493.8327508
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00025.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "316",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 316,
+    "time": 1794181493.9059203
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00026.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "315",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 315,
+    "time": 1794181493.9155993
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00027.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "313",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 313,
+    "time": 1794181493.9539502
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00028.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "315",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 315,
+    "time": 1794181493.9858465
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00029.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "310",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 310,
+    "time": 1794181494.0397024
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00030.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "313",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 313,
+    "time": 1794181494.0874197
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00031.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "311",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 311,
+    "time": 1794181494.1015894
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00032.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "314",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 314,
+    "time": 1794181494.173887
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00033.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "315",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 315,
+    "time": 1794181494.2666607
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00034.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "315",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 315,
+    "time": 1794181494.3700519
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00035.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "313",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 313,
+    "time": 1794181494.3827143
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00036.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "308",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 308,
+    "time": 1794181499.4419143
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00037.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "310",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 310,
+    "time": 1794181499.4423432
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00038.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "312",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 312,
+    "time": 1794181499.4430325
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00039.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "312",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 312,
+    "time": 1794181499.4436128
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00040.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "309",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 309,
+    "time": 1794181499.4438975
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00041.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "309",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 309,
+    "time": 1794181499.4441562
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00042.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "310",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 310,
+    "time": 1794181499.4444144
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00043.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "308",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 308,
+    "time": 1794181500.4811497
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00044.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "313",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 313,
+    "time": 1794181500.481781
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00045.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "312",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 312,
+    "time": 1794181500.482141
+  },
+  {
+    "case": "1-signal-idle",
+    "path": "profiles/1-signal-idle/00046.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "306",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 306,
+    "time": 1794181500.4826596
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00047.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1751",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1751,
+    "time": 1794181509.6914928
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00048.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1750",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1750,
+    "time": 1794181509.6925051
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00049.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1469",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1469,
+    "time": 1794181509.6929495
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00050.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1438",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1438,
+    "time": 1794181509.6932049
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00051.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1749",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1749,
+    "time": 1794181509.6934602
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00052.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1664",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1664,
+    "time": 1794181509.6936944
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00053.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1872",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1872,
+    "time": 1794181509.693978
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00054.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1560",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1560,
+    "time": 1794181509.8963678
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00055.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1692",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1692,
+    "time": 1794181510.7214937
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00056.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1941",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1941,
+    "time": 1794181510.722202
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00057.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "2675",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 2675,
+    "time": 1794181510.7224622
+  },
+  {
+    "case": "1-stack-idle",
+    "path": "profiles/1-stack-idle/00058.bin",
+    "url": "/push.v1.PusherService/Push",
+    "headers": {
+      "user-agent": "pyroscope-rs/pyspy/1.4.0 reqwest",
+      "content-type": "application/proto",
+      "content-encoding": "gzip",
+      "content-length": "1719",
+      "accept": "*/*",
+      "host": "127.0.0.1:18081"
+    },
+    "bytes": 1719,
+    "time": 1794181510.722783
+  }
+]
