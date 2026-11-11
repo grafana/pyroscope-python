@@ -364,6 +364,16 @@ pub enum LineNo {
     NoLine = 2,
 }
 
+impl From<LineNo> for signal_sampler::Lines {
+    fn from(val: LineNo) -> Self {
+        match val {
+            LineNo::LastInstruction => Self::LastInstruction,
+            LineNo::First => Self::First,
+            LineNo::NoLine => Self::NoLine,
+        }
+    }
+}
+
 impl From<LineNo> for py_spy::config::LineNo {
     fn from(val: LineNo) -> Self {
         match val {

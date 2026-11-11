@@ -71,7 +71,7 @@ pub enum Error {
     /// The output slice has no room, or the chain exceeds [`MAX_FRAMES`] (including loops).
     Truncated,
     /// A pointer on the chain overflows the address space.
-    Invalid,
+    Overflow,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -137,7 +137,7 @@ pub struct Metrics {
     contentions: AtomicUsize,
     buffer_dropped: AtomicUsize,
     truncated: AtomicUsize,
-    invalid: AtomicUsize,
+    overflow: AtomicUsize,
     no_thread_state: AtomicUsize,
     invalid_code_type: AtomicUsize,
     read_errors: AtomicUsize,
@@ -149,7 +149,7 @@ pub static METRICS: Metrics = Metrics {
     contentions: AtomicUsize::new(0),
     buffer_dropped: AtomicUsize::new(0),
     truncated: AtomicUsize::new(0),
-    invalid: AtomicUsize::new(0),
+    overflow: AtomicUsize::new(0),
     no_thread_state: AtomicUsize::new(0),
     invalid_code_type: AtomicUsize::new(0),
     read_errors: AtomicUsize::new(0),
@@ -167,7 +167,7 @@ impl Metrics {
             ("invalid_code_type", &self.invalid_code_type),
             ("read_errors", &self.read_errors),
             ("truncated", &self.truncated),
-            ("invalid", &self.invalid),
+            ("overflow", &self.overflow),
             ("resolve_error", &self.resolve_error),
         ]
         .map(|(reason, count)| (reason, count.swap(0, Ordering::Relaxed)))
@@ -199,7 +199,7 @@ fn unwind_thread(tstate: usize, frames: &mut [Frame], count: usize) -> Result<&[
             Error::InvalidCodeType => &METRICS.invalid_code_type,
             Error::Read => &METRICS.read_errors,
             Error::Truncated => &METRICS.truncated,
-            Error::Invalid => &METRICS.invalid,
+            Error::Overflow => &METRICS.overflow,
         };
         counter.fetch_add(count, Ordering::Relaxed);
     })
@@ -235,7 +235,7 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
         #[cfg(Py_3_11)]
         let instr = read_usize(frame, layout::INSTR)?;
         #[cfg(not(Py_3_11))]
-        let instr = i32::from_ne_bytes(read_bytes::<4>(frame, layout::INSTR)?) as isize as usize;
+        let instr = read_u32(frame, layout::INSTR)? as i32 as isize as usize;
 
         if executable == 0 || read_usize(executable, OB_TYPE)? != code_type {
             return Err(Error::InvalidCodeType);
@@ -252,26 +252,26 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
 
 #[cfg(Py_3_12)]
 fn read_u8(base: usize, offset: usize) -> Result<u8, Error> {
-    Ok(read_bytes::<1>(base, offset)?[0])
+    let addr = base.checked_add(offset).ok_or(Error::Overflow)?;
+    addr.checked_add(size_of::<u8>()).ok_or(Error::Overflow)?;
+    // SAFETY: current-thread frame fields are read under the ownership and recovery
+    // preconditions documented at crate level, without forming a source reference.
+    unsafe { kindasafe::u8(addr as u64) }.map_err(|_| Error::Read)
 }
 
-#[cfg(any(Py_3_12, not(Py_3_11)))]
-fn read_bytes<const N: usize>(base: usize, offset: usize) -> Result<[u8; N], Error> {
-    let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
-    addr.checked_add(N).ok_or(Error::Invalid)?;
-    let mut out = [0; N];
-    // SAFETY: only current-thread frame fields enter here; the runtime ownership assumptions
-    // are stated at crate level. Copy exactly the field width, not adjacent padding. Output
-    // is separate initialized stack storage, the range is checked, and N is 1 or 4. Recovery
-    // initialization, preserved handlers, and unblocked recovery signals are caller
-    // preconditions documented at crate level.
-    unsafe { kindasafe::slice(&mut out, addr as u64) }.map_err(|_| Error::Read)?;
-    Ok(out)
+#[cfg(not(Py_3_11))]
+fn read_u32(base: usize, offset: usize) -> Result<u32, Error> {
+    let addr = base.checked_add(offset).ok_or(Error::Overflow)?;
+    addr.checked_add(size_of::<u32>()).ok_or(Error::Overflow)?;
+    // SAFETY: current-thread frame fields are read under the ownership and recovery
+    // preconditions documented at crate level, without forming a source reference.
+    unsafe { kindasafe::u32(addr as u64) }.map_err(|_| Error::Read)
 }
 
 fn read_usize(base: usize, offset: usize) -> Result<usize, Error> {
-    let addr = base.checked_add(offset).ok_or(Error::Invalid)?;
-    addr.checked_add(size_of::<usize>()).ok_or(Error::Invalid)?;
+    let addr = base.checked_add(offset).ok_or(Error::Overflow)?;
+    addr.checked_add(size_of::<usize>())
+        .ok_or(Error::Overflow)?;
     // SAFETY: these are pointer-sized fields of the interrupted thread's retained frame
     // chain/code objects, under the runtime ownership assumptions documented at crate level.
     // No Rust reference to source memory is created. Recovery initialization, preserved
@@ -314,7 +314,7 @@ mod tests {
             (&metrics.invalid_code_type, 4),
             (&metrics.read_errors, 5),
             (&metrics.truncated, 13),
-            (&metrics.invalid, 8),
+            (&metrics.overflow, 8),
             (&metrics.resolve_error, 9),
         ] {
             counter.fetch_add(count, Ordering::Relaxed);
@@ -326,7 +326,7 @@ mod tests {
             ("invalid_code_type", 4),
             ("read_errors", 5),
             ("truncated", 13),
-            ("invalid", 8),
+            ("overflow", 8),
             ("resolve_error", 9),
         ];
         assert_eq!(metrics.take_drop_counts(), expected);
@@ -342,21 +342,24 @@ mod tests {
     }
 
     #[test]
-    fn missing_thread_and_invalid_address_have_separate_counts() {
+    fn missing_thread_and_overflow_have_separate_counts() {
         let _guard = METRICS_LOCK.lock().unwrap();
         let no_thread_before = METRICS.no_thread_state.load(Ordering::Relaxed);
-        let invalid_before = METRICS.invalid.load(Ordering::Relaxed);
+        let overflow_before = METRICS.overflow.load(Ordering::Relaxed);
         let mut output = [Frame::default(); 1];
         assert_eq!(unwind_thread(0, &mut output, 7), Err(Error::NoThreadState));
         assert_eq!(
             unwind_thread(usize::MAX, &mut output, 11),
-            Err(Error::Invalid)
+            Err(Error::Overflow)
         );
         assert_eq!(
             METRICS.no_thread_state.load(Ordering::Relaxed),
             no_thread_before + 7
         );
-        assert_eq!(METRICS.invalid.load(Ordering::Relaxed), invalid_before + 11);
+        assert_eq!(
+            METRICS.overflow.load(Ordering::Relaxed),
+            overflow_before + 11
+        );
     }
 
     #[test]
