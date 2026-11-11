@@ -249,7 +249,7 @@ pub mod threads {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::{
         encode::{r#gen::google::Profile, pprof},
@@ -257,6 +257,21 @@ mod tests {
     };
     use prost::Message;
     use std::time::{Duration, UNIX_EPOCH};
+
+    #[cfg(all(not(miri), not(Py_3_15)))]
+    pub(crate) fn profile_for_resolved_stack(
+        frames: Vec<ResolvedFrame>,
+        counts: &[usize],
+    ) -> Profile {
+        let trace = to_stack_trace(frames, &BackendConfig::default(), 123);
+        let mut buffer = StackBuffer::default();
+        for &count in counts {
+            buffer.record_with_count(trace.clone(), count).unwrap();
+        }
+        let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(1)).unwrap();
+        let bytes = pprof::encode(buffer.into(), 100, range).encode_to_vec();
+        Profile::decode(bytes.as_slice()).unwrap()
+    }
 
     #[test]
     fn drop_reasons_are_single_frame_pprof_samples_with_exact_weights() {

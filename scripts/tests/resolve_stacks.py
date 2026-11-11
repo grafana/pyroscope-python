@@ -1,5 +1,7 @@
 """Stack shapes called by the Rust resolver tests with a test-only assert_stack hook."""
 
+import sys
+
 
 def direct():  # first: direct
     return assert_stack(expected)  # call: direct
@@ -84,3 +86,32 @@ def exceptions():  # first: exceptions
 
 def cross_module():  # first: cross_module
     return foreign.leaf()  # call: cross_module
+
+
+def empty_lines():  # first: empty_lines
+    return empty_lines_leaf()  # call: empty_lines
+
+
+def empty_lines_leaf():  # first: empty_lines_leaf
+    return assert_stack(expected, 7)  # call: empty_lines_leaf
+
+
+empty_lines_leaf.__code__ = empty_lines_leaf.__code__.replace(co_linetable=b"")
+
+
+def unmapped_lines():  # first: unmapped_lines
+    return unmapped_lines_middle()  # call: unmapped_lines
+
+
+def unmapped_lines_middle():  # first: unmapped_lines_middle
+    return mapped_lines_leaf()  # call: unmapped_lines_middle
+
+
+def mapped_lines_leaf():  # first: mapped_lines_leaf
+    return assert_stack(expected, 11)  # call: mapped_lines_leaf
+
+
+# A complete mapping for only the first instruction; the active call is outside it.
+unmapped_lines_middle.__code__ = unmapped_lines_middle.__code__.replace(
+    co_linetable=b"\x02\x00" if sys.version_info < (3, 11) else b"\x80\x00"
+)

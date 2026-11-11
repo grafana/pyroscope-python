@@ -22,7 +22,7 @@ pub(super) fn line_number(mut table: Table, first: i32, offset: i32) -> Result<i
             return Ok(if delta == -128 { -1 } else { line });
         }
     }
-    Err(Error::LineTable)
+    Ok(-1)
 }
 
 #[cfg(all(test, not(miri)))]
@@ -39,13 +39,20 @@ mod tests {
     }
 
     #[test]
+    fn empty_table_has_no_line_mapping() {
+        for offset in [0, 2, i32::MAX] {
+            assert_eq!(decode(&[], 10, offset).unwrap(), -1);
+        }
+    }
+
+    #[test]
     fn ranges_310_include_empty_ranges_signed_deltas_and_missing_lines() {
         let table = [2, 0, 0, 127, 2, 1, 2, 128, 2, 255, 2, 0];
         let expected = [10, 10, 138, 138, -1, -1, 137, 137, 137, 137];
         for (offset, line) in expected.into_iter().enumerate() {
             assert_eq!(decode(&table, 10, offset as i32).unwrap(), line);
         }
-        assert!(decode(&table, 10, 10).is_err());
+        assert_eq!(decode(&table, 10, 10).unwrap(), -1);
         assert!(decode(&[1], 10, 0).is_err());
         assert!(decode(&[2, 1], i32::MAX, 0).is_err());
     }

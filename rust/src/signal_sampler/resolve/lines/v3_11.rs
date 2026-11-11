@@ -53,7 +53,7 @@ pub(super) fn line_number(mut table: Table, first: i32, offset: i32) -> Result<i
             return Ok(if code == 15 { -1 } else { line });
         }
     }
-    Err(Error::LineTable)
+    Ok(-1)
 }
 
 fn payload(table: &mut Table) -> Result<u8, Error> {
@@ -94,6 +94,13 @@ mod tests {
     }
 
     #[test]
+    fn empty_table_has_no_line_mapping() {
+        for offset in [0, 2, i32::MAX] {
+            assert_eq!(decode(&[], 10, offset).unwrap(), -1);
+        }
+    }
+
+    #[test]
     fn locations_cover_all_forms_and_preserve_line_across_missing_locations() {
         let table = [
             0x87, 0x01, // short, eight units, unchanged
@@ -116,14 +123,13 @@ mod tests {
                 "offset {offset}"
             );
         }
-        assert!(decode(&table, 10, 30).is_err());
+        assert_eq!(decode(&table, 10, 30).unwrap(), -1);
     }
 
     #[test]
     fn malformed_locations_fail_without_panics_or_unbounded_varints() {
         for table in [
-            &[][..],
-            &[0],
+            &[0][..],
             &[0x80],
             &[0x80, 0x80],
             &[0x80, 0, 0],

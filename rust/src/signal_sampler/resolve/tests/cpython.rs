@@ -11,14 +11,14 @@ static STACKS_CHECKED: AtomicUsize = AtomicUsize::new(0);
 // Root-to-leaf name, filename, first line, and current line, supplied by the test.
 type ExpectedFrame = (String, String, i32, i32);
 
-#[pyfunction]
-fn assert_stack(expected: Vec<ExpectedFrame>) -> PyResult<usize> {
+#[pyfunction(signature = (expected, count = 1))]
+fn assert_stack(expected: Vec<ExpectedFrame>, count: usize) -> PyResult<usize> {
     let mut buffer = [Frame::default(); MAX_FRAMES];
     let raw = unwind::unwind(&mut buffer)
         .map_err(|error| PyAssertionError::new_err(format!("unwind failed: {error:?}")))?;
     for mode in [Lines::LastInstruction, Lines::First, Lines::NoLine] {
         let mut actual = Resolver::<PYO3Types>::new(mode)
-            .resolve_stack(raw, 1)
+            .resolve_stack(raw, count)
             .map_err(|error| {
                 PyAssertionError::new_err(format!("{mode:?}: {error:?}; raw stack: {raw:?}"))
             })?;
@@ -41,9 +41,70 @@ fn assert_stack(expected: Vec<ExpectedFrame>) -> PyResult<usize> {
                  actual root-to-leaf stack: {actual:#?}\nraw stack: {raw:#?}"
             )));
         }
+        if count > 1 {
+            actual.reverse();
+            assert_profile_weight(actual, &wanted, count)?;
+        }
     }
     STACKS_CHECKED.fetch_add(1, Ordering::Relaxed);
     Ok(1)
+}
+
+fn assert_profile_weight(
+    frames: Vec<ResolvedFrame>,
+    expected: &[ResolvedFrame],
+    count: usize,
+) -> PyResult<()> {
+    let profile = crate::signal_backend::tests::profile_for_resolved_stack(frames, &[2, count - 2]);
+    let actual: Vec<_> = profile
+        .sample
+        .iter()
+        .map(|sample| {
+            let stack: Vec<_> = sample
+                .location_id
+                .iter()
+                .rev()
+                .flat_map(|id| {
+                    let location = profile
+                        .location
+                        .iter()
+                        .find(|location| location.id == *id)
+                        .unwrap();
+                    location.line.iter().map(|line| {
+                        let function = profile
+                            .function
+                            .iter()
+                            .find(|function| function.id == line.function_id)
+                            .unwrap();
+                        (
+                            profile.string_table[function.name as usize].as_str(),
+                            profile.string_table[function.filename as usize].as_str(),
+                            line.line,
+                        )
+                    })
+                })
+                .collect();
+            (stack, sample.value.clone())
+        })
+        .collect();
+    let stack: Vec<_> = expected
+        .iter()
+        .map(|frame| {
+            (
+                frame.name.as_str(),
+                frame.filename.as_str(),
+                i64::from(frame.line.max(0)),
+            )
+        })
+        .collect();
+    // Two identical weighted samples must aggregate to the full count at 100 Hz.
+    let wanted = vec![(stack, vec![count as i64 * 10_000_000])];
+    if actual != wanted {
+        return Err(PyAssertionError::new_err(format!(
+            "expected profile stacks and weights: {wanted:#?}\nactual: {actual:#?}\nfull profile: {profile:#?}"
+        )));
+    }
+    Ok(())
 }
 
 fn source_line(marker: &str) -> i32 {
@@ -150,6 +211,31 @@ fn resolves_real_cpython_stack_shapes() {
                         frame("coroutines", "coroutines"),
                         frame("coroutine_outer", "coroutine_outer"),
                         frame("coroutine_leaf", "coroutine_leaf"),
+                    ],
+                ),
+                (
+                    "empty_lines",
+                    vec![
+                        frame("empty_lines", "empty_lines"),
+                        (
+                            "empty_lines_leaf".into(),
+                            filename.into(),
+                            source_line("first: empty_lines_leaf"),
+                            -1,
+                        ),
+                    ],
+                ),
+                (
+                    "unmapped_lines",
+                    vec![
+                        frame("unmapped_lines", "unmapped_lines"),
+                        (
+                            "unmapped_lines_middle".into(),
+                            filename.into(),
+                            source_line("first: unmapped_lines_middle"),
+                            -1,
+                        ),
+                        frame("mapped_lines_leaf", "mapped_lines_leaf"),
                     ],
                 ),
                 ("comprehension", comprehension),
