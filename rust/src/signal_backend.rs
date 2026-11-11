@@ -1,8 +1,12 @@
 use crate::{
-    backend::{BackendConfig, StackBuffer, StackFrame, StackTrace},
+    encode::{
+        r#gen::google::Profile,
+        pprof::{FunctionMirror, PProfBuilder, PySpyProfile, StringTable, ffi::FFIFrame},
+    },
     error::{PyroscopeError, Result},
     pyspy_backend::Reporter,
-    signal_sampler::{self, ResolvedFrame, SharedTimer, SignalHandlerSession, SignalTimer},
+    signal_sampler::{self, SharedTimer, SignalHandlerSession, SignalTimer},
+    utils::TimeRange,
 };
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
@@ -24,38 +28,35 @@ pub struct Config {
 }
 
 pub struct Signal {
-    buffer: Arc<Mutex<StackBuffer>>,
-    backend_config: BackendConfig,
+    buffer: Arc<Mutex<ProfileBuffer>>,
     sampler_thread: Option<JoinHandle<()>>,
     running: Arc<AtomicBool>,
 }
 
 impl Signal {
-    pub fn new(config: Config, backend_config: BackendConfig) -> Result<Self> {
+    pub fn new(config: Config) -> Result<Self> {
         let mut session = SignalHandlerSession::start(&config.sampler)
             .map_err(|e| PyroscopeError::new(&format!("Signal: {e}")))?;
         if config.sampler.signal_timer == SignalTimer::CTimer {
             threads::attach(session.timer())?;
         }
 
-        let buffer = Arc::new(Mutex::new(StackBuffer::default()));
+        let buffer = Arc::new(Mutex::new(ProfileBuffer::new()));
         let running = Arc::new(AtomicBool::new(true));
         let sampler_thread = {
             let buffer = buffer.clone();
             let running = running.clone();
             std::thread::spawn(move || {
-                let pid = std::process::id();
                 while running.load(Ordering::Relaxed) {
                     std::thread::sleep(Duration::from_millis(10)); //todo do not wake up on every 10ms, notify from producer when buf is half full
-                    let traces = session.drain();
                     let Ok(mut buffer) = buffer.lock() else {
                         break;
                     };
-                    for sample in traces {
-                        let trace = to_stack_trace(sample.frames, &backend_config, pid);
-                        // TODO: Apply thread tags once samples include the thread ID.
-                        let _ = buffer.record_with_count(trace, sample.metadata.count);
-                    }
+                    let ProfileBuffer {
+                        builder, strings, ..
+                    } = &mut *buffer;
+                    // TODO: Apply thread tags once samples include the thread ID.
+                    session.drain(strings, |frames, count| add_sample(builder, frames, count));
                 }
                 if config.sampler.signal_timer == SignalTimer::CTimer {
                     threads::detach();
@@ -66,14 +67,13 @@ impl Signal {
 
         Ok(Signal {
             buffer,
-            backend_config,
             sampler_thread: Some(sampler_thread),
             running,
         })
     }
 
     pub fn reporter(&self) -> Reporter {
-        Reporter::new_signal(self.buffer.clone(), self.backend_config)
+        Reporter::Signal(self.buffer.clone())
     }
 
     pub fn shutdown_thread(&mut self) -> Result<()> {
@@ -93,46 +93,74 @@ impl Drop for Signal {
     }
 }
 
-pub(super) fn record_dropped_stacks(
-    buffer: &mut StackBuffer,
-    counts: impl IntoIterator<Item = (&'static str, usize)>,
-    backend_config: &BackendConfig,
-    pid: u32,
-) -> Result<()> {
-    for (reason, count) in counts {
-        if count == 0 {
-            continue;
-        }
-        let trace = StackTrace::new(
-            backend_config,
-            Some(pid),
-            None,
-            None,
-            vec![StackFrame {
-                name: format!("[dropped: {reason}]"),
-                ..StackFrame::default()
-            }],
-        );
-        buffer.record_with_count(trace, count)?;
-    }
-    Ok(())
+/// Incremental signal profile. String IDs live for this session, while functions,
+/// locations and accumulated samples are reset after each upload window.
+pub struct ProfileBuffer {
+    builder: PProfBuilder<PySpyProfile>,
+    strings: StringTable,
+    drop_name: String,
 }
 
-/// The handler does not record the thread, so there is no thread id or name.
-fn to_stack_trace(
-    frames: Vec<ResolvedFrame>,
-    backend_config: &BackendConfig,
-    pid: u32,
-) -> StackTrace {
-    let frames = frames
-        .into_iter()
-        .map(|frame| StackFrame {
-            name: frame.name,
-            filename: frame.filename,
-            line: frame.line.max(0) as u32,
-        })
-        .collect();
-    StackTrace::new(backend_config, Some(pid), None, None, frames)
+impl ProfileBuffer {
+    pub fn new() -> Self {
+        Self {
+            builder: PProfBuilder::new(),
+            strings: StringTable::new(),
+            drop_name: String::new(),
+        }
+    }
+
+    fn record_dropped_stacks(&mut self, counts: impl IntoIterator<Item = (&'static str, usize)>) {
+        use std::fmt::Write;
+        // Reuse formatting storage across drop reasons and upload windows.
+        for (reason, count) in counts {
+            if count == 0 {
+                continue;
+            }
+            self.drop_name.clear();
+            write!(&mut self.drop_name, "[dropped: {reason}]").unwrap();
+            let frame = FFIFrame {
+                function_name: (&self.strings.add(&self.drop_name)).into(),
+                file_name: (&self.strings.add("")).into(),
+                line: 0,
+            };
+            add_sample(&mut self.builder, &[frame], count);
+        }
+    }
+
+    pub fn report(&mut self, sample_rate: u32, time_range: &TimeRange) -> Option<Profile> {
+        // Consume drops only when the corresponding upload window is built.
+        self.record_dropped_stacks(pyroscope_python_unwind::METRICS.take_drop_counts());
+        self.take_profile(sample_rate, time_range)
+    }
+
+    fn take_profile(&mut self, sample_rate: u32, time_range: &TimeRange) -> Option<Profile> {
+        self.builder
+            .set_profile_type(&mut self.strings, sample_rate);
+        let mut profile = self
+            .builder
+            .take_profile_and_reset(&self.strings, time_range)?;
+        // Accumulate sampling periods, including timer overruns, until the upload.
+        for sample in &mut profile.sample {
+            sample.value[0] = sample.value[0].saturating_mul(profile.period);
+        }
+        Some(profile)
+    }
+}
+
+fn add_sample(builder: &mut PProfBuilder<PySpyProfile>, frames: &[FFIFrame], count: usize) {
+    builder.add_sample(
+        frames.iter().map(|frame| {
+            (
+                FunctionMirror {
+                    name: (&frame.function_name).into(),
+                    filename: (&frame.file_name).into(),
+                },
+                i64::from(frame.line.max(0)),
+            )
+        }),
+        [i64::try_from(count).unwrap_or(i64::MAX)],
+    );
 }
 
 /// Feeds the OS thread ids of python threads to a `CTimer` session. The hooks stay installed
@@ -251,118 +279,96 @@ pub mod threads {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::{
-        encode::{r#gen::google::Profile, pprof},
-        utils::TimeRange,
-    };
+    use crate::{encode::r#gen::google::Profile, utils::TimeRange};
     use prost::Message;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[cfg(all(not(miri), not(Py_3_15)))]
     pub(crate) fn profile_for_resolved_stack(
-        frames: Vec<ResolvedFrame>,
+        frames: &[FFIFrame],
+        strings: StringTable,
         counts: &[usize],
     ) -> Profile {
-        let trace = to_stack_trace(frames, &BackendConfig::default(), 123);
-        let mut buffer = StackBuffer::default();
+        let mut buffer = ProfileBuffer {
+            builder: PProfBuilder::new(),
+            strings,
+            drop_name: String::new(),
+        };
         for &count in counts {
-            buffer.record_with_count(trace.clone(), count).unwrap();
+            add_sample(&mut buffer.builder, frames, count);
         }
         let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(1)).unwrap();
-        let bytes = pprof::encode(buffer.into(), 100, range).encode_to_vec();
+        let bytes = buffer.take_profile(100, &range).unwrap().encode_to_vec();
         Profile::decode(bytes.as_slice()).unwrap()
+    }
+
+    fn profile_frames<'a>(
+        profile: &'a Profile,
+        sample: &crate::encode::r#gen::google::Sample,
+    ) -> Vec<(&'a str, &'a str, i64)> {
+        sample
+            .location_id
+            .iter()
+            .rev()
+            .flat_map(|id| {
+                let location = profile
+                    .location
+                    .iter()
+                    .find(|location| location.id == *id)
+                    .unwrap();
+                location.line.iter().map(|line| {
+                    let function = profile
+                        .function
+                        .iter()
+                        .find(|function| function.id == line.function_id)
+                        .unwrap();
+                    (
+                        profile.string_table[function.name as usize].as_str(),
+                        profile.string_table[function.filename as usize].as_str(),
+                        line.line,
+                    )
+                })
+            })
+            .collect()
     }
 
     #[test]
     fn drop_reasons_are_single_frame_pprof_samples_with_exact_weights() {
-        let config = BackendConfig {
-            report_pid: true,
-            ..BackendConfig::default()
-        };
-        let mut buffer = StackBuffer::default();
-        buffer
-            .record_with_count(
-                StackTrace::new(
-                    &config,
-                    Some(123),
-                    None,
-                    None,
-                    vec![
-                        StackFrame {
-                            name: "work".into(),
-                            filename: "workload.py".into(),
-                            line: 20,
-                        },
-                        StackFrame {
-                            name: "main".into(),
-                            filename: "workload.py".into(),
-                            line: 10,
-                        },
-                    ],
-                ),
-                100,
-            )
-            .unwrap();
-        record_dropped_stacks(&mut buffer, [("resolve_error", 0)], &config, 123).unwrap();
-        assert_eq!(buffer.data.len(), 1, "{buffer:#?}");
-        record_dropped_stacks(
-            &mut buffer,
-            [
-                ("contentions", 1),
-                ("buffer_dropped", 2),
-                ("no_thread_state", 3),
-                ("invalid_code_type", 4),
-                ("read_errors", 5),
-                ("truncated", 13),
-                ("invalid", 8),
-                ("resolve_error", 9),
-            ],
-            &config,
-            123,
-        )
-        .unwrap();
+        let mut buffer = ProfileBuffer::new();
+        let frames = [
+            FFIFrame {
+                function_name: (&buffer.strings.add("work")).into(),
+                file_name: (&buffer.strings.add("workload.py")).into(),
+                line: 20,
+            },
+            FFIFrame {
+                function_name: (&buffer.strings.add("main")).into(),
+                file_name: (&buffer.strings.add("workload.py")).into(),
+                line: 10,
+            },
+        ];
+        add_sample(&mut buffer.builder, &frames, 40);
+        add_sample(&mut buffer.builder, &frames, 60);
+        buffer.record_dropped_stacks([("resolve_error", 0)]);
+        buffer.record_dropped_stacks([
+            ("contentions", 1),
+            ("buffer_dropped", 2),
+            ("no_thread_state", 3),
+            ("invalid_code_type", 4),
+            ("read_errors", 5),
+            ("truncated", 13),
+            ("invalid", 8),
+            ("resolve_error", 9),
+        ]);
         let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
-        let bytes = pprof::encode(buffer.into(), 100, range).encode_to_vec();
+        let bytes = buffer.take_profile(100, &range).unwrap().encode_to_vec();
         let profile = Profile::decode(bytes.as_slice()).unwrap();
         let mut actual: Vec<_> = profile
             .sample
             .iter()
             .map(|sample| {
-                let frames: Vec<_> = sample
-                    .location_id
-                    .iter()
-                    .rev()
-                    .flat_map(|id| {
-                        let location = profile
-                            .location
-                            .iter()
-                            .find(|location| location.id == *id)
-                            .unwrap();
-                        location.line.iter().map(|line| {
-                            let function = profile
-                                .function
-                                .iter()
-                                .find(|function| function.id == line.function_id)
-                                .unwrap();
-                            (
-                                profile.string_table[function.name as usize].as_str(),
-                                profile.string_table[function.filename as usize].as_str(),
-                                line.line,
-                            )
-                        })
-                    })
-                    .collect();
-                let labels: Vec<_> = sample
-                    .label
-                    .iter()
-                    .map(|label| {
-                        (
-                            profile.string_table[label.key as usize].as_str(),
-                            profile.string_table[label.str as usize].as_str(),
-                        )
-                    })
-                    .collect();
-                assert_eq!(labels, [("pid", "123")], "{profile:#?}");
+                let frames = profile_frames(&profile, sample);
+                assert!(sample.label.is_empty(), "{profile:#?}");
                 (frames, sample.value.clone())
             })
             .collect();
@@ -398,5 +404,86 @@ pub(crate) mod tests {
             1_450_000_000,
             "{profile:#?}"
         );
+    }
+
+    #[test]
+    fn upload_windows_reset_samples_and_keep_interned_strings() {
+        let mut buffer = ProfileBuffer::new();
+        let filename = buffer.strings.add("source.py");
+        let name = buffer.strings.add("work");
+        let root = buffer.strings.add("main");
+        let mut stack = [
+            FFIFrame {
+                function_name: (&name).into(),
+                file_name: (&filename).into(),
+                line: -1,
+            },
+            FFIFrame {
+                function_name: (&root).into(),
+                file_name: (&filename).into(),
+                line: 10,
+            },
+        ];
+        for rate in [100, 200] {
+            let range = TimeRange::new(
+                UNIX_EPOCH + Duration::from_secs(5),
+                UNIX_EPOCH + Duration::from_secs(15),
+            )
+            .unwrap();
+            assert!(buffer.take_profile(rate, &range).is_none());
+            stack[0].line = -1;
+            add_sample(&mut buffer.builder, &stack, 2);
+            add_sample(&mut buffer.builder, &stack, 3);
+            stack[0].line = 25;
+            add_sample(&mut buffer.builder, &stack, 7);
+            let bytes = buffer.take_profile(rate, &range).unwrap().encode_to_vec();
+            let profile = Profile::decode(bytes.as_slice()).unwrap();
+            let mut actual: Vec<_> = profile
+                .sample
+                .iter()
+                .map(|sample| {
+                    assert!(sample.label.is_empty(), "{profile:#?}");
+                    (profile_frames(&profile, sample), sample.value.clone())
+                })
+                .collect();
+            actual.sort();
+            let period = 1_000_000_000 / i64::from(rate);
+            assert_eq!(
+                actual,
+                [
+                    (
+                        vec![("main", "source.py", 10), ("work", "source.py", 0)],
+                        vec![5 * period]
+                    ),
+                    (
+                        vec![("main", "source.py", 10), ("work", "source.py", 25)],
+                        vec![7 * period]
+                    ),
+                ],
+                "{profile:#?}"
+            );
+            assert_eq!(profile.function.len(), 2, "{profile:#?}");
+            assert_eq!(profile.location.len(), 3, "{profile:#?}");
+            assert_eq!(profile.period, period, "{profile:#?}");
+            assert_eq!(profile.time_nanos, 5_000_000_000, "{profile:#?}");
+            assert_eq!(profile.duration_nanos, 10_000_000_000, "{profile:#?}");
+            assert_eq!(profile.sample_type.len(), 1, "{profile:#?}");
+            let sample_type = &profile.sample_type[0];
+            assert_eq!(
+                (
+                    &*profile.string_table[sample_type.r#type as usize],
+                    &*profile.string_table[sample_type.unit as usize]
+                ),
+                ("cpu", "nanoseconds"),
+                "{profile:#?}"
+            );
+            assert_eq!(
+                profile.period_type.as_ref(),
+                Some(sample_type),
+                "{profile:#?}"
+            );
+            assert_eq!(buffer.strings.add("work").index, name.index);
+            assert!(buffer.take_profile(rate, &range).is_none());
+        }
     }
 }

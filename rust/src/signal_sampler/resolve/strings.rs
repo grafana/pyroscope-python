@@ -2,14 +2,21 @@
 
 use super::{Error, Types, check_type, copy_bytes, layout, read_u64, word};
 
-// Bound allocations and decoder work for reused addresses or torn reads.
-const MAX_STRING_BYTES: usize = 1 << 20;
+// Bound the UTF-8 output for both function names and filenames.
+pub(super) const MAX_STRING_BYTES: usize = 4096;
 
-pub(super) fn read<T: Types>(address: usize) -> Result<String, Error> {
+pub(super) fn read<T: Types>(
+    address: usize,
+    buffer: &mut [u8],
+    text: &mut String,
+) -> Result<(), Error> {
     // Include/cpython/unicodeobject.h: PyUnicode_DATA / PyUnicode_KIND, PEP 393.
     // https://github.com/python/cpython/blob/v3.14.0/Include/cpython/unicodeobject.h
     check_type(address, T::string())?;
     let len = word(address, layout::UNICODE_LENGTH)?;
+    if len > MAX_STRING_BYTES {
+        return Err(Error::Length);
+    }
     let state = read_u64(address.wrapping_add(layout::UNICODE_STATE))?;
     let kind = ((state & layout::STATE_KIND_MASK) >> layout::STATE_KIND_SHIFT) as usize;
     let ascii = state & layout::STATE_ASCII != 0;
@@ -27,15 +34,20 @@ pub(super) fn read<T: Types>(address: usize) -> Result<String, Error> {
         word(address, layout::COMPACT_SIZE)?
     };
     let size = len.checked_mul(kind).ok_or(Error::Length)?;
-    let bytes = copy_bytes(data, size, MAX_STRING_BYTES)?;
-    decode_unicode(&bytes, kind, ascii)
+    let bytes = copy_bytes(data, size, buffer)?;
+    decode_unicode(bytes, kind, ascii, text)
 }
 
-fn decode_unicode(bytes: &[u8], kind: usize, ascii: bool) -> Result<String, Error> {
+fn decode_unicode(
+    bytes: &[u8],
+    kind: usize,
+    ascii: bool,
+    result: &mut String,
+) -> Result<(), Error> {
     if !matches!(kind, 1 | 2 | 4) || !bytes.len().is_multiple_of(kind) || (ascii && kind != 1) {
         return Err(Error::Unicode);
     }
-    let mut result = String::with_capacity(bytes.len());
+    result.clear();
     for unit in bytes.chunks_exact(kind) {
         let codepoint = match kind {
             1 => u32::from(unit[0]),
@@ -48,9 +60,13 @@ fn decode_unicode(bytes: &[u8], kind: usize, ascii: bool) -> Result<String, Erro
         }
         // Python permits lone surrogates. Rust strings do not; replace each surrogate.
         // UCS2 data is a sequence of code points, not UTF-16 surrogate pairs.
-        result.push(char::from_u32(codepoint).unwrap_or(char::REPLACEMENT_CHARACTER));
+        let character = char::from_u32(codepoint).unwrap_or(char::REPLACEMENT_CHARACTER);
+        if result.len() + character.len_utf8() > MAX_STRING_BYTES {
+            return Err(Error::Length);
+        }
+        result.push(character);
     }
-    Ok(result)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -58,6 +74,19 @@ mod tests {
     #[cfg(not(miri))]
     use super::super::tests::{TestTypes, put_word, recovery, string_object};
     use super::*;
+
+    fn decode_unicode(bytes: &[u8], kind: usize, ascii: bool) -> Result<String, Error> {
+        let mut text = String::new();
+        super::decode_unicode(bytes, kind, ascii, &mut text)?;
+        Ok(text)
+    }
+
+    #[cfg(not(miri))]
+    fn read<T: Types>(address: usize) -> Result<String, Error> {
+        let mut text = String::new();
+        super::read::<T>(address, &mut vec![0; 4 * MAX_STRING_BYTES], &mut text)?;
+        Ok(text)
+    }
 
     #[test]
     fn decodes_python_code_points() {
@@ -88,6 +117,42 @@ mod tests {
                 Err(Error::Unicode)
             ));
         }
+    }
+
+    #[test]
+    fn bounds_decoded_names_to_max_string_bytes_without_growing_output() {
+        for (unit, kind, ascii, utf8_width) in [
+            (vec![b'a'], 1, true, 1),
+            (vec![0xe9], 1, false, 2),
+            (0x4e2du16.to_ne_bytes().to_vec(), 2, false, 3),
+            (0xd800u16.to_ne_bytes().to_vec(), 2, false, 3),
+            (0x1f40du32.to_ne_bytes().to_vec(), 4, false, 4),
+        ] {
+            let mut bytes = unit.repeat(MAX_STRING_BYTES / utf8_width);
+            let mut text = String::with_capacity(MAX_STRING_BYTES);
+            let capacity = text.capacity();
+            super::decode_unicode(&bytes, kind, ascii, &mut text).unwrap();
+            assert_eq!(text.len(), MAX_STRING_BYTES / utf8_width * utf8_width);
+            bytes.extend_from_slice(&unit);
+            assert!(matches!(
+                super::decode_unicode(&bytes, kind, ascii, &mut text),
+                Err(Error::Length)
+            ));
+            assert_eq!(text.capacity(), capacity);
+        }
+    }
+
+    #[cfg(not(miri))]
+    #[test]
+    fn accepts_max_string_bytes_utf8_bytes_from_ucs4_storage() {
+        recovery();
+        let mut bytes = (b'a' as u32).to_ne_bytes().repeat(MAX_STRING_BYTES - 4);
+        bytes.extend_from_slice(&0x1f40du32.to_ne_bytes());
+        let object = string_object(&bytes, 4, false);
+        assert_eq!(
+            read::<TestTypes>(object.as_ptr() as usize).unwrap(),
+            format!("{}🐍", "a".repeat(MAX_STRING_BYTES - 4))
+        );
     }
 
     #[cfg(not(miri))]
