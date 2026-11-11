@@ -5,10 +5,6 @@ edition = "2024"
 rust-version = "1.98.0"
 publish = false
 
-[features]
-default = []
-profiling = ["dep:pyroscope", "dep:prost"]
-
 [dependencies]
 criterion = "0.8.2"
 kindasafe_init.workspace = true
@@ -16,8 +12,8 @@ pyo3.workspace = true
 pyroscope-pprof = { path = "../pprof" }
 pyroscope-python-resolve = { path = "../python-resolve" }
 pyroscope-python-unwind = { path = "../python-unwind" }
-prost = { version = "0.14", optional = true }
-pyroscope = { version = "2.1.5", default-features = false, features = ["backend-pprof-rs"], optional = true }
+prost = "0.14"
+pyroscope = { version = "2.1.5", default-features = false, features = ["backend-pprof-rs"] }
 
 [[bench]]
 name = "signal_stack"

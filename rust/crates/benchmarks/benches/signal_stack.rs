@@ -1,5 +1,5 @@
 //! Rust -> Python stack shape -> synchronous Rust Criterion loop.
-//! The optional profiling feature enables --profile-time native CPU captures.
+//! Pass --profile-time <seconds> to collect native CPU profiles instead of timings.
 
 use std::ffi::CString;
 use std::hint::black_box;
@@ -12,7 +12,6 @@ use pyroscope_python_unwind::{self as unwind, Frame, MAX_FRAMES};
 use pyroscope_pprof::{StringTable, ffi::FFIFrame};
 use pyroscope_python_resolve::{Lines, PYO3Types, Resolver};
 
-#[cfg(feature = "profiling")]
 #[path = "support/profiling.rs"]
 mod profiling;
 
@@ -124,19 +123,9 @@ fn validate_stack(
 }
 
 fn main() -> PyResult<()> {
-    #[cfg(not(feature = "profiling"))]
-    if std::env::args_os()
-        .any(|arg| arg == "--profile-time" || arg.to_string_lossy().starts_with("--profile-time="))
-    {
-        eprintln!(
-            "Self-profiling requires --features profiling; rebuild this benchmark with that feature."
-        );
-        std::process::exit(2);
-    }
-    let criterion = Criterion::default();
-    #[cfg(feature = "profiling")]
-    let criterion = criterion.with_profiler(profiling::Pprof::default());
-    let criterion = criterion.configure_from_args();
+    let criterion = Criterion::default()
+        .with_profiler(profiling::Pprof::default())
+        .configure_from_args();
     initialize_python();
     Python::attach(|py| {
         let version = py.version_info();
