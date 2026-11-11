@@ -299,7 +299,7 @@ mod tests {
                 ("invalid_code_type", 4),
                 ("read_errors", 5),
                 ("truncated", 13),
-                ("overflow", 8),
+                ("invalid", 8),
                 ("resolve_error", 9),
             ],
             &config,
@@ -369,7 +369,7 @@ mod tests {
             ),
             (vec![("[dropped: read_errors]", "", 0)], vec![50_000_000]),
             (vec![("[dropped: truncated]", "", 0)], vec![130_000_000]),
-            (vec![("[dropped: overflow]", "", 0)], vec![80_000_000]),
+            (vec![("[dropped: invalid]", "", 0)], vec![80_000_000]),
             (vec![("[dropped: resolve_error]", "", 0)], vec![90_000_000]),
         ];
         expected.sort();
