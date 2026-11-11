@@ -13,7 +13,8 @@ use timer::Timer;
 use timer::{Mode, SignalHandler};
 use unwind::{Frame, MAX_FRAMES};
 
-mod resolve;
+#[path = "signal_sampler/resolve.rs"]
+pub(crate) mod resolve;
 pub use py_spy::{Frame as ResolvedFrame, config::LineNo as Lines};
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;

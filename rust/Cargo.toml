@@ -44,6 +44,16 @@ hashbrown = "0.17.1"
 lazy_static = "1.5.0"
 pyo3.workspace = true
 
+[dev-dependencies]
+criterion = "0.8.2"
+pyroscope = { version = "2.1.5", default-features = false, features = ["backend-pprof-rs"] }
+
+[[bench]]
+name = "signal_stack"
+harness = false
+
+[profile.bench]
+debug = 1
 
 [build-dependencies]
 cmake = "0.1"

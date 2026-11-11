@@ -23,6 +23,20 @@ fn main() {
 
     pyo3_build_config::use_pyo3_cfgs();
 
+    // The Criterion executable embeds Python. Extension modules deliberately leave Python
+    // symbols unresolved, so link libpython only into this benchmark executable.
+    let python = pyo3_build_config::get();
+    if let Some(executable) = python.executable() {
+        println!("cargo:rustc-env=SIGNAL_BENCH_PYTHON={executable}");
+    }
+    if let Some(dir) = python.lib_dir() {
+        println!("cargo:rustc-link-arg-benches=-L{dir}");
+        println!("cargo:rustc-link-arg-benches=-Wl,-rpath,{dir}");
+    }
+    if let Some(name) = python.lib_name() {
+        println!("cargo:rustc-link-arg-benches=-l{name}");
+    }
+
     let dst = cfg.build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
