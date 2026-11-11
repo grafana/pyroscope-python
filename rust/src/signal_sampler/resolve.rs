@@ -1,5 +1,6 @@
+// Frame resolution adapted from py-spy (MIT); see LICENSE.py-spy.
 //! Resolves the code objects a signal handler recorded into names, from a normal thread of the
-//! same process. Kindasafe reads potentially stale addresses into untrusted bytes. Py-spy
+//! same process. Kindasafe reads potentially stale addresses into untrusted bytes. The resolver
 //! validates code and string types and bounds copied lengths, then decodes names and lines.
 //! Torn reads or a reused address can still produce a misattributed sample.
 //!
@@ -8,10 +9,11 @@
 //! live Rust exclusive borrows, including after allocation reuse. These are runtime assumptions,
 //! not properties established by a recorded address or by fault recovery.
 
+use anyhow::Context;
 use py_spy::{
     python_bindings as bindings,
+    python_interpreters::{BytesObject, CodeObject, FrameObject, StringObject},
     python_process_info::{TypeChecks, Types},
-    stack_trace::{RawFrame, resolve_frames},
 };
 use remoteprocess::ProcessMemory;
 use std::sync::atomic::Ordering;
@@ -54,7 +56,6 @@ pub enum Error {
 pub struct Resolver {
     types: TypeChecks,
     lines: Lines,
-    raw: Vec<RawFrame>,
 }
 
 impl Resolver {
@@ -62,7 +63,6 @@ impl Resolver {
         Self {
             types: TypeChecks::Strict(types),
             lines,
-            raw: Vec::new(),
         }
     }
 
@@ -73,22 +73,66 @@ impl Resolver {
     }
 
     fn resolve_stack_inner(&mut self, frames: &[Frame]) -> Result<Vec<ResolvedFrame>, Error> {
-        self.raw.clear();
+        let mut resolved: Vec<ResolvedFrame> = Vec::with_capacity(frames.len());
         for frame in frames {
             let lasti = match self.lines {
                 Lines::LastInstruction => instruction_offset(frame)?,
                 Lines::First | Lines::NoLine => 0,
             };
-            self.raw.push(RawFrame {
-                frame: 0,
-                code: frame.code,
-                lasti,
+            let code = Memory
+                .copy_pointer(frame.code as *const <PythonFrame as FrameObject>::CodeObject)
+                .context("Failed to copy PyCodeObject")?;
+            self.types.check_code(&code)?;
+            let filename = copy_string(code.filename(), &Memory, &self.types);
+            let name = match code.qualname() {
+                Some(ptr) => copy_string(ptr, &Memory, &self.types)
+                    .or_else(|_| copy_string(code.name(), &Memory, &self.types)),
+                None => copy_string(code.name(), &Memory, &self.types),
+            };
+            // Match py-spy's handling of torn reads and interpreter shim frames.
+            let (Ok(filename), Ok(name)) = (filename, name) else {
+                if let Some(previous) = resolved.last_mut() {
+                    previous.is_shim_entry = true;
+                }
+                continue;
+            };
+            if filename.is_empty() || filename == "<shim>" {
+                if let Some(previous) = resolved.last_mut() {
+                    previous.is_shim_entry = true;
+                }
+                continue;
+            }
+            let line = match self.lines {
+                Lines::NoLine => 0,
+                Lines::First => code.first_lineno(),
+                Lines::LastInstruction => match copy_bytes(code.line_table(), &Memory) {
+                    Ok(table) => code.get_line_number(lasti, &table),
+                    Err(error) => {
+                        log::warn!(
+                            "Failed to get line number from {}.{}: {}",
+                            filename,
+                            name,
+                            error
+                        );
+                        0
+                    }
+                },
+            };
+            resolved.push(ResolvedFrame {
+                name,
+                filename,
+                line,
+                short_filename: None,
+                module: None,
+                locals: None,
                 is_entry: false,
                 is_shim_entry: false,
             });
         }
-        resolve_frames::<PythonFrame, _>(&self.raw, &Memory, false, self.lines, &self.types)
-            .map_err(Error::PySpy)
+        if let Some(last) = resolved.last_mut() {
+            last.is_shim_entry = true;
+        }
+        Ok(resolved)
     }
 }
 
@@ -133,6 +177,95 @@ impl ProcessMemory for Memory {
             .into()
         })
     }
+}
+
+pub fn copy_string<T: StringObject, P: ProcessMemory>(
+    ptr: *const T,
+    process: &P,
+    type_checks: &TypeChecks,
+) -> Result<String, anyhow::Error> {
+    let obj = T::copy_header(ptr, process)?;
+    type_checks.check_string(process, &obj)?;
+    let length = obj.size()?;
+    if length >= 4096 {
+        return Err(anyhow::format_err!(
+            "Refusing to copy {} chars of a string",
+            length
+        ));
+    }
+
+    let kind = obj.kind();
+    if !matches!(kind, 1 | 2 | 4) {
+        return Err(anyhow::format_err!("Unknown string kind {}", kind));
+    }
+    let ascii = obj.ascii();
+    if ascii && kind != 1 {
+        return Err(anyhow::format_err!(
+            "ASCII string has non-one-byte kind {}",
+            kind
+        ));
+    }
+    if length == 0 {
+        return Ok(String::new());
+    }
+
+    // Length is below 4096 and kind is at most 4, so this cannot overflow.
+    let byte_length = length * kind as usize;
+    let address = obj.address(ptr as usize)?;
+    address
+        .checked_add(byte_length)
+        .ok_or_else(|| anyhow::format_err!("String range overflow"))?;
+    let bytes = process.copy(address, byte_length)?;
+
+    match (kind, ascii) {
+        (4, _) => {
+            // Decode UCS-4 via u32 + char::from_u32. Casting process memory to
+            // &[char] is UB: char requires a Unicode scalar value, and the
+            // buffer is only 1-byte aligned. See issue #870.
+            let mut out = String::with_capacity(bytes.len() / 4);
+            for chunk in bytes.chunks_exact(4) {
+                let code = u32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                match char::from_u32(code) {
+                    Some(c) => out.push(c),
+                    None => {
+                        return Err(anyhow::format_err!(
+                            "Invalid Unicode code point in UCS-4 string: {:#x}",
+                            code
+                        ));
+                    }
+                }
+            }
+            Ok(out)
+        }
+        (2, _) => {
+            // Avoid casting an unaligned Vec<u8> buffer to &[u16].
+            let mut units = Vec::with_capacity(bytes.len() / 2);
+            for chunk in bytes.chunks_exact(2) {
+                units.push(u16::from_ne_bytes([chunk[0], chunk[1]]));
+            }
+            Ok(String::from_utf16(&units)?)
+        }
+        (1, true) => Ok(String::from_utf8(bytes)?),
+        (1, false) => Ok(bytes.iter().map(|&b| b as char).collect()),
+        _ => Err(anyhow::format_err!("Unknown string kind {}", kind)),
+    }
+}
+
+/// Copies data from a PyBytesObject (currently only lnotab object)
+pub fn copy_bytes<T: BytesObject, P: ProcessMemory>(
+    ptr: *const T,
+    process: &P,
+) -> Result<Vec<u8>, anyhow::Error> {
+    let obj = process.copy_pointer(ptr)?;
+    let size = obj.size()?;
+    if size >= 65536 {
+        return Err(anyhow::format_err!("Refusing to copy {} bytes", size));
+    }
+    let address = obj.address(ptr as usize)?;
+    address
+        .checked_add(size)
+        .ok_or_else(|| anyhow::format_err!("Byte range overflow"))?;
+    Ok(process.copy(address, size)?)
 }
 
 #[cfg(test)]
