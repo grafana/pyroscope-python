@@ -307,7 +307,7 @@ mod tests {
                         .unwrap(),
                         expected.parse::<i32>().unwrap(),
                         "CPython {:?}, no_columns={no_columns}, offset={offset}, fixture={fixture}",
-                        crate::signal_sampler::unwind::PY_VERSION
+                        pyroscope_python_unwind::PY_VERSION
                     );
                     count += 1;
                 }

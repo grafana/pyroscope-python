@@ -8,9 +8,6 @@ fn frame_ids(frames: &[FFIFrame]) -> Vec<(u32, u32, i32)> {
         .collect()
 }
 
-#[cfg(all(not(miri), not(Py_3_15)))]
-mod cpython;
-
 #[cfg(not(miri))]
 pub(super) struct TestTypes;
 
@@ -110,7 +107,7 @@ fn reads_and_recovers_after_faults() {
 #[cfg(not(miri))]
 #[test]
 fn resolves_whole_stacks_and_counts_failures_once() {
-    let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
+    let _guard = crate::METRICS_LOCK.lock().unwrap();
     recovery();
     let mut strings = StringTable::new();
     let name = string_object(b"outer.inner", 1, true);
@@ -187,7 +184,7 @@ fn resolves_whole_stacks_and_counts_failures_once() {
 #[cfg(not(miri))]
 #[test]
 fn rejects_recorded_code_addresses_reused_for_another_type() {
-    let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
+    let _guard = crate::METRICS_LOCK.lock().unwrap();
     recovery();
     let mut strings = StringTable::new();
     let name = string_object(b"original", 1, true);
@@ -261,7 +258,7 @@ fn interns_unicode_by_content_and_rereads_reused_string_storage() {
 #[cfg(not(miri))]
 #[test]
 fn limits_both_function_names_and_filenames_to_max_string_bytes() {
-    let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
+    let _guard = crate::METRICS_LOCK.lock().unwrap();
     recovery();
     let mut strings = StringTable::new();
     let short = string_object(b"short", 1, true);

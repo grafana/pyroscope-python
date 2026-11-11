@@ -1587,12 +1587,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyroscope-pprof"
+version = "0.1.0"
+dependencies = [
+ "hashbrown 0.17.1",
+ "prost",
+]
+
+[[package]]
+name = "pyroscope-python-benchmarks"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "kindasafe_init",
+ "prost",
+ "pyo3",
+ "pyo3-build-config",
+ "pyroscope",
+ "pyroscope-pprof",
+ "pyroscope-python-resolve",
+ "pyroscope-python-unwind",
+]
+
+[[package]]
 name = "pyroscope-python-offsets"
 version = "0.1.0"
 dependencies = [
  "cc",
  "pyo3-build-config",
  "pyo3-ffi",
+]
+
+[[package]]
+name = "pyroscope-python-resolve"
+version = "0.1.0"
+dependencies = [
+ "kindasafe",
+ "kindasafe_init",
+ "libc",
+ "pyo3-build-config",
+ "pyo3-ffi",
+ "pyroscope-pprof",
+ "pyroscope-python-offsets",
+ "pyroscope-python-unwind",
+ "thiserror",
 ]
 
 [[package]]
@@ -1627,9 +1665,6 @@ version = "1.4.0"
 dependencies = [
  "anyhow",
  "cmake",
- "criterion",
- "hashbrown 0.17.1",
- "kindasafe",
  "kindasafe_init",
  "lazy_static",
  "libc",
@@ -1640,8 +1675,8 @@ dependencies = [
  "py-spy",
  "pyo3",
  "pyo3-build-config",
- "pyroscope",
- "pyroscope-python-offsets",
+ "pyroscope-pprof",
+ "pyroscope-python-resolve",
  "pyroscope-python-unwind",
  "pyroscope-ringbuffer",
  "pyroscope-signal-timer",

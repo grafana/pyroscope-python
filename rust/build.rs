@@ -23,33 +23,17 @@ fn main() {
 
     pyo3_build_config::use_pyo3_cfgs();
 
-    // The Criterion executable embeds Python. Add explicit benchmark linkage and
-    // an rpath for interpreters whose libpython is outside the system search path.
-    let python = pyo3_build_config::get();
-    if let Some(executable) = python.executable() {
-        println!("cargo:rustc-env=SIGNAL_BENCH_PYTHON={executable}");
-    }
-    if let Some(dir) = python.lib_dir() {
-        println!("cargo:rustc-link-arg-benches=-L{dir}");
-        println!("cargo:rustc-link-arg-benches=-Wl,-rpath,{dir}");
-    }
-    if let Some(name) = python.lib_name() {
-        println!("cargo:rustc-link-arg-benches=-l{name}");
-    }
-
     let dst = cfg.build();
 
     println!("cargo:rustc-link-search=native={}", dst.display());
     println!("cargo:rustc-link-lib=static=datadog_mem_profiler_bundled");
 
-    // Let the final linker find the system C++ runtime; do not bundle it into
-    // the rlib used by Rust benchmark executables. Static final linkage is retained.
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "macos" {
-        println!("cargo:rustc-link-lib=static:-bundle=c++");
+        println!("cargo:rustc-link-lib=static=c++");
         println!("cargo:rustc-link-arg=-undefined");
         println!("cargo:rustc-link-arg=dynamic_lookup");
     } else {
-        println!("cargo:rustc-link-lib=static:-bundle=stdc++");
+        println!("cargo:rustc-link-lib=static=stdc++");
     }
 }
 

@@ -11,8 +11,8 @@ use crate::utils::TimeRange;
 use crate::{
     Result,
     backend::{ReportBatch, ReportData},
-    encode::pprof,
     pyroscope::PyroscopeConfig,
+    pyspy_backend::encode_reports,
 };
 use libflate::gzip::Encoder;
 use prost::Message;
@@ -120,7 +120,7 @@ impl Session {
             let raw_profile = match data {
                 ReportData::RawPprof(pprof_bytes) => pprof_bytes,
                 ReportData::Reports(reports) => {
-                    pprof::encode(reports, self.config.sample_rate, self.time_range.clone())
+                    encode_reports(reports, self.config.sample_rate, self.time_range.clone())
                         .encode_to_vec()
                 }
             };

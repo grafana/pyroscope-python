@@ -201,9 +201,173 @@ impl From<(py_spy::StackTrace, &BackendConfig)> for StackTraceWrapper {
     }
 }
 
+/// Adapt SDK reports to the transport-independent pprof builder.
+pub(crate) fn encode_reports(
+    reports: Vec<Report>,
+    sample_rate: u32,
+    time_range: TimeRange,
+) -> pyroscope_pprof::proto::Profile {
+    use pyroscope_pprof::{PProfBuilder, PySpyProfile, StringTable};
+    let mut strings = StringTable::new();
+    let mut builder = PProfBuilder::<PySpyProfile>::new();
+    builder.set_time_range(&time_range);
+    builder.set_profile_type(&mut strings, sample_rate);
+    for report in reports {
+        for (stack, value) in report.data {
+            builder.add_stacktrace(
+                &mut strings,
+                stack
+                    .frames
+                    .iter()
+                    .map(|f| (f.name.as_str(), f.filename.as_str(), i64::from(f.line))),
+                stack
+                    .metadata
+                    .tags
+                    .iter()
+                    .map(|tag| (tag.key.as_str(), tag.value.as_str())),
+                value,
+            );
+        }
+    }
+    builder.into_profile(strings)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn report_encoder_preserves_complete_stacks_weights_labels_and_time() {
+        use crate::backend::Tag;
+        use pyroscope_pprof::proto::Profile;
+        use std::{
+            collections::HashMap,
+            time::{Duration, UNIX_EPOCH},
+        };
+
+        let stack = |leaf: &str| {
+            let mut stack = StackTrace::new(
+                &BackendConfig {
+                    report_pid: true,
+                    ..Default::default()
+                },
+                Some(42),
+                None,
+                None,
+                vec![
+                    StackFrame {
+                        name: leaf.into(),
+                        filename: "worker_é.py".into(),
+                        line: 20,
+                    },
+                    StackFrame {
+                        name: "main".into(),
+                        filename: "main.py".into(),
+                        line: 10,
+                    },
+                ],
+            );
+            stack
+                .metadata
+                .add_tag(Tag::new("service".into(), "fixture".into()));
+            stack
+        };
+        let range = TimeRange::new(
+            UNIX_EPOCH + Duration::from_secs(1),
+            UNIX_EPOCH + Duration::from_secs(3),
+        )
+        .unwrap();
+        let profile = encode_reports(
+            vec![Report::new(HashMap::from([
+                (stack("read"), 3),
+                (stack("write"), 7),
+            ]))],
+            100,
+            range.clone(),
+        );
+        let profile = Profile::decode(profile.encode_to_vec().as_slice()).unwrap();
+        let mut actual: Vec<_> = profile
+            .sample
+            .iter()
+            .map(|sample| {
+                let frames: Vec<_> = sample
+                    .location_id
+                    .iter()
+                    .rev()
+                    .flat_map(|id| {
+                        let location = profile
+                            .location
+                            .iter()
+                            .find(|location| location.id == *id)
+                            .unwrap();
+                        location.line.iter().map(|line| {
+                            let function = profile
+                                .function
+                                .iter()
+                                .find(|f| f.id == line.function_id)
+                                .unwrap();
+                            (
+                                profile.string_table[function.name as usize].as_str(),
+                                profile.string_table[function.filename as usize].as_str(),
+                                line.line,
+                            )
+                        })
+                    })
+                    .collect();
+                let mut labels: Vec<_> = sample
+                    .label
+                    .iter()
+                    .map(|label| {
+                        (
+                            profile.string_table[label.key as usize].as_str(),
+                            profile.string_table[label.str as usize].as_str(),
+                        )
+                    })
+                    .collect();
+                labels.sort();
+                (frames, sample.value.clone(), labels)
+            })
+            .collect();
+        actual.sort();
+        let labels = vec![("pid", "42"), ("service", "fixture")];
+        assert_eq!(
+            actual,
+            vec![
+                (
+                    vec![("main", "main.py", 10), ("read", "worker_é.py", 20)],
+                    vec![30_000_000],
+                    labels.clone()
+                ),
+                (
+                    vec![("main", "main.py", 10), ("write", "worker_é.py", 20)],
+                    vec![70_000_000],
+                    labels
+                ),
+            ],
+            "full profile: {profile:#?}"
+        );
+        assert_eq!(
+            (profile.time_nanos, profile.duration_nanos, profile.period),
+            (1_000_000_000, 2_000_000_000, 10_000_000),
+            "{profile:#?}"
+        );
+        let empty = encode_reports(vec![], 100, range);
+        assert!(empty.sample.is_empty(), "{empty:#?}");
+        assert_eq!(
+            (empty.time_nanos, empty.duration_nanos, empty.period),
+            (profile.time_nanos, profile.duration_nanos, profile.period),
+            "{empty:#?}"
+        );
+        assert_eq!(empty.sample_type.len(), 1, "{empty:#?}");
+        assert_eq!(
+            empty.string_table[empty.sample_type[0].r#type as usize], "cpu",
+            "{empty:#?}"
+        );
+        assert_eq!(
+            empty.string_table[empty.sample_type[0].unit as usize], "nanoseconds",
+            "{empty:#?}"
+        );
+    }
 
     #[test]
     fn signal_report_consumes_drops_only_when_building_pprof() {

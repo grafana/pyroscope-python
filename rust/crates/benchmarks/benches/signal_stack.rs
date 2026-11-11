@@ -1,5 +1,5 @@
 //! Rust -> Python stack shape -> synchronous Rust Criterion loop.
-//! In --profile-time mode, pyroscope-rs separately samples the Rust execution into pprof.
+//! The optional profiling feature enables --profile-time native CPU captures.
 
 use std::ffi::CString;
 use std::hint::black_box;
@@ -9,12 +9,12 @@ use criterion::{Criterion, Throughput};
 use pyo3::prelude::*;
 use pyroscope_python_unwind::{self as unwind, Frame, MAX_FRAMES};
 
-// Link the extension library to exercise its production implementation. Library
-// unit-test helpers are compiled separately from this benchmark executable.
-use _native::benchmark::{FFIFrame, Lines, PYO3Types, Resolver, StringTable};
+use pyroscope_pprof::{StringTable, ffi::FFIFrame};
+use pyroscope_python_resolve::{Lines, PYO3Types, Resolver};
 
-#[path = "support/pprof.rs"]
-mod pprof;
+#[cfg(feature = "profiling")]
+#[path = "support/profiling.rs"]
+mod profiling;
 
 #[pyclass(unsendable)]
 struct Benchmarks {
@@ -124,9 +124,19 @@ fn validate_stack(
 }
 
 fn main() -> PyResult<()> {
-    let criterion = Criterion::default()
-        .with_profiler(pprof::Pprof::default())
-        .configure_from_args();
+    #[cfg(not(feature = "profiling"))]
+    if std::env::args_os()
+        .any(|arg| arg == "--profile-time" || arg.to_string_lossy().starts_with("--profile-time="))
+    {
+        eprintln!(
+            "Self-profiling requires --features profiling; rebuild this benchmark with that feature."
+        );
+        std::process::exit(2);
+    }
+    let criterion = Criterion::default();
+    #[cfg(feature = "profiling")]
+    let criterion = criterion.with_profiler(profiling::Pprof::default());
+    let criterion = criterion.configure_from_args();
     initialize_python();
     Python::attach(|py| {
         let version = py.version_info();
@@ -137,24 +147,16 @@ fn main() -> PyResult<()> {
         assert_eq!((version.major, version.minor), unwind::PY_VERSION);
         eprintln!("Benchmarking CPython {}", Python::version_str());
 
-        // Establish the caller precondition once, outside the measured path.
-        // SAFETY: signals points to initialized storage; this only changes the calling
-        // benchmark thread's mask. Keep recovery signals deliverable through process exit.
-        unsafe {
-            let mut signals = std::mem::zeroed();
-            assert_eq!(libc::sigemptyset(&mut signals), 0);
-            assert_eq!(libc::sigaddset(&mut signals, libc::SIGSEGV), 0);
-            assert_eq!(libc::sigaddset(&mut signals, libc::SIGBUS), 0);
-            assert_eq!(
-                libc::pthread_sigmask(libc::SIG_UNBLOCK, &signals, std::ptr::null_mut()),
-                0
-            );
-        }
-        // SAFETY: this standalone process installs no competing recovery handlers. Python
-        // remains attached on this thread and retains the source objects throughout each loop.
+        // SAFETY: launch this standalone process with recovery signals unblocked. It
+        // installs no competing recovery handlers. Python remains attached on this
+        // thread and retains the source objects throughout each loop.
         unsafe { kindasafe_init::init() }.expect("failed to initialize fault recovery");
 
-        let source = CString::new(include_str!("stack_shape.py")).unwrap();
+        let source = CString::new(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../scripts/benchmarks/stack_shape.py"
+        )))
+        .unwrap();
         let module = PyModule::from_code(py, &source, c"stack_shape.py", c"stack_shape")?;
         let bench = Py::new(
             py,

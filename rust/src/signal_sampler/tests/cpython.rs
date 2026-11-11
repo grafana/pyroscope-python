@@ -1,9 +1,13 @@
-use super::*;
-use crate::signal_sampler::unwind::{self, MAX_FRAMES};
 use pyo3::{exceptions::PyAssertionError, prelude::*, types::PyModule, wrap_pyfunction};
-use std::{ffi::CString, sync::atomic::AtomicUsize};
+use pyroscope_pprof::{StringTable, ffi::FFIFrame};
+use pyroscope_python_resolve::{Lines, PYO3Types, Resolver};
+use pyroscope_python_unwind::{self as unwind, Frame, MAX_FRAMES};
+use std::{
+    ffi::CString,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
-const SOURCE: &str = include_str!("../../../../../scripts/tests/resolve_stacks.py");
+const SOURCE: &str = include_str!("../../../../scripts/tests/resolve_stacks.py");
 const FOREIGN_SOURCE: &str = "def leaf():\n    return assert_stack(expected)\n";
 const FOREIGN_FILENAME: &str = "foreign_🐍.py";
 static STACKS_CHECKED: AtomicUsize = AtomicUsize::new(0);
@@ -162,7 +166,8 @@ fn module<'py>(py: Python<'py>, source: &str, filename: &str, name: &str) -> Bou
 fn resolves_real_cpython_stack_shapes() {
     let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
     Python::initialize();
-    recovery();
+    // SAFETY: these tests preserve recovery handlers throughout all walks.
+    unsafe { kindasafe_init::init() }.unwrap();
     Python::attach(|py| {
         let foreign = module(py, FOREIGN_SOURCE, FOREIGN_FILENAME, "resolver_foreign");
         for (index, filename) in ["frames.py", "frames_é.py", "frames_中.py", "frames_🐍.py"]

@@ -1,9 +1,13 @@
-use crate::backend::StackTrace;
-use crate::backend::types::Report;
-use crate::encode::r#gen::google::{Function, Label, Line, Location, Profile, Sample, ValueType};
-use crate::encode::pprof::ffi::FFIInternedString;
-use crate::encode::pprof::ffi::{FFIFrame, FFISampleValues};
-use crate::utils::TimeRange;
+//! Pprof builders, interned strings, shared frame types and protobuf definitions.
+//! This crate has no dependency on Python, SDK sessions, transports or samplers.
+
+pub mod proto;
+mod time_range;
+pub use time_range::TimeRange;
+
+use crate::ffi::FFIInternedString;
+use crate::ffi::{FFIFrame, FFISampleValues};
+use crate::proto::{Function, Label, Line, Location, Profile, Sample, ValueType};
 use hashbrown::hash_map::EntryRef;
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -212,6 +216,13 @@ impl<K: ProfileKind> PProfBuilder<K> {
         }
     }
 
+    /// Finish an owned profile, including an empty profile's type and time metadata.
+    pub fn into_profile(mut self, strings: StringTable) -> Profile {
+        self.flush_ffi_samples();
+        self.profile.string_table = strings.into_pprof_table();
+        self.profile
+    }
+
     pub fn set_time_range(&mut self, time_range: &TimeRange) {
         //todo fix casts before April 2262
         let start_time_nanos = time_range.start_time_unix().as_nanos() as u64;
@@ -354,10 +365,11 @@ impl<K: FfiProfileKind> PProfBuilder<K> {
 }
 
 impl PProfBuilder<PySpyProfile> {
-    pub fn add_stacktrace(
+    pub fn add_stacktrace<'a>(
         &mut self,
         strings: &mut StringTable,
-        stacktrace: StackTrace,
+        frames: impl IntoIterator<Item = (&'a str, &'a str, i64)>,
+        tags: impl IntoIterator<Item = (&'a str, &'a str)>,
         value: usize,
     ) {
         let mut sample = Sample {
@@ -365,38 +377,23 @@ impl PProfBuilder<PySpyProfile> {
             value: vec![value as i64 * self.profile.period],
             label: vec![],
         };
-        for sf in stacktrace.frames {
-            let name = strings.add(&sf.name); //todo move
-            let filename = strings.add(&sf.filename); //todo move
-            let line = sf.line as i64;
+        for (name, filename, line) in frames {
+            let name = strings.add(name);
+            let filename = strings.add(filename);
             let function_id = self.add_function_mirror(FunctionMirror { name, filename });
             let location_id = self.add_location_mirror(LocationMirror { function_id, line });
             sample.location_id.push(location_id);
         }
-        for l in stacktrace.metadata.tags {
+        for (key, value) in tags {
             sample.label.push(Label {
-                key: strings.add(&l.key).pprof(),   //todo move
-                str: strings.add(&l.value).pprof(), //todo move
+                key: strings.add(key).pprof(),
+                str: strings.add(value).pprof(),
                 num: 0,
                 num_unit: 0,
             });
         }
         self.profile.sample.push(sample);
     }
-}
-
-pub fn encode(reports: Vec<Report>, sample_rate: u32, time_range: TimeRange) -> Profile {
-    let mut strings: StringTable = StringTable::new();
-    let mut b = PProfBuilder::<PySpyProfile>::new();
-    b.set_time_range(&time_range);
-    b.set_profile_type(&mut strings, sample_rate);
-    for report in reports {
-        for (stacktrace, value) in report.data {
-            b.add_stacktrace(&mut strings, stacktrace, value);
-        }
-    }
-    b.profile.string_table = strings.into_pprof_table();
-    b.profile
 }
 
 #[derive(Hash, PartialEq, Eq, Clone)]
@@ -575,7 +572,7 @@ mod tests {
         CpuWallProfile, FunctionMirror, LocationMirror, MemoryProfile, PProfBuilder, StringID,
         StringTable,
     };
-    use crate::utils::TimeRange;
+    use crate::TimeRange;
     use std::time::{Duration, UNIX_EPOCH};
 
     fn frame(function_name: u32, file_name: u32, line: i32) -> FFIFrame {
