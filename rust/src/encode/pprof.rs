@@ -304,21 +304,20 @@ impl<K: ProfileKind> PProfBuilder<K> {
         self.reset();
         Some(profile)
     }
-}
 
-impl<K: FfiProfileKind> PProfBuilder<K> {
-    pub fn add_ffi_sample(&mut self, frames: &[FFIFrame], values: &FFISampleValues) {
-        let sample_values = K::value_slots(values);
+    /// Accumulate interned frames in leaf-to-root order, copying the location list only
+    /// for a previously unseen stack. Callers may reuse their frame storage immediately.
+    pub fn add_sample(
+        &mut self,
+        frames: impl IntoIterator<Item = (FunctionMirror, i64)>,
+        sample_values: K::Values,
+    ) {
         let mut location_ids = std::mem::take(&mut self.ffi_locations_scratch);
         location_ids.clear();
-        location_ids.reserve(frames.len());
-
-        for f in frames {
-            let line = f.line as i64;
-            let function_id = self.add_function_mirror(FunctionMirror {
-                name: (&f.function_name).into(),
-                filename: (&f.file_name).into(),
-            });
+        let frames = frames.into_iter();
+        location_ids.reserve(frames.size_hint().0);
+        for (function, line) in frames {
+            let function_id = self.add_function_mirror(function);
             location_ids.push(self.add_location_mirror(LocationMirror { function_id, line }));
         }
 
@@ -334,6 +333,23 @@ impl<K: FfiProfileKind> PProfBuilder<K> {
             }
         }
         self.ffi_locations_scratch = location_ids;
+    }
+}
+
+impl<K: FfiProfileKind> PProfBuilder<K> {
+    pub fn add_ffi_sample(&mut self, frames: &[FFIFrame], values: &FFISampleValues) {
+        self.add_sample(
+            frames.iter().map(|f| {
+                (
+                    FunctionMirror {
+                        name: (&f.function_name).into(),
+                        filename: (&f.file_name).into(),
+                    },
+                    f.line as i64,
+                )
+            }),
+            K::value_slots(values),
+        );
     }
 }
 

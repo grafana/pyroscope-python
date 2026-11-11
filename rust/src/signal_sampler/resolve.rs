@@ -11,8 +11,9 @@
 use pyroscope_python_offsets as layout;
 use std::{marker::PhantomData, sync::atomic::Ordering};
 
+use super::Lines;
 use super::unwind::{Frame, METRICS};
-use super::{Lines, ResolvedFrame};
+use crate::encode::pprof::{StringTable, ffi::FFIFrame};
 
 mod lines;
 mod strings;
@@ -59,6 +60,11 @@ impl Types for PYO3Types {
 
 pub struct Resolver<T: Types> {
     lines: Lines,
+    frames: Vec<FFIFrame>,
+    // Allocate bounded decoding storage once, before sampling. Re-reading Python memory
+    // on every resolution avoids caching identities of freed or reused objects.
+    string_bytes: Vec<u8>,
+    text: String,
     _types: PhantomData<T>,
 }
 
@@ -66,35 +72,55 @@ impl<T: Types> Resolver<T> {
     pub fn new(lines: Lines) -> Self {
         Self {
             lines,
+            frames: Vec::with_capacity(super::MAX_FRAMES),
+            // CPython may store every character as UCS4, even for mostly ASCII text.
+            string_bytes: vec![0; 4 * strings::MAX_STRING_BYTES],
+            text: String::with_capacity(strings::MAX_STRING_BYTES),
             _types: PhantomData,
         }
     }
 
     pub fn resolve_stack(
-        &self,
+        &mut self,
         frames: &[Frame],
         count: usize,
-    ) -> Result<Vec<ResolvedFrame>, Error> {
-        frames
-            .iter()
-            .map(|frame| self.resolve_frame(frame))
-            .collect::<Result<_, _>>()
-            .inspect_err(|_| {
-                // Discard the entire stack, counting its sampling periods once regardless of depth.
-                METRICS.resolve_error.fetch_add(count, Ordering::Relaxed);
-            })
-    }
-
-    fn resolve_frame(&self, frame: &Frame) -> Result<ResolvedFrame, Error> {
-        check_type(frame.code, T::code())?;
-        let name = strings::read::<T>(word(frame.code, layout::CO_QUALNAME)?)?;
-        let filename = strings::read::<T>(word(frame.code, layout::CO_FILENAME)?)?;
-        let line = lines::resolve::<T>(frame, self.lines)?;
-        Ok(ResolvedFrame {
-            name,
-            filename,
-            line,
-        })
+        strings: &mut StringTable,
+    ) -> Result<&[FFIFrame], Error> {
+        self.frames.clear();
+        let result = (|| {
+            if frames.len() > super::MAX_FRAMES {
+                return Err(Error::Length);
+            }
+            for frame in frames {
+                check_type(frame.code, T::code())?;
+                strings::read::<T>(
+                    word(frame.code, layout::CO_QUALNAME)?,
+                    &mut self.string_bytes,
+                    &mut self.text,
+                )?;
+                let name = strings.add(&self.text);
+                strings::read::<T>(
+                    word(frame.code, layout::CO_FILENAME)?,
+                    &mut self.string_bytes,
+                    &mut self.text,
+                )?;
+                let filename = strings.add(&self.text);
+                let line = lines::resolve::<T>(frame, self.lines)?;
+                self.frames.push(FFIFrame {
+                    function_name: (&name).into(),
+                    file_name: (&filename).into(),
+                    line,
+                });
+            }
+            Ok(())
+        })();
+        if let Err(error) = result {
+            // Discard the entire stack, counting its sampling periods once regardless of depth.
+            self.frames.clear();
+            METRICS.resolve_error.fetch_add(count, Ordering::Relaxed);
+            return Err(error);
+        }
+        Ok(&self.frames)
     }
 }
 
@@ -124,12 +150,9 @@ fn read_u64(addr: usize) -> Result<u64, Error> {
     unsafe { kindasafe::u64(addr as u64) }.map_err(|_| Error::ReadMemory)
 }
 
-fn copy_bytes(address: usize, len: usize, limit: usize) -> Result<Vec<u8>, Error> {
-    if len > limit {
-        return Err(Error::Length);
-    }
-    let mut bytes = vec![0; len];
-    read_into(address, &mut bytes)?;
+fn copy_bytes(address: usize, len: usize, buffer: &mut [u8]) -> Result<&[u8], Error> {
+    let bytes = buffer.get_mut(..len).ok_or(Error::Length)?;
+    read_into(address, bytes)?;
     Ok(bytes)
 }
 

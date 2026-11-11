@@ -17,22 +17,38 @@ fn assert_stack(expected: Vec<ExpectedFrame>, count: usize) -> PyResult<usize> {
     let raw = unwind::unwind(&mut buffer)
         .map_err(|error| PyAssertionError::new_err(format!("unwind failed: {error:?}")))?;
     for mode in [Lines::LastInstruction, Lines::First, Lines::NoLine] {
-        let mut actual = Resolver::<PYO3Types>::new(mode)
-            .resolve_stack(raw, count)
+        let mut strings = StringTable::new();
+        let mut resolver = Resolver::<PYO3Types>::new(mode);
+        let resolved = resolver
+            .resolve_stack(raw, count, &mut strings)
             .map_err(|error| {
                 PyAssertionError::new_err(format!("{mode:?}: {error:?}; raw stack: {raw:?}"))
             })?;
-        actual.reverse();
+        let mut table = Vec::new();
+        strings.clone_pprof_table(&mut table);
+        let actual: Vec<_> = resolved
+            .iter()
+            .rev()
+            .map(|frame| {
+                (
+                    table[frame.function_name.index as usize].clone(),
+                    table[frame.file_name.index as usize].clone(),
+                    frame.line,
+                )
+            })
+            .collect();
         let wanted: Vec<_> = expected
             .iter()
-            .map(|(name, filename, first, current)| ResolvedFrame {
-                name: name.clone(),
-                filename: filename.clone(),
-                line: match mode {
-                    Lines::LastInstruction => *current,
-                    Lines::First => *first,
-                    Lines::NoLine => 0,
-                },
+            .map(|(name, filename, first, current)| {
+                (
+                    name.clone(),
+                    filename.clone(),
+                    match mode {
+                        Lines::LastInstruction => *current,
+                        Lines::First => *first,
+                        Lines::NoLine => 0,
+                    },
+                )
             })
             .collect();
         if actual != wanted {
@@ -42,8 +58,7 @@ fn assert_stack(expected: Vec<ExpectedFrame>, count: usize) -> PyResult<usize> {
             )));
         }
         if count > 1 {
-            actual.reverse();
-            assert_profile_weight(actual, &wanted, count)?;
+            assert_profile_weight(resolved, strings, &wanted, count)?;
         }
     }
     STACKS_CHECKED.fetch_add(1, Ordering::Relaxed);
@@ -51,11 +66,13 @@ fn assert_stack(expected: Vec<ExpectedFrame>, count: usize) -> PyResult<usize> {
 }
 
 fn assert_profile_weight(
-    frames: Vec<ResolvedFrame>,
-    expected: &[ResolvedFrame],
+    frames: &[FFIFrame],
+    strings: StringTable,
+    expected: &[(String, String, i32)],
     count: usize,
 ) -> PyResult<()> {
-    let profile = crate::signal_backend::tests::profile_for_resolved_stack(frames, &[2, count - 2]);
+    let profile =
+        crate::signal_backend::tests::profile_for_resolved_stack(frames, strings, &[2, count - 2]);
     let actual: Vec<_> = profile
         .sample
         .iter()
@@ -89,13 +106,7 @@ fn assert_profile_weight(
         .collect();
     let stack: Vec<_> = expected
         .iter()
-        .map(|frame| {
-            (
-                frame.name.as_str(),
-                frame.filename.as_str(),
-                i64::from(frame.line.max(0)),
-            )
-        })
+        .map(|(name, filename, line)| (name.as_str(), filename.as_str(), i64::from((*line).max(0))))
         .collect();
     // Two identical weighted samples must aggregate to the full count at 100 Hz.
     let wanted = vec![(stack, vec![count as i64 * 10_000_000])];
