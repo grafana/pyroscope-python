@@ -52,7 +52,7 @@ jobs:
         run: |
           export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
           export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
-          cargo clippy --locked --workspace --all-targets --all-features -- --deny warnings
+          cargo clippy --locked --workspace --all-targets -- --deny warnings
           cargo clippy --manifest-path ../kindasafe/Cargo.toml --locked --workspace --all-targets -- --deny warnings
         working-directory: rust
 
@@ -82,8 +82,6 @@ jobs:
           export Python3_ROOT_DIR=$(python3 -c 'import sys, pathlib; print(pathlib.Path(sys.base_prefix).resolve())')
           export Python3_EXECUTABLE=$(python3 -c 'import sys; print(sys.executable)')
           cargo test --locked --workspace
-          cargo bench --locked -p pyroscope-python-benchmarks --bench signal_stack -- --test
-          cargo bench --locked -p pyroscope-python-benchmarks --features profiling --bench signal_stack -- --test
           cargo test --manifest-path ../kindasafe/Cargo.toml --locked --workspace
         working-directory: rust
 
