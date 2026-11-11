@@ -18,7 +18,7 @@ use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
 
-mod resolve;
+pub(crate) mod resolve;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Lines {

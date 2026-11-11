@@ -435,3 +435,14 @@ mod tests {
         );
     }
 }
+
+/// Production types used by the opt-in Criterion benchmark executable.
+#[cfg(feature = "bench")]
+#[doc(hidden)]
+pub mod benchmark {
+    pub use crate::encode::pprof::{StringTable, ffi::FFIFrame};
+    pub use crate::signal_sampler::{
+        Lines,
+        resolve::{PYO3Types, Resolver},
+    };
+}

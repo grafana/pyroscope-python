@@ -19,7 +19,7 @@ edition = "2024"
 rust-version = "1.98.0"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 name = "_native"
 
 [dependencies]
@@ -44,6 +44,20 @@ hashbrown = "0.17.1"
 lazy_static = "1.5.0"
 pyo3.workspace = true
 
+[features]
+bench = []
+
+[dev-dependencies]
+criterion = "0.8.2"
+pyroscope = { version = "2.1.5", default-features = false, features = ["backend-pprof-rs"] }
+
+[[bench]]
+name = "signal_stack"
+harness = false
+required-features = ["bench"]
+
+[profile.bench]
+debug = 1
 
 [build-dependencies]
 cmake = "0.1"
