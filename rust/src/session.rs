@@ -11,8 +11,8 @@ use crate::utils::TimeRange;
 use crate::{
     Result,
     backend::{ReportBatch, ReportData},
+    encode::pprof::encode_reports,
     pyroscope::PyroscopeConfig,
-    pyspy_backend::encode_reports,
 };
 use libflate::gzip::Encoder;
 use prost::Message;
