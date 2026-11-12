@@ -22,6 +22,7 @@ use std::{
 };
 
 const LOG_TAG: &str = "Pyroscope::Signal";
+const STRING_TABLE_RESET_WINDOWS: u8 = 20;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
@@ -102,6 +103,7 @@ pub struct ProfileBuffer {
     builder: PProfBuilder<PySpyProfile>,
     strings: StringTable,
     drop_name: String,
+    string_table_windows: u8,
 }
 
 impl ProfileBuffer {
@@ -110,6 +112,7 @@ impl ProfileBuffer {
             builder: PProfBuilder::new(),
             strings: StringTable::new(),
             drop_name: String::new(),
+            string_table_windows: 0,
         }
     }
 
@@ -143,7 +146,13 @@ impl ProfileBuffer {
         let profile = self
             .builder
             .take_profile_and_reset(&self.strings, time_range);
-        self.strings = StringTable::new();
+        self.string_table_windows += 1;
+        if self.string_table_windows == STRING_TABLE_RESET_WINDOWS {
+            self.strings = StringTable::new();
+            self.string_table_windows = 0;
+        } else {
+            self.strings.clear();
+        }
         let mut profile = profile?;
         // Accumulate sampling periods, including timer overruns, until the upload.
         for sample in &mut profile.sample {
@@ -298,6 +307,7 @@ pub(crate) mod tests {
             builder: PProfBuilder::new(),
             strings,
             drop_name: String::new(),
+            string_table_windows: 0,
         };
         for &count in counts {
             add_sample(&mut buffer.builder, frames, count);
@@ -410,15 +420,29 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn empty_upload_windows_release_unreferenced_strings() {
+    fn empty_upload_windows_clear_strings_and_release_capacity_every_twentieth_window() {
         let mut buffer = ProfileBuffer::new();
         let empty_memory = buffer.strings.memory_size_bytes();
         let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(1)).unwrap();
+        buffer.strings.set.reserve(128);
+        let retained_memory = buffer.strings.set.allocation_size();
+        assert!(retained_memory > empty_memory);
         buffer.strings.add(&"orphaned filename".repeat(1000));
-        assert!(buffer.take_profile(100, &range).is_none());
-        assert_eq!(buffer.strings.set.len(), 1);
-        assert_eq!(buffer.strings.memory_size_bytes(), empty_memory);
-        assert_eq!(buffer.strings.add("").index, 0);
+        for window in 1..=20 {
+            assert!(buffer.take_profile(100, &range).is_none());
+            assert_eq!(buffer.strings.set.len(), 1);
+            let expected = if window == 20 {
+                empty_memory
+            } else {
+                retained_memory
+            };
+            assert_eq!(
+                buffer.strings.memory_size_bytes(),
+                expected,
+                "window {window}"
+            );
+            assert_eq!(buffer.strings.add("").index, 0);
+        }
     }
 
     #[test]
@@ -426,7 +450,13 @@ pub(crate) mod tests {
         let mut buffer = ProfileBuffer::new();
         let empty_memory = buffer.strings.memory_size_bytes();
         let mut encoded_size = None;
-        for window in 0..16 {
+        let mut retained_memory = 0;
+        for window in 0..40 {
+            if window % 20 == 0 {
+                buffer.strings.set.reserve(128);
+                retained_memory = buffer.strings.set.allocation_size();
+                assert!(retained_memory > empty_memory);
+            }
             let rate = if window % 2 == 0 { 100 } else { 200 };
             let filename_text = format!("source_{window:03}.py");
             let range = TimeRange::new(
@@ -434,7 +464,6 @@ pub(crate) mod tests {
                 UNIX_EPOCH + Duration::from_secs(15),
             )
             .unwrap();
-            assert!(buffer.take_profile(rate, &range).is_none());
             let filename = buffer.strings.add(&filename_text);
             let name = buffer.strings.add("work");
             let root = buffer.strings.add("main");
@@ -508,7 +537,17 @@ pub(crate) mod tests {
                 "{profile:#?}"
             );
             assert_eq!(buffer.strings.set.len(), 1);
-            assert_eq!(buffer.strings.memory_size_bytes(), empty_memory);
+            let expected_memory = if (window + 1) % 20 == 0 {
+                empty_memory
+            } else {
+                retained_memory
+            };
+            assert_eq!(
+                buffer.strings.memory_size_bytes(),
+                expected_memory,
+                "window {}",
+                window + 1
+            );
             assert_eq!(buffer.strings.add("").index, 0);
             assert_eq!(
                 profile.string_table,
@@ -524,7 +563,6 @@ pub(crate) mod tests {
             );
             let expected_size = *encoded_size.get_or_insert(bytes.len());
             assert_eq!(bytes.len(), expected_size, "window {window}: {profile:#?}");
-            assert!(buffer.take_profile(rate, &range).is_none());
         }
     }
 }

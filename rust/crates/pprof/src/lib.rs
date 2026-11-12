@@ -481,6 +481,13 @@ impl StringTable {
         s
     }
 
+    /// Drop interned strings and invalidate their IDs while retaining table capacity.
+    /// The empty string is reinserted at index zero.
+    pub fn clear(&mut self) {
+        self.set.clear();
+        self.add("");
+    }
+
     pub fn add(&mut self, s: &str) -> StringID {
         let next_id = StringID::new(&self.set);
         let k = self.set.entry_ref(s);
@@ -781,6 +788,23 @@ mod tests {
         // depends on index 0 being the empty string.
         let mut strings = StringTable::new();
         assert_eq!(strings.add("").index, 0);
+    }
+
+    #[test]
+    fn clear_reuses_capacity_and_resets_string_ids() {
+        let mut strings = StringTable::new();
+        strings.set.reserve(128);
+        strings.add(&"old name".repeat(1024));
+        strings.add("old filename.py");
+        let capacity = strings.set.capacity();
+        let allocation_size = strings.set.allocation_size();
+        strings.clear();
+        assert_eq!(strings.set.capacity(), capacity);
+        assert_eq!(strings.memory_size_bytes(), allocation_size);
+        assert_eq!(strings.set.len(), 1);
+        assert_eq!(strings.add("").index, 0);
+        assert_eq!(strings.add("new filename.py").index, 1);
+        assert_eq!(strings.into_pprof_table(), ["", "new filename.py"]);
     }
 
     #[test]
