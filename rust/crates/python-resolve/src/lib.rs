@@ -130,6 +130,7 @@ impl<T: Types> Resolver<T> {
     }
 }
 
+#[inline(always)]
 fn check_type(address: usize, expected: usize) -> Result<(), Error> {
     if address == 0 || word(address, layout::OB_TYPE)? != expected {
         return Err(Error::ObjectType(address));
@@ -137,10 +138,12 @@ fn check_type(address: usize, expected: usize) -> Result<(), Error> {
     Ok(())
 }
 
+#[inline(always)]
 fn word(address: usize, offset: usize) -> Result<usize, Error> {
     read_u64(address.wrapping_add(offset)).map(|value| value as usize)
 }
 
+#[inline(always)]
 fn integer(address: usize, offset: usize) -> Result<i32, Error> {
     let addr = address.wrapping_add(offset);
     // SAFETY: recovery and source-borrow assumptions are documented at module level.
@@ -150,18 +153,21 @@ fn integer(address: usize, offset: usize) -> Result<i32, Error> {
         .map_err(|_| Error::ReadMemory)
 }
 
+#[inline(always)]
 fn read_u64(addr: usize) -> Result<u64, Error> {
     // SAFETY: recovery and source-borrow assumptions are documented at module level.
     // No Rust reference to the source is created.
     unsafe { kindasafe::u64(addr as u64) }.map_err(|_| Error::ReadMemory)
 }
 
+#[inline(always)]
 fn copy_bytes(address: usize, len: usize, buffer: &mut [u8]) -> Result<&[u8], Error> {
     let bytes = buffer.get_mut(..len).ok_or(Error::Length)?;
     read_into(address, bytes)?;
     Ok(bytes)
 }
 
+#[inline(always)]
 fn read_into(addr: usize, out: &mut [u8]) -> Result<(), Error> {
     // SAFETY: recovery and source-borrow assumptions are documented at module level.
     // The destination is initialized, exclusively borrowed storage, separate from the source.
