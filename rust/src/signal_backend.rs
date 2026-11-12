@@ -357,7 +357,6 @@ pub(crate) mod tests {
             ("invalid_code_type", 4),
             ("read_errors", 5),
             ("truncated", 13),
-            ("invalid", 8),
             ("resolve_error", 9),
         ]);
         let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
@@ -390,7 +389,6 @@ pub(crate) mod tests {
             ),
             (vec![("[dropped: read_errors]", "", 0)], vec![50_000_000]),
             (vec![("[dropped: truncated]", "", 0)], vec![130_000_000]),
-            (vec![("[dropped: invalid]", "", 0)], vec![80_000_000]),
             (vec![("[dropped: resolve_error]", "", 0)], vec![90_000_000]),
         ];
         expected.sort();
@@ -401,7 +399,7 @@ pub(crate) mod tests {
                 .iter()
                 .map(|sample| sample.value[0])
                 .sum::<i64>(),
-            1_450_000_000,
+            1_370_000_000,
             "{profile:#?}"
         );
     }

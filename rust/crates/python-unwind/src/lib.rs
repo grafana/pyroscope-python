@@ -70,7 +70,6 @@ pub enum Error {
     InvalidCodeType,
     /// The output slice has no room, or the chain exceeds [`MAX_FRAMES`] (including loops).
     Truncated,
-    Invalid,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -137,7 +136,6 @@ pub struct Metrics {
     contentions: AtomicUsize,
     buffer_dropped: AtomicUsize,
     truncated: AtomicUsize,
-    invalid: AtomicUsize,
     no_thread_state: AtomicUsize,
     invalid_code_type: AtomicUsize,
     read_errors: AtomicUsize,
@@ -149,7 +147,6 @@ pub static METRICS: Metrics = Metrics {
     contentions: AtomicUsize::new(0),
     buffer_dropped: AtomicUsize::new(0),
     truncated: AtomicUsize::new(0),
-    invalid: AtomicUsize::new(0),
     no_thread_state: AtomicUsize::new(0),
     invalid_code_type: AtomicUsize::new(0),
     read_errors: AtomicUsize::new(0),
@@ -159,7 +156,7 @@ pub static METRICS: Metrics = Metrics {
 impl Metrics {
     /// Takes lost sampling-period counts since the previous drain, one reason per lost stack.
     /// Concurrent increments remain in this batch or the next one.
-    pub fn take_drop_counts(&self) -> [(&'static str, usize); 8] {
+    pub fn take_drop_counts(&self) -> [(&'static str, usize); 7] {
         [
             ("contentions", &self.contentions),
             ("buffer_dropped", &self.buffer_dropped),
@@ -167,7 +164,6 @@ impl Metrics {
             ("invalid_code_type", &self.invalid_code_type),
             ("read_errors", &self.read_errors),
             ("truncated", &self.truncated),
-            ("invalid", &self.invalid),
             ("resolve_error", &self.resolve_error),
         ]
         .map(|(reason, count)| (reason, count.swap(0, Ordering::Relaxed)))
@@ -199,7 +195,6 @@ fn unwind_thread(tstate: usize, frames: &mut [Frame], count: usize) -> Result<&[
             Error::InvalidCodeType => &METRICS.invalid_code_type,
             Error::Read => &METRICS.read_errors,
             Error::Truncated => &METRICS.truncated,
-            Error::Invalid => &METRICS.invalid,
         };
         counter.fetch_add(count, Ordering::Relaxed);
     })
@@ -314,7 +309,6 @@ mod tests {
             (&metrics.invalid_code_type, 4),
             (&metrics.read_errors, 5),
             (&metrics.truncated, 13),
-            (&metrics.invalid, 8),
             (&metrics.resolve_error, 9),
         ] {
             counter.fetch_add(count, Ordering::Relaxed);
@@ -326,7 +320,6 @@ mod tests {
             ("invalid_code_type", 4),
             ("read_errors", 5),
             ("truncated", 13),
-            ("invalid", 8),
             ("resolve_error", 9),
         ];
         assert_eq!(metrics.take_drop_counts(), expected);
