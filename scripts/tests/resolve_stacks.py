@@ -128,3 +128,17 @@ def malformed_lines_leaf():  # first: malformed_lines_leaf
 malformed_lines_leaf.__code__ = malformed_lines_leaf.__code__.replace(
     co_linetable=b"\x80"
 )
+
+
+def long_unicode_names():  # first: long_unicode_names
+    return long_unicode_leaf()  # call: long_unicode_names
+
+
+def long_unicode_leaf():  # first: long_unicode_leaf
+    return assert_stack(expected, 17)  # call: long_unicode_leaf
+
+
+long_unicode_fields = {"co_name": "中" * 2000, "co_filename": "🐍" * 2000}
+if sys.version_info >= (3, 11):
+    long_unicode_fields["co_qualname"] = long_unicode_fields["co_name"]
+long_unicode_leaf.__code__ = long_unicode_leaf.__code__.replace(**long_unicode_fields)

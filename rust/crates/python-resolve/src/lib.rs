@@ -86,7 +86,7 @@ impl<T: Types> Resolver<T> {
             lines,
             frames: Vec::with_capacity(MAX_FRAMES),
             // CPython may store every character as UCS4, even for mostly ASCII text.
-            string_bytes: vec![0; 4 * strings::MAX_STRING_BYTES],
+            string_bytes: vec![0; strings::MAX_STRING_BYTES],
             text: String::with_capacity(strings::MAX_STRING_BYTES),
             _types: PhantomData,
         }

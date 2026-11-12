@@ -266,14 +266,14 @@ fn interns_unicode_by_content_and_rereads_reused_string_storage() {
 
 #[cfg(not(miri))]
 #[test]
-fn limits_both_function_names_and_filenames_to_max_string_bytes() {
+fn limits_both_function_names_and_filenames_to_max_characters() {
     let _guard = crate::METRICS_LOCK.lock().unwrap();
     recovery();
     let mut strings = StringTable::new();
     let short = string_object(b"short", 1, true);
-    let boundary_text = "a".repeat(strings::MAX_STRING_BYTES);
+    let boundary_text = "a".repeat(strings::MAX_STRING_CHARS);
     let boundary = string_object(boundary_text.as_bytes(), 1, true);
-    let oversized = string_object(&vec![b'a'; strings::MAX_STRING_BYTES + 1], 1, true);
+    let oversized = string_object(&vec![b'a'; strings::MAX_STRING_CHARS + 1], 1, true);
     let mut code = vec![0; layout::CO_LINETABLE + 8];
     put_word(&mut code, layout::OB_TYPE, TestTypes::code());
     let frame = recorded_frame(code.as_ptr() as usize, 0);

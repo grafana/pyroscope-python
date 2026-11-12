@@ -2,8 +2,9 @@
 
 use super::{Error, Types, check_type, copy_bytes, layout, read_u64, word};
 
-// Bound the UTF-8 output for both function names and filenames.
-pub(super) const MAX_STRING_BYTES: usize = 4096;
+// CPython counts code points; UCS4 storage and UTF-8 need at most four bytes each.
+pub(super) const MAX_STRING_CHARS: usize = 4096;
+pub(super) const MAX_STRING_BYTES: usize = 4 * MAX_STRING_CHARS;
 
 pub(super) fn read<T: Types>(
     address: usize,
@@ -14,7 +15,7 @@ pub(super) fn read<T: Types>(
     // https://github.com/python/cpython/blob/v3.14.0/Include/cpython/unicodeobject.h
     check_type(address, T::string())?;
     let len = word(address, layout::UNICODE_LENGTH)?;
-    if len > MAX_STRING_BYTES {
+    if len > MAX_STRING_CHARS {
         return Err(Error::Length);
     }
     let state = read_u64(address.wrapping_add(layout::UNICODE_STATE))?;
@@ -47,6 +48,9 @@ fn decode_unicode(
     if !matches!(kind, 1 | 2 | 4) || !bytes.len().is_multiple_of(kind) || (ascii && kind != 1) {
         return Err(Error::Unicode);
     }
+    if bytes.len() / kind > MAX_STRING_CHARS {
+        return Err(Error::Length);
+    }
     result.clear();
     for unit in bytes.chunks_exact(kind) {
         let codepoint = match kind {
@@ -61,9 +65,6 @@ fn decode_unicode(
         // Python permits lone surrogates. Rust strings do not; replace each surrogate.
         // UCS2 data is a sequence of code points, not UTF-16 surrogate pairs.
         let character = char::from_u32(codepoint).unwrap_or(char::REPLACEMENT_CHARACTER);
-        if result.len() + character.len_utf8() > MAX_STRING_BYTES {
-            return Err(Error::Length);
-        }
         result.push(character);
     }
     Ok(())
@@ -84,7 +85,7 @@ mod tests {
     #[cfg(not(miri))]
     fn read<T: Types>(address: usize) -> Result<String, Error> {
         let mut text = String::new();
-        super::read::<T>(address, &mut vec![0; 4 * MAX_STRING_BYTES], &mut text)?;
+        super::read::<T>(address, &mut vec![0; MAX_STRING_BYTES], &mut text)?;
         Ok(text)
     }
 
@@ -120,7 +121,7 @@ mod tests {
     }
 
     #[test]
-    fn bounds_decoded_names_to_max_string_bytes_without_growing_output() {
+    fn bounds_character_count_without_growing_output() {
         for (unit, kind, ascii, utf8_width) in [
             (vec![b'a'], 1, true, 1),
             (vec![0xe9], 1, false, 2),
@@ -128,11 +129,11 @@ mod tests {
             (0xd800u16.to_ne_bytes().to_vec(), 2, false, 3),
             (0x1f40du32.to_ne_bytes().to_vec(), 4, false, 4),
         ] {
-            let mut bytes = unit.repeat(MAX_STRING_BYTES / utf8_width);
+            let mut bytes = unit.repeat(MAX_STRING_CHARS);
             let mut text = String::with_capacity(MAX_STRING_BYTES);
             let capacity = text.capacity();
             super::decode_unicode(&bytes, kind, ascii, &mut text).unwrap();
-            assert_eq!(text.len(), MAX_STRING_BYTES / utf8_width * utf8_width);
+            assert_eq!(text.len(), MAX_STRING_CHARS * utf8_width);
             bytes.extend_from_slice(&unit);
             assert!(matches!(
                 super::decode_unicode(&bytes, kind, ascii, &mut text),
@@ -144,15 +145,33 @@ mod tests {
 
     #[cfg(not(miri))]
     #[test]
-    fn accepts_max_string_bytes_utf8_bytes_from_ucs4_storage() {
+    fn accepts_max_characters_from_ucs4_storage() {
         recovery();
-        let mut bytes = (b'a' as u32).to_ne_bytes().repeat(MAX_STRING_BYTES - 4);
+        let mut bytes = (b'a' as u32).to_ne_bytes().repeat(MAX_STRING_CHARS - 1);
         bytes.extend_from_slice(&0x1f40du32.to_ne_bytes());
         let object = string_object(&bytes, 4, false);
         assert_eq!(
             read::<TestTypes>(object.as_ptr() as usize).unwrap(),
-            format!("{}🐍", "a".repeat(MAX_STRING_BYTES - 4))
+            format!("{}🐍", "a".repeat(MAX_STRING_CHARS - 1))
         );
+    }
+
+    #[cfg(not(miri))]
+    #[test]
+    fn accepts_unicode_names_above_4096_encoded_bytes() {
+        recovery();
+        for (unit, kind, character) in [
+            (0x4e2du16.to_ne_bytes().to_vec(), 2, "中"),
+            (0x1f40du32.to_ne_bytes().to_vec(), 4, "🐍"),
+        ] {
+            let expected = character.repeat(2000);
+            assert!(expected.len() > 4096);
+            let object = string_object(&unit.repeat(2000), kind, false);
+            assert_eq!(
+                read::<TestTypes>(object.as_ptr() as usize).unwrap(),
+                expected
+            );
+        }
     }
 
     #[cfg(not(miri))]

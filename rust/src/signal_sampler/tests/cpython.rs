@@ -266,6 +266,18 @@ fn resolves_real_cpython_stack_shapes() {
                         ),
                     ],
                 ),
+                (
+                    "long_unicode_names",
+                    vec![
+                        frame("long_unicode_names", "long_unicode_names"),
+                        (
+                            "中".repeat(2000),
+                            "🐍".repeat(2000),
+                            source_line("first: long_unicode_leaf"),
+                            source_line("call: long_unicode_leaf"),
+                        ),
+                    ],
+                ),
                 ("comprehension", comprehension),
                 (
                     "c_reentry",
