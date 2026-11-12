@@ -93,8 +93,8 @@ impl Drop for Signal {
     }
 }
 
-/// Incremental signal profile. String IDs live for this session, while functions,
-/// locations and accumulated samples are reset after each upload window.
+/// Incremental signal profile. String IDs, functions, locations and accumulated
+/// samples are scoped to one upload window.
 pub struct ProfileBuffer {
     builder: PProfBuilder<PySpyProfile>,
     strings: StringTable,
@@ -137,9 +137,11 @@ impl ProfileBuffer {
     fn take_profile(&mut self, sample_rate: u32, time_range: &TimeRange) -> Option<Profile> {
         self.builder
             .set_profile_type(&mut self.strings, sample_rate);
-        let mut profile = self
+        let profile = self
             .builder
-            .take_profile_and_reset(&self.strings, time_range)?;
+            .take_profile_and_reset(&self.strings, time_range);
+        self.strings = StringTable::new();
+        let mut profile = profile?;
         // Accumulate sampling periods, including timer overruns, until the upload.
         for sample in &mut profile.sample {
             sample.value[0] = sample.value[0].saturating_mul(profile.period);
@@ -405,30 +407,46 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn upload_windows_reset_samples_and_keep_interned_strings() {
+    fn empty_upload_windows_release_unreferenced_strings() {
         let mut buffer = ProfileBuffer::new();
-        let filename = buffer.strings.add("source.py");
-        let name = buffer.strings.add("work");
-        let root = buffer.strings.add("main");
-        let mut stack = [
-            FFIFrame {
-                function_name: (&name).into(),
-                file_name: (&filename).into(),
-                line: -1,
-            },
-            FFIFrame {
-                function_name: (&root).into(),
-                file_name: (&filename).into(),
-                line: 10,
-            },
-        ];
-        for rate in [100, 200] {
+        let empty_memory = buffer.strings.memory_size_bytes();
+        let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(1)).unwrap();
+        buffer.strings.add(&"orphaned filename".repeat(1000));
+        assert!(buffer.take_profile(100, &range).is_none());
+        assert_eq!(buffer.strings.set.len(), 1);
+        assert_eq!(buffer.strings.memory_size_bytes(), empty_memory);
+        assert_eq!(buffer.strings.add("").index, 0);
+    }
+
+    #[test]
+    fn upload_windows_reclaim_strings_and_keep_profile_size_constant() {
+        let mut buffer = ProfileBuffer::new();
+        let empty_memory = buffer.strings.memory_size_bytes();
+        let mut encoded_size = None;
+        for window in 0..16 {
+            let rate = if window % 2 == 0 { 100 } else { 200 };
+            let filename_text = format!("source_{window:03}.py");
             let range = TimeRange::new(
                 UNIX_EPOCH + Duration::from_secs(5),
                 UNIX_EPOCH + Duration::from_secs(15),
             )
             .unwrap();
             assert!(buffer.take_profile(rate, &range).is_none());
+            let filename = buffer.strings.add(&filename_text);
+            let name = buffer.strings.add("work");
+            let root = buffer.strings.add("main");
+            let mut stack = [
+                FFIFrame {
+                    function_name: (&name).into(),
+                    file_name: (&filename).into(),
+                    line: -1,
+                },
+                FFIFrame {
+                    function_name: (&root).into(),
+                    file_name: (&filename).into(),
+                    line: 10,
+                },
+            ];
             stack[0].line = -1;
             add_sample(&mut buffer.builder, &stack, 2);
             add_sample(&mut buffer.builder, &stack, 3);
@@ -450,11 +468,17 @@ pub(crate) mod tests {
                 actual,
                 [
                     (
-                        vec![("main", "source.py", 10), ("work", "source.py", 0)],
+                        vec![
+                            ("main", filename_text.as_str(), 10),
+                            ("work", filename_text.as_str(), 0)
+                        ],
                         vec![5 * period]
                     ),
                     (
-                        vec![("main", "source.py", 10), ("work", "source.py", 25)],
+                        vec![
+                            ("main", filename_text.as_str(), 10),
+                            ("work", filename_text.as_str(), 25)
+                        ],
                         vec![7 * period]
                     ),
                 ],
@@ -480,7 +504,23 @@ pub(crate) mod tests {
                 Some(sample_type),
                 "{profile:#?}"
             );
-            assert_eq!(buffer.strings.add("work").index, name.index);
+            assert_eq!(buffer.strings.set.len(), 1);
+            assert_eq!(buffer.strings.memory_size_bytes(), empty_memory);
+            assert_eq!(buffer.strings.add("").index, 0);
+            assert_eq!(
+                profile.string_table,
+                [
+                    "",
+                    filename_text.as_str(),
+                    "work",
+                    "main",
+                    "cpu",
+                    "nanoseconds"
+                ],
+                "{profile:#?}"
+            );
+            let expected_size = *encoded_size.get_or_insert(bytes.len());
+            assert_eq!(bytes.len(), expected_size, "window {window}: {profile:#?}");
             assert!(buffer.take_profile(rate, &range).is_none());
         }
     }
