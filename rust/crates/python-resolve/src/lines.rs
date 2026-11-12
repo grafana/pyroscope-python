@@ -35,20 +35,13 @@ impl Table {
     }
 
     #[inline(always)]
-    fn peek(&self) -> Result<Option<u8>, Error> {
+    fn next(&mut self) -> Result<u8, Error> {
         if self.remaining == 0 {
-            return Ok(None);
+            return Err(Error::LineTable);
         }
         // SAFETY: the resolver's recovery and source-borrow preconditions apply.
         // Read only a byte within the declared table, without forming a source reference.
-        unsafe { kindasafe::u8(self.address as u64) }
-            .map(Some)
-            .map_err(|_| Error::ReadMemory)
-    }
-
-    #[inline(always)]
-    fn next(&mut self) -> Result<u8, Error> {
-        let byte = self.peek()?.ok_or(Error::LineTable)?;
+        let byte = unsafe { kindasafe::u8(self.address as u64) }.map_err(|_| Error::ReadMemory)?;
         self.address = self.address.wrapping_add(1);
         self.remaining -= 1;
         Ok(byte)
@@ -171,7 +164,6 @@ mod tests {
         assert_eq!(table.next().unwrap(), 11);
         bytes[1] = 33;
         assert_eq!(table.next().unwrap(), bytes[1]);
-        assert_eq!(table.peek().unwrap(), None);
         assert!(matches!(table.next(), Err(Error::LineTable)));
         let mut empty = Table::new(0, 0).unwrap();
         assert!(matches!(empty.next(), Err(Error::LineTable)));

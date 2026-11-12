@@ -42,9 +42,6 @@ pub(super) fn line_number(mut table: Table, first: i32, offset: i32) -> Result<i
             15 => 0,
             _ => unreachable!(),
         };
-        if table.peek()?.is_some_and(|byte| byte & 0x80 == 0) {
-            return Err(Error::LineTable);
-        }
         line = line.checked_add(delta).ok_or(Error::LineTable)?;
         end = end
             .checked_add((i32::from(header & 7) + 1) * 2)
@@ -134,7 +131,6 @@ mod tests {
             &[0][..],
             &[0x80],
             &[0x80, 0x80],
-            &[0x80, 0, 0],
             &[0xd0, 0],
             &[0xe8, 0x40],
             &[0xf0, 0, 0, 0],
@@ -143,6 +139,12 @@ mod tests {
         ] {
             assert!(decode(table, 10, 0).is_err(), "{table:?}");
         }
+        // Validate the next header only when the requested offset needs it.
+        assert_eq!(decode(&[0x80, 0, 0], 10, 0).unwrap(), 10);
+        assert!(matches!(
+            decode(&[0x80, 0, 0], 10, 2),
+            Err(Error::LineTable)
+        ));
         assert!(decode(&[0xe8, 2], i32::MAX, 0).is_err());
         assert!(decode(&[0xe8, 3], i32::MIN, 0).is_err());
     }
