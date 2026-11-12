@@ -254,6 +254,18 @@ fn resolves_real_cpython_stack_shapes() {
                         frame("mapped_lines_leaf", "mapped_lines_leaf"),
                     ],
                 ),
+                (
+                    "malformed_lines",
+                    vec![
+                        frame("malformed_lines", "malformed_lines"),
+                        (
+                            "malformed_lines_leaf".into(),
+                            filename.into(),
+                            source_line("first: malformed_lines_leaf"),
+                            -1,
+                        ),
+                    ],
+                ),
                 ("comprehension", comprehension),
                 (
                     "c_reentry",

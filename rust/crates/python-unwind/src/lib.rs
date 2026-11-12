@@ -139,7 +139,7 @@ pub struct Metrics {
     no_thread_state: AtomicUsize,
     invalid_code_type: AtomicUsize,
     read_errors: AtomicUsize,
-    /// Stacks dropped because deferred name or line resolution failed.
+    /// Stacks dropped because deferred frame resolution failed.
     pub resolve_error: AtomicUsize,
 }
 

@@ -115,3 +115,16 @@ def mapped_lines_leaf():  # first: mapped_lines_leaf
 unmapped_lines_middle.__code__ = unmapped_lines_middle.__code__.replace(
     co_linetable=b"\x02\x00" if sys.version_info < (3, 11) else b"\x80\x00"
 )
+
+
+def malformed_lines():  # first: malformed_lines
+    return malformed_lines_leaf()  # call: malformed_lines
+
+
+def malformed_lines_leaf():  # first: malformed_lines_leaf
+    return assert_stack(expected, 13)  # call: malformed_lines_leaf
+
+
+malformed_lines_leaf.__code__ = malformed_lines_leaf.__code__.replace(
+    co_linetable=b"\x80"
+)

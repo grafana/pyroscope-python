@@ -9,13 +9,19 @@
 //! reject many stale reads, but torn reads or address reuse can still misattribute a sample.
 
 use pyroscope_python_offsets as layout;
-use std::{marker::PhantomData, sync::atomic::Ordering};
+use std::{
+    marker::PhantomData,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use pyroscope_pprof::{StringTable, ffi::FFIFrame};
 use pyroscope_python_unwind::{Frame, MAX_FRAMES, METRICS};
 
 mod lines;
 mod strings;
+
+// TODO: expose this count of failed frame line lookups as a profiler metric.
+static LINE_RESOLUTION_ERRORS: AtomicUsize = AtomicUsize::new(0);
 #[cfg(test)]
 mod tests;
 
@@ -111,7 +117,10 @@ impl<T: Types> Resolver<T> {
                     &mut self.text,
                 )?;
                 let filename = strings.add(&self.text);
-                let line = lines::resolve::<T>(frame, self.lines)?;
+                let line = lines::resolve::<T>(frame, self.lines).unwrap_or_else(|_| {
+                    LINE_RESOLUTION_ERRORS.fetch_add(1, Ordering::Relaxed);
+                    -1
+                });
                 self.frames.push(FFIFrame {
                     function_name: (&name).into(),
                     file_name: (&filename).into(),

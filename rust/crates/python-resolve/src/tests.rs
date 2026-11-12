@@ -155,13 +155,18 @@ fn resolves_whole_stacks_and_counts_failures_once() {
         Err(Error::ReadMemory)
     ));
     assert_eq!(METRICS.resolve_error.load(Ordering::Relaxed), before + 7);
-    // Do not read line tables for First/NoLine. LastInstruction must validate the bytes type.
+    // A line-table type mismatch keeps the frame with an unknown line.
     put_word(&mut bytes, layout::OB_TYPE, 999);
-    assert!(matches!(
-        resolver.resolve_stack(&[frame], 11, &mut strings),
-        Err(Error::ObjectType(_))
-    ));
-    assert_eq!(METRICS.resolve_error.load(Ordering::Relaxed), before + 18);
+    let line_errors = LINE_RESOLUTION_ERRORS.load(Ordering::Relaxed);
+    assert_eq!(
+        frame_ids(resolver.resolve_stack(&[frame], 11, &mut strings).unwrap()),
+        [(name_id.index, filename_id.index, -1)]
+    );
+    assert_eq!(METRICS.resolve_error.load(Ordering::Relaxed), before + 7);
+    assert_eq!(
+        LINE_RESOLUTION_ERRORS.load(Ordering::Relaxed),
+        line_errors + 1
+    );
     assert!(
         Resolver::<TestTypes>::new(Lines::First)
             .resolve_stack(&[frame], 11, &mut strings)
@@ -178,7 +183,11 @@ fn resolves_whole_stacks_and_counts_failures_once() {
             .unwrap()
             .is_empty()
     );
-    assert_eq!(METRICS.resolve_error.load(Ordering::Relaxed), before + 18);
+    assert_eq!(METRICS.resolve_error.load(Ordering::Relaxed), before + 7);
+    assert_eq!(
+        LINE_RESOLUTION_ERRORS.load(Ordering::Relaxed),
+        line_errors + 1
+    );
 }
 
 #[cfg(not(miri))]
@@ -289,5 +298,55 @@ fn limits_both_function_names_and_filenames_to_max_string_bytes() {
             (short_id, boundary_id, 0)
         };
         assert_eq!(actual, [expected]);
+    }
+}
+
+#[cfg(not(miri))]
+#[test]
+fn line_failures_preserve_frames_and_only_increment_the_private_counter() {
+    let _guard = crate::METRICS_LOCK.lock().unwrap();
+    recovery();
+    let mut strings = StringTable::new();
+    let name = string_object(b"work", 1, true);
+    let filename = string_object(b"source.py", 1, true);
+    let name_id = strings.add("work").index;
+    let filename_id = strings.add("source.py").index;
+    let mut bytes = vec![0; layout::BYTES_DATA + 1];
+    put_word(&mut bytes, layout::OB_TYPE, TestTypes::bytes());
+    put_word(&mut bytes, layout::BYTES_SIZE, 1);
+    bytes[layout::BYTES_DATA] = 0x80; // Truncated entry in both formats.
+    let mut code = vec![0; layout::CO_LINETABLE + 8];
+    put_word(&mut code, layout::OB_TYPE, TestTypes::code());
+    put_word(&mut code, layout::CO_QUALNAME, name.as_ptr() as usize);
+    put_word(&mut code, layout::CO_FILENAME, filename.as_ptr() as usize);
+    let mut resolver = Resolver::<TestTypes>::new(Lines::LastInstruction);
+    for failure in ["malformed", "unreadable", "oversized", "instruction"] {
+        put_word(&mut code, layout::CO_LINETABLE, bytes.as_ptr() as usize);
+        put_word(&mut bytes, layout::BYTES_SIZE, 1);
+        let mut frame = recorded_frame(code.as_ptr() as usize, 0);
+        match failure {
+            "unreadable" => put_word(&mut code, layout::CO_LINETABLE, 1),
+            "oversized" => put_word(&mut bytes, layout::BYTES_SIZE, usize::MAX),
+            "instruction" => frame = recorded_frame(frame.code, i32::MAX as usize + 1),
+            _ => {}
+        }
+        let dropped = METRICS.resolve_error.load(Ordering::Relaxed);
+        let line_errors = LINE_RESOLUTION_ERRORS.load(Ordering::Relaxed);
+        let actual = frame_ids(
+            resolver
+                .resolve_stack(&[frame, frame], 7, &mut strings)
+                .unwrap(),
+        );
+        assert_eq!(actual, [(name_id, filename_id, -1); 2], "{failure}");
+        assert_eq!(
+            METRICS.resolve_error.load(Ordering::Relaxed),
+            dropped,
+            "{failure}"
+        );
+        assert_eq!(
+            LINE_RESOLUTION_ERRORS.load(Ordering::Relaxed),
+            line_errors + 2,
+            "{failure}"
+        );
     }
 }
