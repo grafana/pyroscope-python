@@ -164,11 +164,17 @@ pub struct PyroscopeAgentBuilder {
 
 impl PyroscopeAgentBuilder {
     pub fn new(
-        config: PyroscopeConfig,
+        mut config: PyroscopeConfig,
         cpu_config: Option<CpuConfig>,
-        backend_config: BackendConfig,
+        mut backend_config: BackendConfig,
         ruleset: ThreadTagsSet,
     ) -> Self {
+        if backend_config.report_pid {
+            config
+                .tags
+                .insert("pid".into(), std::process::id().to_string());
+            backend_config.report_pid = false;
+        }
         Self {
             config,
             cpu_config,
@@ -192,9 +198,7 @@ impl PyroscopeAgentBuilder {
                     Pyspy::new(config, self.backend_config, self.ruleset.clone())
                         .map(Backend::PySpy)
                 }
-                CpuConfig::Signal(config) => {
-                    Signal::new(config, self.backend_config).map(Backend::Signal)
-                }
+                CpuConfig::Signal(config) => Signal::new(config).map(Backend::Signal),
             })
             .transpose()?;
         if backend.is_some() {
@@ -402,5 +406,63 @@ impl StopWatch {
         let res = TimeRange::new(self.start, until)?;
         self.start = until;
         Ok(res)
+    }
+}
+
+#[cfg(all(test, not(miri)))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pid_is_an_agent_series_tag_not_a_backend_sample_tag() {
+        let pid = std::process::id().to_string();
+        for report_pid in [false, true] {
+            for user_pid in [None, Some("user-pid")] {
+                let mut config = PyroscopeConfig::new(
+                    "http://localhost:4040",
+                    "my-app",
+                    100,
+                    "pyspy",
+                    "1.4.0",
+                    memory::Config {
+                        enabled: false,
+                        enable_mem_domain: false,
+                        max_nframe: 0,
+                        heap_sample_size: 0,
+                    },
+                    stack::Config {
+                        enabled: false,
+                        oncpu: false,
+                    },
+                );
+                config.tags.insert("env".into(), "prod".into());
+                if let Some(value) = user_pid {
+                    config.tags.insert("pid".into(), value.into());
+                }
+                let builder = PyroscopeAgentBuilder::new(
+                    config,
+                    None,
+                    BackendConfig {
+                        report_pid,
+                        report_thread_id: true,
+                        report_thread_name: true,
+                    },
+                    ThreadTagsSet::default(),
+                );
+                let expected = if report_pid {
+                    Some(pid.as_str())
+                } else {
+                    user_pid
+                };
+                assert_eq!(builder.config.tags.get("pid").map(String::as_str), expected);
+                assert_eq!(
+                    builder.config.tags.get("env").map(String::as_str),
+                    Some("prod")
+                );
+                assert!(!builder.backend_config.report_pid);
+                assert!(builder.backend_config.report_thread_id);
+                assert!(builder.backend_config.report_thread_name);
+            }
+        }
     }
 }

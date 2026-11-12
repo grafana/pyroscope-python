@@ -11,7 +11,7 @@ use crate::utils::TimeRange;
 use crate::{
     Result,
     backend::{ReportBatch, ReportData},
-    encode::pprof,
+    encode::pprof::encode_reports,
     pyroscope::PyroscopeConfig,
 };
 use libflate::gzip::Encoder;
@@ -120,7 +120,7 @@ impl Session {
             let raw_profile = match data {
                 ReportData::RawPprof(pprof_bytes) => pprof_bytes,
                 ReportData::Reports(reports) => {
-                    pprof::encode(reports, self.config.sample_rate, self.time_range.clone())
+                    encode_reports(reports, self.config.sample_rate, self.time_range.clone())
                         .encode_to_vec()
                 }
             };
@@ -279,7 +279,7 @@ mod tests {
             disabled_memory_config(),
             disabled_stack_config(),
         )
-        .tags(tags([("env", "prod")]))
+        .tags(tags([("env", "prod"), ("pid", "123")]))
         .runtime("cpython".to_string(), "3.12.4".to_string());
 
         let labels = labels_for_profile(&config, "process_cpu".to_string());
@@ -295,6 +295,7 @@ mod tests {
             Some(LABEL_PROFILE_NAME)
         );
         assert_eq!(labels_by_name.get("env"), Some(&"prod"));
+        assert_eq!(labels_by_name.get("pid"), Some(&"123"));
         assert_eq!(labels_by_name.get(LABEL_SCOPE_NAME), Some(&SCOPE_NAME));
         assert_eq!(labels_by_name.get(LABEL_SCOPE_VERSION), Some(&"1.0.12"));
         assert_eq!(

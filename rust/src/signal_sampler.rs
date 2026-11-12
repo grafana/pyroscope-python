@@ -8,16 +8,18 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::encode::pprof::{StringTable, ffi::FFIFrame};
 use ringbuffer::PopError;
 use timer::Timer;
 use timer::{Mode, SignalHandler};
 use unwind::{Frame, MAX_FRAMES, SampleMetadata};
 
-mod resolve;
-pub use py_spy::{Frame as ResolvedFrame, config::LineNo as Lines};
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
+
+use pyroscope_python_resolve as resolve;
+pub use resolve::Lines;
 
 extern "C" fn signal_handler(_: libc::c_int, info: *mut libc::siginfo_t, _: *mut libc::c_void) {
     // SAFETY: SignalHandler installs this callback with SA_SIGINFO, so the kernel
@@ -83,18 +85,13 @@ fn check_version(version: (u8, u8)) -> Result<(), Error> {
 /// [`thread_created`] and [`thread_removed`]. `None` once the session ended.
 pub type SharedTimer = Arc<Mutex<Option<Timer>>>;
 
-pub struct Sample {
-    pub frames: Vec<ResolvedFrame>,
-    pub metadata: SampleMetadata,
-}
-
 /// Running signal sampling. Only one can exist at a time.
 pub struct SignalHandlerSession {
     timer: SharedTimer,
     // Dropped after the timer, see the `Drop` impl.
     _handler: SignalHandler,
     buf: Vec<Frame>,
-    resolver: resolve::Resolver,
+    resolver: resolve::Resolver<resolve::PYO3Types>,
 }
 
 impl SignalHandlerSession {
@@ -109,13 +106,7 @@ impl SignalHandlerSession {
         // callbacks compatible and loaded, as documented in README.md and the unwinder.
         unsafe { kindasafe_init::init() }
             .map_err(|error| format!("failed to install memory fault handlers: {error:?}"))?;
-        let types = py_spy::python_process_info::Types {
-            code: (&raw mut pyo3::ffi::PyCode_Type) as usize,
-            string: (&raw mut pyo3::ffi::PyUnicode_Type) as usize,
-            dict: (&raw mut pyo3::ffi::PyDict_Type) as usize,
-        };
-
-        let resolver = resolve::Resolver::new(types, config.lines);
+        let resolver = resolve::Resolver::new(config.lines);
 
         // Discard what a previous session left behind.
         let mut buf = vec![Frame::default(); MAX_FRAMES];
@@ -151,10 +142,9 @@ impl SignalHandlerSession {
 
     /// Resolves a bounded batch of recorded stacks, each innermost frame first.
     /// Returning even while producers are busy lets the sampling thread upload and stop.
-    pub fn drain(&mut self) -> Vec<Sample> {
-        let mut traces = Vec::new();
+    pub fn drain(&mut self, strings: &mut StringTable, mut sample: impl FnMut(&[FFIFrame], usize)) {
         let Some(mut consumer) = unwind::consumer() else {
-            return traces;
+            return;
         };
         for _ in 0..MAX_DRAIN_STACKS {
             let (n, metadata) = match consumer.pop_slice(&mut self.buf) {
@@ -162,11 +152,13 @@ impl SignalHandlerSession {
                 Err(PopError::Empty) => break,
                 Err(PopError::TooSmall { .. }) => unreachable!("buffer fits MAX_FRAMES"),
             };
-            if let Ok(frames) = self.resolver.resolve_stack(&self.buf[..n], metadata.count) {
-                traces.push(Sample { frames, metadata });
+            if let Ok(frames) = self
+                .resolver
+                .resolve_stack(&self.buf[..n], metadata.count, strings)
+            {
+                sample(frames, metadata.count);
             }
         }
-        traces
     }
 }
 
@@ -194,3 +186,7 @@ pub fn thread_removed(timer: &SharedTimer, tid: timer::pid_t) {
         timer.thread_removed(tid);
     }
 }
+
+#[cfg(all(test, not(miri), not(Py_3_15)))]
+#[path = "signal_sampler/tests/cpython.rs"]
+mod cpython_tests;

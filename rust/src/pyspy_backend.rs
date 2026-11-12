@@ -3,7 +3,6 @@ use crate::{
         BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame, StackTrace,
         ThreadTagsSet,
     },
-    encode::pprof,
     error::{PyroscopeError, Result},
     utils::TimeRange,
 };
@@ -26,9 +25,9 @@ pub struct Pyspy {
     ruleset: ThreadTagsSet,
 }
 
-pub struct Reporter {
-    buffer: Arc<Mutex<StackBuffer>>,
-    signal_config: Option<BackendConfig>,
+pub enum Reporter {
+    PySpy(Arc<Mutex<StackBuffer>>),
+    Signal(Arc<Mutex<crate::signal_backend::ProfileBuffer>>),
 }
 
 impl Pyspy {
@@ -50,10 +49,7 @@ impl Pyspy {
     }
 
     pub fn reporter(&self) -> Reporter {
-        Reporter {
-            buffer: self.buffer.clone(),
-            signal_config: None,
-        }
+        Reporter::PySpy(self.buffer.clone())
     }
 }
 
@@ -127,32 +123,18 @@ impl Drop for Pyspy {
 }
 
 impl Reporter {
-    pub fn new_signal(buffer: Arc<Mutex<StackBuffer>>, config: BackendConfig) -> Self {
-        Reporter {
-            buffer,
-            signal_config: Some(config),
-        }
-    }
-
     pub fn report(&self, sample_rate: u32, time_range: &TimeRange) -> Result<ReportBatch> {
-        let mut report = std::mem::take(&mut *self.buffer.lock()?);
-        let data = if let Some(config) = &self.signal_config {
-            // Add one weighted stack per drop reason only when building the pprof.
-            crate::signal_backend::record_dropped_stacks(
-                &mut report,
-                pyroscope_python_unwind::METRICS.take_drop_counts(),
-                config,
-                std::process::id(),
-            )?;
-            let bytes = if report.data.is_empty() {
-                Vec::new()
-            } else {
-                pprof::encode(report.into(), sample_rate, time_range.clone()).encode_to_vec()
-            };
-            ReportData::RawPprof(bytes)
-        } else {
-            let reports: Vec<Report> = report.into();
-            ReportData::Reports(reports)
+        let data = match self {
+            Self::PySpy(buffer) => {
+                let report = std::mem::take(&mut *buffer.lock()?);
+                let reports: Vec<Report> = report.into();
+                ReportData::Reports(reports)
+            }
+            Self::Signal(buffer) => {
+                let profile = buffer.lock()?.report(sample_rate, time_range);
+                // Serialize after releasing the lock so the sampler can drain the next batch.
+                ReportData::RawPprof(profile.map(|p| p.encode_to_vec()).unwrap_or_default())
+            }
         };
 
         Ok(ReportBatch {
@@ -225,18 +207,17 @@ mod tests {
 
     #[test]
     fn signal_report_consumes_drops_only_when_building_pprof() {
-        use crate::encode::r#gen::google::Profile;
+        use crate::{encode::r#gen::google::Profile, signal_backend::ProfileBuffer};
         use pyroscope_python_unwind::METRICS;
         use std::time::{Duration, UNIX_EPOCH};
 
         let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
         METRICS.take_drop_counts();
-        let buffer = Arc::new(Mutex::new(StackBuffer::default()));
-        let reporter = Reporter::new_signal(buffer.clone(), BackendConfig::default());
+        let buffer = Arc::new(Mutex::new(ProfileBuffer::new()));
+        let reporter = Reporter::Signal(buffer);
         let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
         for count in [3, 2] {
             METRICS.resolve_error.fetch_add(count, Ordering::Relaxed);
-            assert!(buffer.lock().unwrap().data.is_empty());
             let report = reporter.report(100, &range).unwrap();
             let ReportData::RawPprof(bytes) = report.data else {
                 panic!("signal report must already contain the pprof");

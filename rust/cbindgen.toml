@@ -18,7 +18,8 @@ line_length = 80
 prefix_with_name = true
 
 [parse]
-parse_deps = false
+parse_deps = true
+include = ["pyroscope-pprof"]
 
 [export]
 include = [
