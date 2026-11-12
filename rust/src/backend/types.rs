@@ -125,6 +125,8 @@ pub struct ReportBatch {
     pub profile_type: String,
     /// Report data in this batch
     pub data: ReportData,
+    /// Labels attached to this profile's upload series.
+    pub series_tags: Vec<Tag>,
 }
 
 impl ReportBatch {

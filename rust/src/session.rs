@@ -10,7 +10,7 @@ use crate::encode::r#gen::types::LabelPair;
 use crate::utils::TimeRange;
 use crate::{
     Result,
-    backend::{ReportBatch, ReportData},
+    backend::{ReportBatch, ReportData, Tag},
     encode::pprof::encode_reports,
     pyroscope::PyroscopeConfig,
 };
@@ -111,30 +111,7 @@ impl Session {
     fn push(self, client: &reqwest::blocking::Client) -> Result<()> {
         log::info!(target: LOG_TAG, "Sending Session: {:?} ", self.time_range);
 
-        let mut req = PushRequest {
-            series: Vec::with_capacity(self.batch.len()),
-        };
-        for batch in self.batch {
-            let ReportBatch { profile_type, data } = batch;
-
-            let raw_profile = match data {
-                ReportData::RawPprof(pprof_bytes) => pprof_bytes,
-                ReportData::Reports(reports) => {
-                    encode_reports(reports, self.config.sample_rate, self.time_range.clone())
-                        .encode_to_vec()
-                }
-            };
-
-            let labels = labels_for_profile(&self.config, profile_type);
-            let series = RawProfileSeries {
-                labels,
-                samples: vec![RawSample {
-                    raw_profile,
-                    id: Uuid::new_v4().to_string(),
-                }],
-            };
-            req.series.push(series);
-        }
+        let req = build_push_request(&self.config, &self.time_range, self.batch);
 
         let req = Self::gzip(&req.encode_to_vec())?;
 
@@ -198,20 +175,62 @@ impl Session {
     }
 }
 
-fn labels_for_profile(config: &PyroscopeConfig, profile_type: String) -> Vec<LabelPair> {
-    let mut labels: Vec<LabelPair> = Vec::with_capacity(6 + config.tags.len());
+fn build_push_request(
+    config: &PyroscopeConfig,
+    time_range: &TimeRange,
+    batch: Vec<ReportBatch>,
+) -> PushRequest {
+    let mut req = PushRequest {
+        series: Vec::with_capacity(batch.len()),
+    };
+    for batch in batch {
+        let ReportBatch {
+            profile_type,
+            data,
+            series_tags,
+        } = batch;
+
+        let raw_profile = match data {
+            ReportData::RawPprof(pprof_bytes) => pprof_bytes,
+            ReportData::Reports(reports) => {
+                encode_reports(reports, config.sample_rate, time_range.clone()).encode_to_vec()
+            }
+        };
+
+        let labels = labels_for_profile(config, profile_type, &series_tags);
+        let series = RawProfileSeries {
+            labels,
+            samples: vec![RawSample {
+                raw_profile,
+                id: Uuid::new_v4().to_string(),
+            }],
+        };
+        req.series.push(series);
+    }
+
+    req
+}
+
+fn labels_for_profile(
+    config: &PyroscopeConfig,
+    profile_type: String,
+    series_tags: &[Tag],
+) -> Vec<LabelPair> {
+    let mut labels: Vec<LabelPair> = Vec::with_capacity(6 + config.tags.len() + series_tags.len());
     labels.push(LabelPair {
         name: LABEL_PROFILE_NAME.to_string(),
         value: profile_type,
     });
+    for tag in series_tags {
+        if tag.key != LABEL_PROFILE_NAME {
+            push_label_if_absent(&mut labels, &tag.key, &tag.value);
+        }
+    }
     for (k, v) in &config.tags {
         if k == LABEL_PROFILE_NAME {
             continue;
         }
-        labels.push(LabelPair {
-            name: k.clone(),
-            value: v.clone(),
-        })
+        push_label_if_absent(&mut labels, k, v);
     }
     push_label_if_absent(&mut labels, LABEL_SERVICE_NAME, &config.application_name);
     push_label_if_absent(&mut labels, LABEL_SCOPE_NAME, SCOPE_NAME);
@@ -268,6 +287,140 @@ mod tests {
         }
     }
 
+    #[cfg(not(miri))]
+    #[test]
+    fn signal_pid_is_an_optional_label_on_its_push_series() {
+        use crate::{
+            backend::BackendConfig,
+            encode::r#gen::google::Profile,
+            pyspy_backend::Reporter,
+            signal_backend::{ProfileBuffer, tests::profile_frames},
+        };
+        use pyroscope_python_unwind::METRICS;
+        use std::{
+            io::Read,
+            sync::{Arc, Mutex, atomic::Ordering},
+            time::UNIX_EPOCH,
+        };
+
+        let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
+        METRICS.take_drop_counts();
+        let config = PyroscopeConfig::new(
+            "http://localhost:4040",
+            "my-app",
+            100,
+            "signal",
+            "1.0.12",
+            disabled_memory_config(),
+            disabled_stack_config(),
+        )
+        .tags(tags([("env", "prod")]))
+        .runtime("cpython".into(), "3.14".into());
+        let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(1)).unwrap();
+        let pid = std::process::id().to_string();
+        for report_pid in [false, true] {
+            let reporter = Reporter::new_signal(
+                Arc::new(Mutex::new(ProfileBuffer::new())),
+                BackendConfig {
+                    report_pid,
+                    ..BackendConfig::default()
+                },
+            );
+            for count in [3, 2] {
+                METRICS.resolve_error.fetch_add(count, Ordering::Relaxed);
+                let report = reporter.report(100, &range).unwrap();
+                let ReportData::RawPprof(payload) = &report.data else {
+                    panic!("expected raw pprof");
+                };
+                // The transport treats raw payloads as opaque; reuse it to test per-series scoping.
+                let other = ReportBatch {
+                    profile_type: "memory".into(),
+                    data: ReportData::RawPprof(payload.clone()),
+                    series_tags: Vec::new(),
+                };
+                let request = build_push_request(&config, &range, vec![report, other]);
+                let compressed = Session::gzip(&request.encode_to_vec()).unwrap();
+                let mut decoded = Vec::new();
+                libflate::gzip::Decoder::new(compressed.as_slice())
+                    .unwrap()
+                    .read_to_end(&mut decoded)
+                    .unwrap();
+                let request = PushRequest::decode(decoded.as_slice()).unwrap();
+                assert_eq!(request.series.len(), 2, "{request:#?}");
+                for (index, series) in request.series.iter().enumerate() {
+                    let profile_type = if index == 0 { "process_cpu" } else { "memory" };
+                    let mut expected = vec![(LABEL_PROFILE_NAME, profile_type)];
+                    if index == 0 && report_pid {
+                        expected.push(("pid", pid.as_str()));
+                    }
+                    expected.extend([
+                        ("env", "prod"),
+                        (LABEL_SERVICE_NAME, "my-app"),
+                        (LABEL_SCOPE_NAME, SCOPE_NAME),
+                        (LABEL_SCOPE_VERSION, "1.0.12"),
+                        (LABEL_PROCESS_RUNTIME_NAME, "cpython"),
+                        (LABEL_PROCESS_RUNTIME_VERSION, "3.14"),
+                    ]);
+                    let actual: Vec<_> = series
+                        .labels
+                        .iter()
+                        .map(|label| (label.name.as_str(), label.value.as_str()))
+                        .collect();
+                    assert_eq!(actual, expected, "{request:#?}");
+                    assert_eq!(series.samples.len(), 1, "{request:#?}");
+                    let profile =
+                        Profile::decode(series.samples[0].raw_profile.as_slice()).unwrap();
+                    assert_eq!(profile.sample.len(), 1, "{profile:#?}");
+                    let sample = &profile.sample[0];
+                    assert_eq!(
+                        profile_frames(&profile, sample),
+                        [("[dropped: resolve_error]", "", 0)],
+                        "{profile:#?}"
+                    );
+                    assert_eq!(sample.value, [count as i64 * 10_000_000], "{profile:#?}");
+                    assert!(sample.label.is_empty(), "{profile:#?}");
+                }
+                assert!(reporter.report(100, &range).unwrap().is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn series_pid_overrides_a_user_tag_without_duplicate_labels() {
+        let config = PyroscopeConfig::new(
+            "http://localhost:4040",
+            "my-app",
+            100,
+            "signal",
+            "1.0.12",
+            disabled_memory_config(),
+            disabled_stack_config(),
+        )
+        .tags(tags([
+            ("pid", "user-pid"),
+            (LABEL_PROFILE_NAME, "user-profile"),
+        ]));
+        let series_tags = [
+            Tag::new("pid".into(), "123".into()),
+            Tag::new(LABEL_PROFILE_NAME.into(), "wrong-profile".into()),
+        ];
+        let labels = labels_for_profile(&config, "process_cpu".into(), &series_tags);
+        let pid: Vec<_> = labels
+            .iter()
+            .filter(|label| label.name == "pid")
+            .map(|label| label.value.as_str())
+            .collect();
+        assert_eq!(pid, ["123"]);
+        assert_eq!(labels[0].value, "process_cpu");
+        let labels = labels_for_profile(&config, "memory".into(), &[]);
+        let pid: Vec<_> = labels
+            .iter()
+            .filter(|label| label.name == "pid")
+            .map(|label| label.value.as_str())
+            .collect();
+        assert_eq!(pid, ["user-pid"]);
+    }
+
     #[test]
     fn labels_for_profile_includes_scope_and_runtime_labels() {
         let config = PyroscopeConfig::new(
@@ -282,7 +435,7 @@ mod tests {
         .tags(tags([("env", "prod")]))
         .runtime("cpython".to_string(), "3.12.4".to_string());
 
-        let labels = labels_for_profile(&config, "process_cpu".to_string());
+        let labels = labels_for_profile(&config, "process_cpu".to_string(), &[]);
         let labels_by_name: HashMap<&str, &str> = labels
             .iter()
             .map(|label| (label.name.as_str(), label.value.as_str()))
@@ -343,7 +496,7 @@ mod tests {
         ]))
         .runtime("cpython".to_string(), "3.12.4".to_string());
 
-        let labels = labels_for_profile(&config, "process_cpu".to_string());
+        let labels = labels_for_profile(&config, "process_cpu".to_string(), &[]);
         let labels_by_name: HashMap<&str, &str> = labels
             .iter()
             .map(|label| (label.name.as_str(), label.value.as_str()))
@@ -398,7 +551,7 @@ mod tests {
         ]))
         .runtime("cpython".to_string(), "3.12.4".to_string());
 
-        let labels = labels_for_profile(&config, "process_cpu".to_string());
+        let labels = labels_for_profile(&config, "process_cpu".to_string(), &[]);
         let labels_by_name: HashMap<&str, &str> = labels
             .iter()
             .map(|label| (label.name.as_str(), label.value.as_str()))

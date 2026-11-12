@@ -1,6 +1,6 @@
 use crate::{
     backend::{
-        BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame, StackTrace,
+        BackendConfig, Report, ReportBatch, ReportData, StackBuffer, StackFrame, StackTrace, Tag,
         ThreadTagsSet,
     },
     error::{PyroscopeError, Result},
@@ -27,7 +27,10 @@ pub struct Pyspy {
 
 pub enum Reporter {
     PySpy(Arc<Mutex<StackBuffer>>),
-    Signal(Arc<Mutex<crate::signal_backend::ProfileBuffer>>),
+    Signal {
+        buffer: Arc<Mutex<crate::signal_backend::ProfileBuffer>>,
+        pid: Option<u32>,
+    },
 }
 
 impl Pyspy {
@@ -123,23 +126,39 @@ impl Drop for Pyspy {
 }
 
 impl Reporter {
+    pub fn new_signal(
+        buffer: Arc<Mutex<crate::signal_backend::ProfileBuffer>>,
+        config: BackendConfig,
+    ) -> Self {
+        Self::Signal {
+            buffer,
+            pid: config.report_pid.then(std::process::id),
+        }
+    }
+
     pub fn report(&self, sample_rate: u32, time_range: &TimeRange) -> Result<ReportBatch> {
-        let data = match self {
+        let (data, series_tags) = match self {
             Self::PySpy(buffer) => {
                 let report = std::mem::take(&mut *buffer.lock()?);
                 let reports: Vec<Report> = report.into();
-                ReportData::Reports(reports)
+                (ReportData::Reports(reports), Vec::new())
             }
-            Self::Signal(buffer) => {
+            Self::Signal { buffer, pid } => {
                 let profile = buffer.lock()?.report(sample_rate, time_range);
                 // Serialize after releasing the lock so the sampler can drain the next batch.
-                ReportData::RawPprof(profile.map(|p| p.encode_to_vec()).unwrap_or_default())
+                (
+                    ReportData::RawPprof(profile.map(|p| p.encode_to_vec()).unwrap_or_default()),
+                    pid.iter()
+                        .map(|pid| Tag::new("pid".into(), pid.to_string()))
+                        .collect(),
+                )
             }
         };
 
         Ok(ReportBatch {
             profile_type: "process_cpu".into(),
             data,
+            series_tags,
         })
     }
 }
@@ -214,7 +233,7 @@ mod tests {
         let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
         METRICS.take_drop_counts();
         let buffer = Arc::new(Mutex::new(ProfileBuffer::new()));
-        let reporter = Reporter::Signal(buffer);
+        let reporter = Reporter::new_signal(buffer, BackendConfig::default());
         let range = TimeRange::new(UNIX_EPOCH, UNIX_EPOCH + Duration::from_secs(10)).unwrap();
         for count in [3, 2] {
             METRICS.resolve_error.fetch_add(count, Ordering::Relaxed);

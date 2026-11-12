@@ -1,4 +1,5 @@
 use crate::{
+    backend::BackendConfig,
     encode::{
         r#gen::google::Profile,
         pprof::{FunctionMirror, PProfBuilder, PySpyProfile, StringTable, ffi::FFIFrame},
@@ -28,13 +29,14 @@ pub struct Config {
 }
 
 pub struct Signal {
+    backend_config: BackendConfig,
     buffer: Arc<Mutex<ProfileBuffer>>,
     sampler_thread: Option<JoinHandle<()>>,
     running: Arc<AtomicBool>,
 }
 
 impl Signal {
-    pub fn new(config: Config) -> Result<Self> {
+    pub fn new(config: Config, backend_config: BackendConfig) -> Result<Self> {
         let mut session = SignalHandlerSession::start(&config.sampler)
             .map_err(|e| PyroscopeError::new(&format!("Signal: {e}")))?;
         if config.sampler.signal_timer == SignalTimer::CTimer {
@@ -66,6 +68,7 @@ impl Signal {
         };
 
         Ok(Signal {
+            backend_config,
             buffer,
             sampler_thread: Some(sampler_thread),
             running,
@@ -73,7 +76,7 @@ impl Signal {
     }
 
     pub fn reporter(&self) -> Reporter {
-        Reporter::Signal(self.buffer.clone())
+        Reporter::new_signal(self.buffer.clone(), self.backend_config)
     }
 
     pub fn shutdown_thread(&mut self) -> Result<()> {
@@ -304,7 +307,7 @@ pub(crate) mod tests {
         Profile::decode(bytes.as_slice()).unwrap()
     }
 
-    fn profile_frames<'a>(
+    pub(crate) fn profile_frames<'a>(
         profile: &'a Profile,
         sample: &crate::encode::r#gen::google::Sample,
     ) -> Vec<(&'a str, &'a str, i64)> {

@@ -192,7 +192,9 @@ impl PyroscopeAgentBuilder {
                     Pyspy::new(config, self.backend_config, self.ruleset.clone())
                         .map(Backend::PySpy)
                 }
-                CpuConfig::Signal(config) => Signal::new(config).map(Backend::Signal),
+                CpuConfig::Signal(config) => {
+                    Signal::new(config, self.backend_config).map(Backend::Signal)
+                }
             })
             .transpose()?;
         if backend.is_some() {
@@ -310,6 +312,7 @@ impl PyroscopeAgent {
                 batch.push(ReportBatch {
                     profile_type: "memory".to_string(),
                     data: ReportData::RawPprof(pprof),
+                    series_tags: Vec::new(),
                 })
             }
         }
@@ -322,6 +325,7 @@ impl PyroscopeAgent {
                 batch.push(ReportBatch {
                     profile_type: "process_cpu".to_string(),
                     data: ReportData::RawPprof(pprof),
+                    series_tags: Vec::new(),
                 })
             }
         }
