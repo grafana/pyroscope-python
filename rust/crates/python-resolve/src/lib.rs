@@ -20,7 +20,7 @@ use pyroscope_python_unwind::{Frame, MAX_FRAMES, METRICS};
 mod lines;
 mod strings;
 
-// TODO: expose this count of failed frame line lookups as a profiler metric.
+// TODO: expose this
 static LINE_RESOLUTION_ERRORS: AtomicUsize = AtomicUsize::new(0);
 #[cfg(test)]
 mod tests;
