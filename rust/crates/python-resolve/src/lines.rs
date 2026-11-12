@@ -34,6 +34,7 @@ impl Table {
         })
     }
 
+    #[inline(always)]
     fn peek(&self) -> Result<Option<u8>, Error> {
         if self.remaining == 0 {
             return Ok(None);
@@ -45,6 +46,7 @@ impl Table {
             .map_err(|_| Error::ReadMemory)
     }
 
+    #[inline(always)]
     fn next(&mut self) -> Result<u8, Error> {
         let byte = self.peek()?.ok_or(Error::LineTable)?;
         self.address = self.address.wrapping_add(1);
@@ -73,6 +75,7 @@ pub(super) fn resolve<T: Types>(frame: &Frame, mode: Lines) -> Result<i32, Error
     })
 }
 
+#[inline(always)]
 fn instruction_offset(frame: &Frame) -> Result<i32, Error> {
     // CPython's _Py_CODEUNIT is two bytes. 3.10 stores an index; 3.11+ stores a
     // pointer into co_code_adaptive. A frame that has not started can point one unit before it.
@@ -102,6 +105,7 @@ fn instruction_offset(frame: &Frame) -> Result<i32, Error> {
     i32::try_from(offset).map_err(|_| Error::InstructionOffset)
 }
 
+#[inline(always)]
 fn line_number(table: Table, first: i32, offset: i32) -> Result<i32, Error> {
     if offset < 0 {
         return Ok(first);
@@ -307,7 +311,7 @@ mod tests {
                         .unwrap(),
                         expected.parse::<i32>().unwrap(),
                         "CPython {:?}, no_columns={no_columns}, offset={offset}, fixture={fixture}",
-                        crate::signal_sampler::unwind::PY_VERSION
+                        pyroscope_python_unwind::PY_VERSION
                     );
                     count += 1;
                 }

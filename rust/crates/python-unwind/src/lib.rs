@@ -125,6 +125,7 @@ fn record_stack(frames: &[Frame], metadata: SampleMetadata) {
     }
 }
 
+#[inline(always)]
 fn current_thread_state() -> usize {
     // TODO: PyGILState_GetThisThreadState is not safe on 3.15; find another way to get the tstate.
     // SAFETY: this queries the calling thread's state without requiring the GIL.
@@ -204,6 +205,7 @@ fn unwind_thread(tstate: usize, frames: &mut [Frame], count: usize) -> Result<&[
     })
 }
 
+#[inline(always)]
 fn current_frame(tstate: usize) -> Result<usize, Error> {
     let frame = read_usize(tstate, layout::THREAD_FRAME)?;
     #[cfg(all(Py_3_11, not(Py_3_13)))]
@@ -250,6 +252,7 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
 }
 
 #[cfg(Py_3_12)]
+#[inline(always)]
 fn read_u8(base: usize, offset: usize) -> Result<u8, Error> {
     let addr = base.wrapping_add(offset);
     // SAFETY: current-thread frame fields are read under the ownership and recovery
@@ -258,6 +261,7 @@ fn read_u8(base: usize, offset: usize) -> Result<u8, Error> {
 }
 
 #[cfg(not(Py_3_11))]
+#[inline(always)]
 fn read_u32(base: usize, offset: usize) -> Result<u32, Error> {
     let addr = base.wrapping_add(offset);
     // SAFETY: current-thread frame fields are read under the ownership and recovery
@@ -265,6 +269,7 @@ fn read_u32(base: usize, offset: usize) -> Result<u32, Error> {
     unsafe { kindasafe::u32(addr as u64) }.map_err(|_| Error::Read)
 }
 
+#[inline(always)]
 fn read_usize(base: usize, offset: usize) -> Result<usize, Error> {
     let addr = base.wrapping_add(offset);
     // SAFETY: these are pointer-sized fields of the interrupted thread's retained frame

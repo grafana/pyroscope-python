@@ -18,14 +18,8 @@ use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
 
-mod resolve;
-
-#[derive(Debug, Clone, Copy)]
-pub enum Lines {
-    LastInstruction,
-    First,
-    NoLine,
-}
+use pyroscope_python_resolve as resolve;
+pub use resolve::Lines;
 
 extern "C" fn signal_handler(_: libc::c_int, info: *mut libc::siginfo_t, _: *mut libc::c_void) {
     // SAFETY: SignalHandler installs this callback with SA_SIGINFO, so the kernel
@@ -192,3 +186,7 @@ pub fn thread_removed(timer: &SharedTimer, tid: timer::pid_t) {
         timer.thread_removed(tid);
     }
 }
+
+#[cfg(all(test, not(miri), not(Py_3_15)))]
+#[path = "signal_sampler/tests/cpython.rs"]
+mod cpython_tests;

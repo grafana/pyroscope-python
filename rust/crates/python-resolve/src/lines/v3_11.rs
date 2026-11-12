@@ -56,6 +56,7 @@ pub(super) fn line_number(mut table: Table, first: i32, offset: i32) -> Result<i
     Ok(-1)
 }
 
+#[inline(always)]
 fn payload(table: &mut Table) -> Result<u8, Error> {
     let byte = table.next()?;
     if byte & 0x80 != 0 {
@@ -64,6 +65,7 @@ fn payload(table: &mut Table) -> Result<u8, Error> {
     Ok(byte)
 }
 
+#[inline(always)]
 fn varint(table: &mut Table) -> Result<u32, Error> {
     let mut value = 0u32;
     for shift in (0..32).step_by(6) {

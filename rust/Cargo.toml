@@ -1,5 +1,13 @@
 [workspace]
-members = ["crates/python-offsets", "crates/python-unwind", "crates/ringbuffer", "crates/signal-timer"]
+members = [
+    "crates/python-offsets",
+    "crates/python-unwind",
+    "crates/python-resolve",
+    "crates/pprof",
+    "crates/ringbuffer",
+    "crates/signal-timer",
+    "crates/benchmarks",
+]
 resolver = "3"
 
 [workspace.dependencies]
@@ -23,10 +31,10 @@ crate-type = ["cdylib"]
 name = "_native"
 
 [dependencies]
+pyroscope-pprof = { path = "crates/pprof" }
+pyroscope-python-resolve = { path = "crates/python-resolve" }
 anyhow = "1"
-kindasafe.workspace = true
 kindasafe_init.workspace = true
-pyroscope-python-offsets = { path = "crates/python-offsets" }
 pyroscope-python-unwind = { path = "crates/python-unwind" }
 pyroscope-ringbuffer = { path = "crates/ringbuffer" }
 pyroscope-signal-timer = { path = "crates/signal-timer" }
@@ -40,10 +48,11 @@ uuid = { version = "1.20.0", features = ["v4"] }
 url = "2.2.2"
 libflate = "2.1.0"
 prost = "0.14"
-hashbrown = "0.17.1"
 lazy_static = "1.5.0"
 pyo3.workspace = true
 
+[profile.bench]
+debug = 1
 
 [build-dependencies]
 cmake = "0.1"

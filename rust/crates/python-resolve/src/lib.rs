@@ -11,9 +11,8 @@
 use pyroscope_python_offsets as layout;
 use std::{marker::PhantomData, sync::atomic::Ordering};
 
-use super::Lines;
-use super::unwind::{Frame, METRICS};
-use crate::encode::pprof::{StringTable, ffi::FFIFrame};
+use pyroscope_pprof::{StringTable, ffi::FFIFrame};
+use pyroscope_python_unwind::{Frame, MAX_FRAMES, METRICS};
 
 mod lines;
 mod strings;
@@ -36,6 +35,13 @@ pub enum Error {
     ReadMemory,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Lines {
+    LastInstruction,
+    First,
+    NoLine,
+}
+
 pub trait Types {
     fn code() -> usize;
     fn string() -> usize;
@@ -46,15 +52,15 @@ pub struct PYO3Types;
 
 impl Types for PYO3Types {
     fn code() -> usize {
-        (&raw mut pyo3::ffi::PyCode_Type) as usize
+        (&raw mut pyo3_ffi::PyCode_Type) as usize
     }
 
     fn string() -> usize {
-        (&raw mut pyo3::ffi::PyUnicode_Type) as usize
+        (&raw mut pyo3_ffi::PyUnicode_Type) as usize
     }
 
     fn bytes() -> usize {
-        (&raw mut pyo3::ffi::PyBytes_Type) as usize
+        (&raw mut pyo3_ffi::PyBytes_Type) as usize
     }
 }
 
@@ -72,7 +78,7 @@ impl<T: Types> Resolver<T> {
     pub fn new(lines: Lines) -> Self {
         Self {
             lines,
-            frames: Vec::with_capacity(super::MAX_FRAMES),
+            frames: Vec::with_capacity(MAX_FRAMES),
             // CPython may store every character as UCS4, even for mostly ASCII text.
             string_bytes: vec![0; 4 * strings::MAX_STRING_BYTES],
             text: String::with_capacity(strings::MAX_STRING_BYTES),
@@ -88,7 +94,7 @@ impl<T: Types> Resolver<T> {
     ) -> Result<&[FFIFrame], Error> {
         self.frames.clear();
         let result = (|| {
-            if frames.len() > super::MAX_FRAMES {
+            if frames.len() > MAX_FRAMES {
                 return Err(Error::Length);
             }
             for frame in frames {
@@ -124,6 +130,7 @@ impl<T: Types> Resolver<T> {
     }
 }
 
+#[inline(always)]
 fn check_type(address: usize, expected: usize) -> Result<(), Error> {
     if address == 0 || word(address, layout::OB_TYPE)? != expected {
         return Err(Error::ObjectType(address));
@@ -131,10 +138,12 @@ fn check_type(address: usize, expected: usize) -> Result<(), Error> {
     Ok(())
 }
 
+#[inline(always)]
 fn word(address: usize, offset: usize) -> Result<usize, Error> {
     read_u64(address.wrapping_add(offset)).map(|value| value as usize)
 }
 
+#[inline(always)]
 fn integer(address: usize, offset: usize) -> Result<i32, Error> {
     let addr = address.wrapping_add(offset);
     // SAFETY: recovery and source-borrow assumptions are documented at module level.
@@ -144,18 +153,21 @@ fn integer(address: usize, offset: usize) -> Result<i32, Error> {
         .map_err(|_| Error::ReadMemory)
 }
 
+#[inline(always)]
 fn read_u64(addr: usize) -> Result<u64, Error> {
     // SAFETY: recovery and source-borrow assumptions are documented at module level.
     // No Rust reference to the source is created.
     unsafe { kindasafe::u64(addr as u64) }.map_err(|_| Error::ReadMemory)
 }
 
+#[inline(always)]
 fn copy_bytes(address: usize, len: usize, buffer: &mut [u8]) -> Result<&[u8], Error> {
     let bytes = buffer.get_mut(..len).ok_or(Error::Length)?;
     read_into(address, bytes)?;
     Ok(bytes)
 }
 
+#[inline(always)]
 fn read_into(addr: usize, out: &mut [u8]) -> Result<(), Error> {
     // SAFETY: recovery and source-borrow assumptions are documented at module level.
     // The destination is initialized, exclusively borrowed storage, separate from the source.
@@ -163,3 +175,6 @@ fn read_into(addr: usize, out: &mut [u8]) -> Result<(), Error> {
     // The copy does not form a source reference.
     unsafe { kindasafe::slice(out, addr as u64) }.map_err(|_| Error::ReadMemory)
 }
+
+#[cfg(test)]
+static METRICS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
