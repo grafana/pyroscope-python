@@ -10,7 +10,7 @@
 //! Initialize kindasafe recovery, invoke [`handler`] from a `SIGPROF` callback, and drain with [`consumer`].
 //! Each record contains the interrupted thread's frames, innermost first, and its sampling-period count.
 //!
-//! Supports CPython 3.10 to 3.14, default (GIL) build, 64-bit targets. The offsets come from the
+//! Supports CPython 3.11 to 3.14, default (GIL) build, 64-bit targets. The offsets come from the
 //! checked-in layouts verified against the target CPython headers by `pyroscope-python-offsets`.
 //!
 //! Native reads rely on CPython's current-thread ownership of the active frame chain: the
@@ -76,7 +76,6 @@ pub enum Error {
 pub struct Frame {
     /// Address of the `PyCodeObject`.
     pub code: usize,
-    /// Signed `f_lasti` code-unit index on 3.10 (cast to `usize`),
     /// `prev_instr` on 3.11 and 3.12, `instr_ptr` from 3.13.
     pub instr: usize,
 }
@@ -203,7 +202,7 @@ fn unwind_thread(tstate: usize, frames: &mut [Frame], count: usize) -> Result<&[
 #[inline(always)]
 fn current_frame(tstate: usize) -> Result<usize, Error> {
     let frame = read_usize(tstate, layout::THREAD_FRAME)?;
-    #[cfg(all(Py_3_11, not(Py_3_13)))]
+    #[cfg(not(Py_3_13))]
     let frame = read_usize(frame, layout::CFRAME_FRAME)?;
     Ok(frame)
 }
@@ -228,10 +227,7 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
             }
         }
         let executable = read_usize(frame, layout::EXECUTABLE)? & EXECUTABLE_MASK;
-        #[cfg(Py_3_11)]
         let instr = read_usize(frame, layout::INSTR)?;
-        #[cfg(not(Py_3_11))]
-        let instr = read_u32(frame, layout::INSTR)? as i32 as isize as usize;
 
         if executable == 0 || read_usize(executable, OB_TYPE)? != code_type {
             return Err(Error::InvalidCodeType);
@@ -253,15 +249,6 @@ fn read_u8(base: usize, offset: usize) -> Result<u8, Error> {
     // SAFETY: current-thread frame fields are read under the ownership and recovery
     // preconditions documented at crate level, without forming a source reference.
     unsafe { kindasafe::u8(addr as u64) }.map_err(|_| Error::Read)
-}
-
-#[cfg(not(Py_3_11))]
-#[inline(always)]
-fn read_u32(base: usize, offset: usize) -> Result<u32, Error> {
-    let addr = base.wrapping_add(offset);
-    // SAFETY: current-thread frame fields are read under the ownership and recovery
-    // preconditions documented at crate level, without forming a source reference.
-    unsafe { kindasafe::u32(addr as u64) }.map_err(|_| Error::Read)
 }
 
 #[inline(always)]
@@ -360,8 +347,6 @@ mod tests {
             assert_eq!(read_usize(usize::MAX, offset), Err(Error::Read));
             #[cfg(Py_3_12)]
             assert_eq!(read_u8(usize::MAX, offset), Err(Error::Read));
-            #[cfg(not(Py_3_11))]
-            assert_eq!(read_u32(usize::MAX, offset), Err(Error::Read));
         }
         let value = 0x8123_4567_89ab_cdefusize;
         assert_eq!(read_usize(&raw const value as usize, 0), Ok(value));
@@ -369,11 +354,6 @@ mod tests {
         {
             let value = 0xffu8;
             assert_eq!(read_u8(&raw const value as usize, 0), Ok(value));
-        }
-        #[cfg(not(Py_3_11))]
-        {
-            let value = 0x8000_0000u32;
-            assert_eq!(read_u32(&raw const value as usize, 0), Ok(value));
         }
     }
 
@@ -427,9 +407,9 @@ mod tests {
         set(&mut inner, layout::EXECUTABLE, code_addr);
         set(&mut inner, layout::PREVIOUS, outer.as_ptr() as usize);
         let frame = inner.as_ptr() as usize;
-        #[cfg(all(Py_3_11, not(Py_3_13)))]
+        #[cfg(not(Py_3_13))]
         let mut cframe = [0usize; 4];
-        #[cfg(all(Py_3_11, not(Py_3_13)))]
+        #[cfg(not(Py_3_13))]
         let frame = {
             set(&mut cframe, layout::CFRAME_FRAME, frame);
             cframe.as_ptr() as usize
@@ -495,9 +475,9 @@ mod tests {
         let extra_frame = frames[MAX_FRAMES].as_ptr() as usize;
         set(&mut frames[MAX_FRAMES - 1], layout::PREVIOUS, 0);
         let frame = frames[0].as_ptr() as usize;
-        #[cfg(all(Py_3_11, not(Py_3_13)))]
+        #[cfg(not(Py_3_13))]
         let mut cframe = [0usize; 4];
-        #[cfg(all(Py_3_11, not(Py_3_13)))]
+        #[cfg(not(Py_3_13))]
         let frame = {
             set(&mut cframe, layout::CFRAME_FRAME, frame);
             cframe.as_ptr() as usize
@@ -532,51 +512,5 @@ mod tests {
             METRICS.truncated.load(Ordering::Relaxed),
             truncated_before + 3
         );
-    }
-
-    #[cfg(not(Py_3_11))]
-    #[test]
-    fn python_310_reads_signed_lasti_and_returns_the_output_subslice() {
-        let _guard = METRICS_LOCK.lock().unwrap();
-        init();
-        let mut code = [0usize; 4];
-        set(
-            &mut code,
-            OB_TYPE,
-            (&raw mut pyo3_ffi::PyCode_Type) as usize,
-        );
-        let mut frame = [0usize; 16];
-        set(&mut frame, layout::EXECUTABLE, code.as_ptr() as usize);
-        let mut tstate = [0usize; 16];
-        set(&mut tstate, layout::THREAD_FRAME, frame.as_ptr() as usize);
-        let mut output = [Frame {
-            code: 123,
-            instr: 456,
-        }; 4];
-        let output_ptr = output.as_ptr();
-        for lasti in [-1i32, 0, 17] {
-            // f_lasti is a 32-bit signed field; the adjacent field must not become part of it.
-            set(
-                &mut frame,
-                layout::INSTR,
-                (0x12345678usize << 32) | lasti as u32 as usize,
-            );
-            let stack = unwind_thread(tstate.as_ptr() as usize, &mut output, 1).unwrap();
-            assert_eq!(stack.as_ptr(), output_ptr);
-            assert_eq!(
-                stack,
-                &[Frame {
-                    code: code.as_ptr() as usize,
-                    instr: lasti as isize as usize
-                }]
-            );
-            assert_eq!(
-                output[1..],
-                [Frame {
-                    code: 123,
-                    instr: 456
-                }; 3]
-            );
-        }
     }
 }

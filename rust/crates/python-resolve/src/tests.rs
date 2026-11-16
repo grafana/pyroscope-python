@@ -45,20 +45,13 @@ pub(super) fn string_object(value: &[u8], kind: usize, ascii: bool) -> Vec<u8> {
     if ascii {
         state |= layout::STATE_ASCII;
     }
-    #[cfg(not(Py_3_11))]
-    {
-        state |= layout::STATE_READY;
-    }
     put_word(&mut object, layout::UNICODE_STATE, state as usize);
     object[header..].copy_from_slice(value);
     object
 }
 
 pub(super) fn recorded_frame(code: usize, byte_offset: usize) -> Frame {
-    #[cfg(Py_3_11)]
     let instr = code + layout::CO_CODE_ADAPTIVE + byte_offset;
-    #[cfg(not(Py_3_11))]
-    let instr = byte_offset / 2;
     Frame { code, instr }
 }
 
@@ -114,10 +107,7 @@ fn resolves_whole_stacks_and_counts_failures_once() {
     let filename = string_object(b"source.py", 1, true);
     let name_id = strings.add("outer.inner");
     let filename_id = strings.add("source.py");
-    #[cfg(Py_3_11)]
     let table = [0xe8, 0x02]; // no columns, one code unit, line delta +1
-    #[cfg(not(Py_3_11))]
-    let table = [2, 1];
     let mut bytes = vec![0; layout::BYTES_DATA + table.len()];
     put_word(&mut bytes, layout::OB_TYPE, TestTypes::bytes());
     put_word(&mut bytes, layout::BYTES_SIZE, table.len());
@@ -200,10 +190,7 @@ fn rejects_recorded_code_addresses_reused_for_another_type() {
     let filename = string_object(b"original.py", 1, true);
     let name_id = strings.add("original");
     let filename_id = strings.add("original.py");
-    #[cfg(Py_3_11)]
     let table = [0xe8, 0x02];
-    #[cfg(not(Py_3_11))]
-    let table = [2, 1];
     let mut bytes = vec![0; layout::BYTES_DATA + table.len()];
     put_word(&mut bytes, layout::OB_TYPE, TestTypes::bytes());
     put_word(&mut bytes, layout::BYTES_SIZE, table.len());
@@ -314,7 +301,7 @@ fn line_failures_preserve_frames_and_only_increment_the_private_counter() {
     let mut bytes = vec![0; layout::BYTES_DATA + 1];
     put_word(&mut bytes, layout::OB_TYPE, TestTypes::bytes());
     put_word(&mut bytes, layout::BYTES_SIZE, 1);
-    bytes[layout::BYTES_DATA] = 0x80; // Truncated entry in both formats.
+    bytes[layout::BYTES_DATA] = 0x80; // Truncated location entry.
     let mut code = vec![0; layout::CO_LINETABLE + 8];
     put_word(&mut code, layout::OB_TYPE, TestTypes::code());
     put_word(&mut code, layout::CO_QUALNAME, name.as_ptr() as usize);

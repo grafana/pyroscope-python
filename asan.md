@@ -18,7 +18,7 @@ make asan/wheel                                 # dist/asan/*.whl
 make asan/test ASAN_PYTHON_REF=3.13             # another CPython branch or tag
 ```
 
-Tested with CPython 3.10 to 3.15. 3.10 and 3.11 still find system libraries through `setup.py`, which misses the multiarch directories, so the image passes them in `CPPFLAGS` and `LDFLAGS`.
+Tested with CPython 3.11 to 3.15. 3.11 still finds system libraries through `setup.py`, which misses the multiarch directories, so the image passes them in `CPPFLAGS` and `LDFLAGS`.
 
 `asan/test` runs the regular integration tests with `PYTHON_IMAGE=pyroscope-python-asan:<ref>`, `PYROSCOPE_WHEEL_DIR=dist/asan` and `PYROSCOPE_WHEEL_GLOB='*.whl'`.
 
@@ -27,7 +27,7 @@ Tested with CPython 3.10 to 3.15. 3.10 and 3.11 still find system libraries thro
 Accepted values are `all`, `py-spy`, `signal`, and `stack`; `dd-trace-py`
 is an alias for `stack`. A selected implementation skips unrelated CPU tests.
 Memory-only tests run in every suite, so each ASAN job covers the memory profiler. Lifecycle tests run with their existing implementation.
-Signal supports CPython 3.10–3.14 and is skipped on other versions.
+Signal supports CPython 3.11–3.14 and is skipped on other versions.
 
 `TestPythonProfilerCallbacks` runs a 20-second C-to-Python callback loop for
 py-spy, both Signal timers, and Stack (both its default sampler and explicit wall

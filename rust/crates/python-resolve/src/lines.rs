@@ -1,21 +1,15 @@
 //! Resolves line-number modes using the target CPython's co_linetable decoder.
 //!
-//! Offsets are bytes, ranges are half-open, and -1 means no source line. The decoders
-//! consume untrusted bytes, checking truncation and arithmetic.
+//! Offsets are bytes, ranges are half-open, and -1 means no source line. The decoder
+//! consumes untrusted bytes, checking truncation and arithmetic.
 
 use super::{Error, Frame, Lines, Types, check_type, integer, layout, word};
 
 // Bound decoder work for reused addresses or torn reads.
 const MAX_LINE_TABLE_BYTES: usize = 1 << 20;
 
-#[cfg(any(not(Py_3_11), all(test, not(miri))))]
-mod v3_10;
-#[cfg(any(Py_3_11, all(test, not(miri))))]
 mod v3_11;
 
-#[cfg(not(Py_3_11))]
-use v3_10::line_number as decode;
-#[cfg(Py_3_11)]
 use v3_11::line_number as decode;
 
 struct Table {
@@ -70,27 +64,20 @@ pub(super) fn resolve<T: Types>(frame: &Frame, mode: Lines) -> Result<i32, Error
 
 #[inline(always)]
 fn instruction_offset(frame: &Frame) -> Result<i32, Error> {
-    // CPython's _Py_CODEUNIT is two bytes. 3.10 stores an index; 3.11+ stores a
-    // pointer into co_code_adaptive. A frame that has not started can point one unit before it.
-    #[cfg(not(Py_3_11))]
-    let offset = (frame.instr as isize)
-        .checked_mul(2)
+    // CPython's _Py_CODEUNIT is two bytes. Instructions point into co_code_adaptive.
+    // A frame that has not started can point one unit before it.
+    let start = frame
+        .code
+        .checked_add(layout::CO_CODE_ADAPTIVE)
         .ok_or(Error::InstructionOffset)?;
-    #[cfg(Py_3_11)]
-    let offset = {
-        let start = frame
-            .code
-            .checked_add(layout::CO_CODE_ADAPTIVE)
+    let offset = if frame.instr == start - 2 {
+        -2
+    } else {
+        let offset = frame
+            .instr
+            .checked_sub(start)
             .ok_or(Error::InstructionOffset)?;
-        if frame.instr == start - 2 {
-            -2
-        } else {
-            let offset = frame
-                .instr
-                .checked_sub(start)
-                .ok_or(Error::InstructionOffset)?;
-            isize::try_from(offset).map_err(|_| Error::InstructionOffset)?
-        }
+        isize::try_from(offset).map_err(|_| Error::InstructionOffset)?
     };
     if offset < -2 || offset % 2 != 0 {
         return Err(Error::InstructionOffset);
@@ -116,43 +103,34 @@ mod tests {
         let frame = recorded_frame(4096, 24);
         assert_eq!(instruction_offset(&frame).unwrap(), 24);
         let start = recorded_frame(4096, 0);
-        #[cfg(Py_3_11)]
         let before = Frame {
             instr: start.instr - 2,
-            ..start
-        };
-        #[cfg(not(Py_3_11))]
-        let before = Frame {
-            instr: usize::MAX,
             ..start
         };
         assert_eq!(instruction_offset(&before).unwrap(), -2);
         let too_far = recorded_frame(4096, i32::MAX as usize + 1);
         assert!(instruction_offset(&too_far).is_err());
-        #[cfg(Py_3_11)]
-        {
-            assert!(
-                instruction_offset(&Frame {
-                    instr: start.instr - 4,
-                    ..start
-                })
-                .is_err()
-            );
-            assert!(
-                instruction_offset(&Frame {
-                    instr: start.instr + 1,
-                    ..start
-                })
-                .is_err()
-            );
-            assert!(
-                instruction_offset(&Frame {
-                    code: usize::MAX,
-                    instr: 0
-                })
-                .is_err()
-            );
-        }
+        assert!(
+            instruction_offset(&Frame {
+                instr: start.instr - 4,
+                ..start
+            })
+            .is_err()
+        );
+        assert!(
+            instruction_offset(&Frame {
+                instr: start.instr + 1,
+                ..start
+            })
+            .is_err()
+        );
+        assert!(
+            instruction_offset(&Frame {
+                code: usize::MAX,
+                instr: 0
+            })
+            .is_err()
+        );
     }
 
     #[cfg(not(miri))]
@@ -178,16 +156,6 @@ mod tests {
     fn decodes_readable_prefix_without_copying_unreadable_tail() {
         super::super::tests::recovery();
         let memory = GuardedMemory::new();
-
-        let address = memory.write_prefix(&[2, 0]);
-        assert_eq!(
-            v3_10::line_number(Table::new(address, 4).unwrap(), 10, 0).unwrap(),
-            10
-        );
-        assert!(matches!(
-            v3_10::line_number(Table::new(address, 4).unwrap(), 10, 2),
-            Err(Error::ReadMemory)
-        ));
 
         let address = memory.write_prefix(&[0x80, 0x01, 0x80]);
         assert_eq!(

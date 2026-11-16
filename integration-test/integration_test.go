@@ -79,7 +79,7 @@ func TestPythonSignalProfilerCTimerOverruns(t *testing.T) {
 	// At 100 Hz the bursts can evade scheduler ticks, coalescing expirations;
 	// each delivery must carry 1 + si_overrun periods through to the profile.
 	// Allow 20% sampling/timer noise and 10% weight outside the full burst stack.
-	// These module-level function names are the same on CPython 3.10–3.14.
+	// These module-level function names are the same on CPython 3.11–3.14.
 	selector := fmt.Sprintf(`{service_name="%s"}`, appName)
 	requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector, profileShape{
 		stacks:   []stackShare{{"<module>;cpu_bursts", 0.90, 1}},
@@ -105,9 +105,6 @@ func TestPythonSignalProfilerCTimerRawFork(t *testing.T) {
 			stack := "<module>;raw_fork;fork_and_profile;raw_fork_child_burn"
 			if scenario == "unregistered" {
 				stack = "raw_fork.<locals>.worker;fork_and_profile;raw_fork_child_burn"
-				if _, minor := pythonVersion(t); minor < 11 {
-					stack = "worker;fork_and_profile;raw_fork_child_burn"
-				}
 			}
 			requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector, profileShape{
 				stacks:   []stackShare{{stack, 0.90, 1}},
@@ -134,18 +131,10 @@ func TestPythonSignalProfilerLifecycle(t *testing.T) {
 	wheelDir := ensureWheel(t)
 	net := dockertest.CreateNetwork(t)
 	startPyroscope(t, net)
-	for _, scenario := range []string{"zero_rate", "ctimer_shutdown_fork", "recovery_handlers_preserved", "bounded_drain", "fault_fallback"} {
+	for _, scenario := range []string{"zero_rate", "ctimer_shutdown_fork", "ctimer_preexisting_thread_cleanup", "recovery_handlers_preserved", "bounded_drain", "fault_fallback"} {
 		t.Run(scenario, func(t *testing.T) {
 			workload := startPythonTestContainer(t, net, wheelDir, "signal_lifecycle_workload.py", map[string]string{
 				"SCENARIO": scenario,
-			})
-			requireContainerExit(t, workload, 0, 2*time.Minute)
-		})
-	}
-	if _, minor := pythonVersion(t); minor >= 11 {
-		t.Run("ctimer_preexisting_thread_cleanup", func(t *testing.T) {
-			workload := startPythonTestContainer(t, net, wheelDir, "signal_lifecycle_workload.py", map[string]string{
-				"SCENARIO": "ctimer_preexisting_thread_cleanup",
 			})
 			requireContainerExit(t, workload, 0, 2*time.Minute)
 		})
@@ -173,17 +162,12 @@ func TestPythonStackProfilerRestart(t *testing.T) {
 	selector := func(canary string) string {
 		return fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
 	}
-	_, minor := pythonVersion(t)
-	prefix := threadStackPrefix(profileConfig{stack: true}, minor)
-	isSet := "Event.is_set"
-	if minor < 11 {
-		isSet = "is_set"
-	}
+	prefix := threadStackPrefix
 	for _, phase := range []struct{ canary, leaf string }{{canaryFirst, "burn_first"}, {canarySecond, "burn_second"}} {
 		requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector(phase.canary), profileShape{
 			stacks: []stackShare{
 				{prefix + phase.leaf, 0.60, 1},
-				{prefix + phase.leaf + ";" + isSet, 0, 0.40},
+				{prefix + phase.leaf + ";Event.is_set", 0, 0.40},
 			},
 			minTotal: int64(time.Second), minCoverage: 0.90,
 		}, 3*time.Minute)
@@ -208,8 +192,7 @@ func TestPythonStackProfilerCpuTimerFork(t *testing.T) {
 	})
 
 	selector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
-	_, minor := pythonVersion(t)
-	prefix := threadStackPrefix(profileConfig{stack: true}, minor) +
+	prefix := threadStackPrefix +
 		"run_worker.<locals>.work;cpu_timer_worker_fork_onstack_signal.<locals>.work;burn_after_fork;burn_for"
 	// One second is spent in burn_for before the fork, then 15 seconds after.
 	// The inline arithmetic loop stays in one Python frame, so the complete
@@ -288,8 +271,8 @@ func skipUnlessPythonSupportsSignal(t *testing.T) {
 	t.Helper()
 	skipUnlessProfiler(t, "signal")
 	major, minor := pythonVersion(t)
-	if major != 3 || minor < 10 || minor > 14 {
-		t.Skip("the Signal profiler supports only CPython 3.10 to 3.14")
+	if major != 3 || minor < 11 || minor > 14 {
+		t.Skip("the Signal profiler supports only CPython 3.11 to 3.14")
 	}
 }
 
@@ -337,8 +320,7 @@ func testPythonMemoryProfiler(t *testing.T) {
 		{name: "alloc_space", profileTypeID: memoryAllocSpaceProfileTypeID},
 		{name: "inuse_space", profileTypeID: memoryInuseSpaceProfileTypeID},
 	}
-	_, minor := pythonVersion(t)
-	stack := threadStackPrefix(profileConfig{}, minor) + "memhog"
+	stack := threadStackPrefix + "memhog"
 	for _, profile := range profiles {
 		t.Run(profile.name, func(t *testing.T) {
 			// The workload retains 8–16 MiB of bytearrays allocated at memhog.
@@ -427,7 +409,6 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 		boolString(cfg.gilOnly),
 	)
 
-	_, minor := pythonVersion(t)
 	collectUntil := time.Now().Add(15 * time.Second)
 	var workloadExited bool
 	var workloadExitCode int
@@ -456,7 +437,7 @@ func testPythonProfilerConfiguration(t *testing.T, cfg profileConfig) {
 			t.Logf("profile for %s is empty", cfg)
 			return false
 		}
-		if err := checkConfigurationProfile(collapsed, cfg, minor); err != nil {
+		if err := checkConfigurationProfile(collapsed, cfg); err != nil {
 			t.Logf("profile for %s: %v\n%s", cfg, err, collapsed)
 			return false
 		}

@@ -13,7 +13,7 @@ def load_hooks():
     native = types.ModuleType("pyroscope._native")
     native.LineNo = types.SimpleNamespace(LastInstruction=0)
     native.ProfilerImplementation = types.SimpleNamespace(PySpy=0)
-    native.SignalTimer = types.SimpleNamespace(ITimer=0)
+    native.SignalTimer = types.SimpleNamespace(ITimer=0, CTimer=1)
     path = Path(__file__).resolve().parents[2] / "python/pyroscope/__init__.py"
     spec = importlib.util.spec_from_file_location(
         "pyroscope", path, submodule_search_locations=[str(path.parent)]
@@ -57,16 +57,8 @@ class ThreadHookTests(unittest.TestCase):
         try:
             install("stack")
             install("signal")
-            if sys.version_info >= (3, 11):
-                self.assertIs(
-                    threading.Thread._bootstrap_inner, original_bootstrap_inner
-                )
-                self.assertIsNot(threading.Thread._delete, original_delete)
-            else:
-                self.assertIs(threading.Thread._delete, original_delete)
-                self.assertIsNot(
-                    threading.Thread._bootstrap_inner, original_bootstrap_inner
-                )
+            self.assertIs(threading.Thread._bootstrap_inner, original_bootstrap_inner)
+            self.assertIsNot(threading.Thread._delete, original_delete)
 
             def new_worker():
                 ready_new.set()
@@ -77,17 +69,16 @@ class ThreadHookTests(unittest.TestCase):
             self.assertTrue(ready_new.wait(5))
 
             failures = []
-            if sys.version_info >= (3, 11):
-                threading.excepthook = lambda args: failures.append(args.exc_type)
+            threading.excepthook = lambda args: failures.append(args.exc_type)
 
-                def raise_error():
-                    raise ValueError("worker failed")
+            def raise_error():
+                raise ValueError("worker failed")
 
-                raising = threading.Thread(target=raise_error)
-                raising.start()
-                raising.join(5)
-                self.assertFalse(raising.is_alive())
-                self.assertEqual(failures, [ValueError])
+            raising = threading.Thread(target=raise_error)
+            raising.start()
+            raising.join(5)
+            self.assertFalse(raising.is_alive())
+            self.assertEqual(failures, [ValueError])
 
             release_new.set()
             new.join(5)
@@ -104,14 +95,11 @@ class ThreadHookTests(unittest.TestCase):
                 )
                 self.assertEqual(registered.count((new.ident, new.native_id)), 1)
                 self.assertEqual(unregistered.count(new.ident), 1)
-                if sys.version_info >= (3, 11):
-                    self.assertEqual(unregistered.count(preexisting.ident), 1)
-                    self.assertEqual(
-                        registered.count((raising.ident, raising.native_id)), 1
-                    )
-                    self.assertEqual(unregistered.count(raising.ident), 1)
-                else:
-                    self.assertEqual(unregistered.count(preexisting.ident), 0)
+                self.assertEqual(unregistered.count(preexisting.ident), 1)
+                self.assertEqual(
+                    registered.count((raising.ident, raising.native_id)), 1
+                )
+                self.assertEqual(unregistered.count(raising.ident), 1)
         finally:
             release_new.set()
             release.set()

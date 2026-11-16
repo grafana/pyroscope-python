@@ -27,17 +27,12 @@ impl Benchmarks {
         assert!(!self.completed, "Python must call Rust exactly once");
         // Capture CPython's own complete root-to-leaf stack, including current line numbers,
         // outside the timed region. No Python bytecode runs again until all loops finish.
-        let name_attribute = if py.version_info().minor >= 11 {
-            "co_qualname"
-        } else {
-            "co_name"
-        };
         let mut frame = py.import("sys")?.getattr("_getframe")?.call0()?;
         let mut python_stack = Vec::new();
         while !frame.is_none() {
             let code = frame.getattr("f_code")?;
             python_stack.push((
-                code.getattr(name_attribute)?.extract::<String>()?,
+                code.getattr("co_qualname")?.extract::<String>()?,
                 code.getattr("co_filename")?.extract::<String>()?,
                 frame.getattr("f_lineno")?.extract::<i32>()?,
             ));
@@ -130,8 +125,8 @@ fn main() -> PyResult<()> {
     Python::attach(|py| {
         let version = py.version_info();
         assert!(
-            version.major == 3 && (10..=14).contains(&version.minor),
-            "signal stack benchmarks require CPython 3.10–3.14"
+            version.major == 3 && (11..=14).contains(&version.minor),
+            "signal stack benchmarks require CPython 3.11–3.14"
         );
         assert_eq!((version.major, version.minor), unwind::PY_VERSION);
         eprintln!("Benchmarking CPython {}", Python::version_str());

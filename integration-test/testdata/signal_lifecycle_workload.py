@@ -50,7 +50,6 @@ def ctimer_shutdown_fork():
 
 
 def ctimer_preexisting_thread_cleanup():
-    assert sys.version_info >= (3, 11)
     release_old = threading.Event()
     release_new = threading.Event()
     ready_old = threading.Event()

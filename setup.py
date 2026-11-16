@@ -6,6 +6,9 @@ from pathlib import Path
 from setuptools import setup
 from setuptools_rust import Binding, RustExtension
 
+if sys.version_info < (3, 11):
+    raise SystemExit("pyroscope-io requires Python 3.11 or newer")
+
 # The C++ profilers read version-specific CPython internal structs, so they
 # must be compiled against the exact Python the wheel targets. Pass the
 # building interpreter and its install root down to build.rs, which forwards

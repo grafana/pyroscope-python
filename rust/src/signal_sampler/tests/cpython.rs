@@ -137,9 +137,6 @@ fn source_line(marker: &str) -> i32 {
 }
 
 fn expected_frame(name: &str, filename: &str, first: &str, current: &str) -> ExpectedFrame {
-    // CPython 3.10 has co_name; qualified code names start with 3.11.
-    #[cfg(not(Py_3_11))]
-    let name = name.rsplit('.').next().unwrap();
     (
         name.to_owned(),
         filename.to_owned(),

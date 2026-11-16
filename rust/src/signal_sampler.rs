@@ -67,9 +67,9 @@ pub(super) static METRICS_LOCK: Mutex<()> = Mutex::new(());
 
 fn check_version(version: (u8, u8)) -> Result<(), Error> {
     let (major, minor) = version;
-    if !matches!(version, (3, 10..=14)) {
+    if !matches!(version, (3, 11..=14)) {
         return Err(format!(
-            "unwinding in the signal handler supports only Python 3.10 to 3.14, found {major}.{minor}"
+            "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
         ));
     }
     if version != unwind::PY_VERSION {
@@ -190,3 +190,33 @@ pub fn thread_removed(timer: &SharedTimer, tid: timer::pid_t) {
 #[cfg(all(test, not(miri), not(Py_3_15)))]
 #[path = "signal_sampler/tests/cpython.rs"]
 mod cpython_tests;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn requires_a_supported_version_matching_the_build() {
+        for version in [(3, 10), (3, 15), (4, 0)] {
+            let (major, minor) = version;
+            assert_eq!(
+                check_version(version),
+                Err(format!(
+                    "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
+                ))
+            );
+        }
+        for minor in 11..=14 {
+            let version = (3, minor);
+            let expected = if version == unwind::PY_VERSION {
+                Ok(())
+            } else {
+                let (built_major, built_minor) = unwind::PY_VERSION;
+                Err(format!(
+                    "running on Python 3.{minor}, but built against Python {built_major}.{built_minor}"
+                ))
+            };
+            assert_eq!(check_version(version), expected);
+        }
+    }
+}
