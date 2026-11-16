@@ -231,7 +231,7 @@ def cpu_timer_fork_child_refused():
 
 
 def cpu_timer_unsupported_fallback():
-    # On CPython 3.10/3.11, enabling the timer option still selects the wall
+    # On CPython 3.11, enabling the timer option still selects the wall
     # sampler. It allocates no alternate stack and can restart after shutdown.
     configure()
     run_worker(

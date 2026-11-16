@@ -13,26 +13,11 @@ type stackShare struct {
 	min, max float64
 }
 
-// Match the whole root-to-leaf path. CPython 3.11 introduced co_qualname.
-// Stack and Signal's CTimer use a bootstrap wrapper only on Python 3.10.
-func threadStackPrefix(cfg profileConfig, minor int) string {
-	bootstrap, inner, run := "_bootstrap", "_bootstrap_inner", "run"
-	if minor >= 11 {
-		bootstrap, inner, run = "Thread._bootstrap", "Thread._bootstrap_inner", "Thread.run"
-	}
-	prefix := bootstrap + ";"
-	if minor == 10 && (cfg.stack || cfg.signalTimer == "CTimer") {
-		prefix += "_bootstrap_inner;"
-	}
-	return prefix + inner + ";" + run + ";"
-}
+// CPython 3.11+ reports qualified names and needs no bootstrap wrapper.
+const threadStackPrefix = "Thread._bootstrap;Thread._bootstrap_inner;Thread.run;"
 
-func configurationStacks(cfg profileConfig, minor int) []stackShare {
-	prefix := threadStackPrefix(cfg, minor)
-	wait := "wait;wait"
-	if minor >= 11 {
-		wait = "Event.wait;Condition.wait"
-	}
+func configurationStacks(cfg profileConfig) []stackShare {
+	prefix := threadStackPrefix
 	// Both workers spend 100ms hashing and 200ms asleep. CPU/GIL-only
 	// profiles should split almost all weight equally between the hash leaves.
 	// Wall profiles also include the main thread waiting: ~1/3 main wait,
@@ -44,21 +29,10 @@ func configurationStacks(cfg profileConfig, minor int) []stackShare {
 			{prefix + "multihash2;hash_value", 0.06, 0.17},
 			{prefix + "multihash", 0.15, 0.30},
 			{prefix + "multihash2", 0.15, 0.30},
-			{"<module>;main;" + wait, 0.25, 0.40},
+			{"<module>;main;Event.wait;Condition.wait", 0.25, 0.40},
 		}
 	}
-	if cfg.profilerName() == "py-spy" && minor == 10 && cfg.onCPU && !cfg.gilOnly {
-		// CPython 3.10 has no native_thread_id. With py-spy's unwind feature
-		// disabled, its idle heuristic recognizes threading.wait but not
-		// time.sleep. The main thread is excluded; each worker contributes
-		// ~1/6 hashing and ~1/3 sleeping to this onCPU profile.
-		return []stackShare{
-			{prefix + "multihash;hash_value", 0.10, 0.25},
-			{prefix + "multihash2;hash_value", 0.10, 0.25},
-			{prefix + "multihash", 0.25, 0.40},
-			{prefix + "multihash2", 0.25, 0.40},
-		}
-	}
+
 	return []stackShare{
 		{prefix + "multihash;hash_value", 0.35, 0.65},
 		{prefix + "multihash2;hash_value", 0.35, 0.65},
@@ -71,10 +45,10 @@ type profileShape struct {
 	minCoverage float64
 }
 
-func checkConfigurationProfile(collapsed string, cfg profileConfig, minor int) error {
+func checkConfigurationProfile(collapsed string, cfg profileConfig) error {
 	// At 100Hz this is at least 200 samples. Do not accept two lucky samples.
 	return checkProfileShape(collapsed, profileShape{
-		stacks:      configurationStacks(cfg, minor),
+		stacks:      configurationStacks(cfg),
 		minTotal:    int64(2 * time.Second),
 		minCoverage: 0.90,
 	})
@@ -129,36 +103,31 @@ func TestConfigurationProfileShape(t *testing.T) {
 		name    string
 		profile string
 		cfg     profileConfig
-		minor   int
 		valid   bool
 	}{
-		{"cpu", cpu, profileConfig{onCPU: true}, 12, true},
-		{"gil only", cpu, profileConfig{gilOnly: true}, 12, true},
-		{"wall", wall, profileConfig{}, 12, true},
-		{"python 310 gil only", strings.ReplaceAll(cpu, "Thread.", ""), profileConfig{onCPU: true, gilOnly: true}, 10, true},
-		{"python 310 idle heuristic", strings.ReplaceAll(strings.ReplaceAll(wall, ";<module>;main;Event.wait;Condition.wait 3000000000\n", ""), "Thread.", ""), profileConfig{onCPU: true}, 10, true},
-		{"stack 311+", cpu, profileConfig{onCPU: true, stack: true}, 12, true},
-		{"ctimer 311+", cpu, profileConfig{onCPU: true, signalTimer: "CTimer"}, 12, true},
-		{"stack 310 wrapper", strings.ReplaceAll(strings.ReplaceAll(cpu, "Thread.", ""), "_bootstrap_inner;", "_bootstrap_inner;_bootstrap_inner;"), profileConfig{onCPU: true, stack: true}, 10, true},
-		{"ctimer 310 wrapper", strings.ReplaceAll(strings.ReplaceAll(cpu, "Thread.", ""), "_bootstrap_inner;", "_bootstrap_inner;_bootstrap_inner;"), profileConfig{onCPU: true, signalTimer: "CTimer"}, 10, true},
-		{"itimer", cpu, profileConfig{onCPU: true, signalTimer: "ITimer"}, 12, true},
-		{"truncated stack", strings.ReplaceAll(cpu, "Thread._bootstrap;", ""), profileConfig{onCPU: true}, 12, false},
-		{"wrong order", strings.ReplaceAll(cpu, "multihash;hash_value", "hash_value;multihash"), profileConfig{onCPU: true}, 12, false},
-		{"substring match", strings.ReplaceAll(cpu, "multihash2", "not_multihash2"), profileConfig{onCPU: true}, 12, false},
-		{"missing worker", ";" + first + " 10000000000\n", profileConfig{onCPU: true}, 12, false},
-		{"unbalanced workers", ";" + first + " 9000000000\n;" + second + " 1000000000\n", profileConfig{onCPU: true}, 12, false},
-		{"unexpected weight", cpu + ";unexpected 2000000000\n", profileConfig{onCPU: true}, 12, false},
-		{"idle cpu samples", wall, profileConfig{onCPU: true}, 12, false},
-		{"missing idle samples", cpu, profileConfig{}, 12, false},
-		{"too few samples", ";" + first + " 10000000\n;" + second + " 10000000\n", profileConfig{onCPU: true}, 12, false},
-		{"empty", "", profileConfig{onCPU: true}, 12, false},
-		{"bad value", cpu + ";unexpected nope\n", profileConfig{onCPU: true}, 12, false},
-		{"negative value", cpu + ";unexpected -1\n", profileConfig{onCPU: true}, 12, false},
+		{"cpu", cpu, profileConfig{onCPU: true}, true},
+		{"gil only", cpu, profileConfig{gilOnly: true}, true},
+		{"wall", wall, profileConfig{}, true},
+		{"stack 311+", cpu, profileConfig{onCPU: true, stack: true}, true},
+		{"ctimer 311+", cpu, profileConfig{onCPU: true, signalTimer: "CTimer"}, true},
+		{"itimer", cpu, profileConfig{onCPU: true, signalTimer: "ITimer"}, true},
+		{"truncated stack", strings.ReplaceAll(cpu, "Thread._bootstrap;", ""), profileConfig{onCPU: true}, false},
+		{"wrong order", strings.ReplaceAll(cpu, "multihash;hash_value", "hash_value;multihash"), profileConfig{onCPU: true}, false},
+		{"substring match", strings.ReplaceAll(cpu, "multihash2", "not_multihash2"), profileConfig{onCPU: true}, false},
+		{"missing worker", ";" + first + " 10000000000\n", profileConfig{onCPU: true}, false},
+		{"unbalanced workers", ";" + first + " 9000000000\n;" + second + " 1000000000\n", profileConfig{onCPU: true}, false},
+		{"unexpected weight", cpu + ";unexpected 2000000000\n", profileConfig{onCPU: true}, false},
+		{"idle cpu samples", wall, profileConfig{onCPU: true}, false},
+		{"missing idle samples", cpu, profileConfig{}, false},
+		{"too few samples", ";" + first + " 10000000\n;" + second + " 10000000\n", profileConfig{onCPU: true}, false},
+		{"empty", "", profileConfig{onCPU: true}, false},
+		{"bad value", cpu + ";unexpected nope\n", profileConfig{onCPU: true}, false},
+		{"negative value", cpu + ";unexpected -1\n", profileConfig{onCPU: true}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			err := checkConfigurationProfile(tc.profile, tc.cfg, tc.minor)
+			err := checkConfigurationProfile(tc.profile, tc.cfg)
 			if (err == nil) != tc.valid {
-				t.Fatalf("valid=%t, error=%v", tc.valid, err)
+				t.Fatalf("valid=%t, error=%v\nfull profile:\n%s", tc.valid, err, tc.profile)
 			}
 		})
 	}

@@ -1,7 +1,5 @@
 """Stack shapes called by the Rust resolver tests with a test-only assert_stack hook."""
 
-import sys
-
 
 def direct():  # first: direct
     return assert_stack(expected)  # call: direct
@@ -113,7 +111,7 @@ def mapped_lines_leaf():  # first: mapped_lines_leaf
 
 # A complete mapping for only the first instruction; the active call is outside it.
 unmapped_lines_middle.__code__ = unmapped_lines_middle.__code__.replace(
-    co_linetable=b"\x02\x00" if sys.version_info < (3, 11) else b"\x80\x00"
+    co_linetable=b"\x80\x00"
 )
 
 
@@ -138,7 +136,6 @@ def long_unicode_leaf():  # first: long_unicode_leaf
     return assert_stack(expected, 17)  # call: long_unicode_leaf
 
 
-long_unicode_fields = {"co_name": "中" * 2000, "co_filename": "🐍" * 2000}
-if sys.version_info >= (3, 11):
-    long_unicode_fields["co_qualname"] = long_unicode_fields["co_name"]
-long_unicode_leaf.__code__ = long_unicode_leaf.__code__.replace(**long_unicode_fields)
+long_unicode_leaf.__code__ = long_unicode_leaf.__code__.replace(
+    co_name="中" * 2000, co_qualname="中" * 2000, co_filename="🐍" * 2000
+)

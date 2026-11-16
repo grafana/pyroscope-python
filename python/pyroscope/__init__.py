@@ -208,34 +208,21 @@ def _install_stack_threads(threading, register, unregister):
         if self.ident is not None and self.native_id is not None:
             register(self.ident, self.native_id)
 
-    if sys.version_info >= (3, 11):
-        # _delete is called by threads already running when the hook is installed,
-        # and by new threads even if their run method raises.
-        orig_delete = Thread._delete
+    # _delete is called by threads already running when the hook is installed,
+    # and by new threads even if their run method raises.
+    orig_delete = Thread._delete
 
-        def _delete(self):
-            try:
-                orig_delete(self)
-            finally:
-                if self.ident is not None:
-                    unregister(self.ident)
-
-        # Install the exit hook first so a thread registered during installation
-        # cannot exit before its cleanup hook is available.
-        Thread._delete = _delete
-        Thread._set_native_id = _set_native_id
-    else:
-        # Python 3.10 removes the thread from _active inside _bootstrap_inner
-        # without calling _delete.
-        orig_bootstrap_inner = Thread._bootstrap_inner
-
-        def _bootstrap_inner(self, *args, **kwargs):
-            orig_bootstrap_inner(self, *args, **kwargs)
+    def _delete(self):
+        try:
+            orig_delete(self)
+        finally:
             if self.ident is not None:
                 unregister(self.ident)
 
-        Thread._set_native_id = _set_native_id
-        Thread._bootstrap_inner = _bootstrap_inner
+    # Install the exit hook first so a thread registered during installation
+    # cannot exit before its cleanup hook is available.
+    Thread._delete = _delete
+    Thread._set_native_id = _set_native_id
 
     _register_stack_threads(threading, register)
 

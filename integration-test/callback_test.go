@@ -51,7 +51,7 @@ func TestPythonProfilerCallbacks(t *testing.T) {
 			selector := fmt.Sprintf(`{service_name="%s",canary="%s"}`, appName, canary)
 			// The main thread alternates between map's C loop and the Python
 			// callback. Neither introduces Python thread-registration frames;
-			// these module-level names are identical on Python 3.10+.
+			// these module-level names are identical on Python 3.11+.
 			// Allow their relative cost to vary across Python versions and
 			// profilers, but require both complete paths and 90% total coverage.
 			requireProfileShape(t, workload, pyroscopeURL, cpuProfileTypeID, selector, profileShape{
