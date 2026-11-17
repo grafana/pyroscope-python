@@ -516,6 +516,11 @@ def main(scenario):
     want = SCENARIOS[scenario]
     env = dict(os.environ, **want.env)
     env.pop("PYTHONFAULTHANDLER", None)
+    # The scenarios check SIGSEGV/SIGBUS ownership and deaths by signal, which
+    # ASAN's own fatal-signal handlers would change.
+    env["ASAN_OPTIONS"] = ":".join(
+        filter(None, (env.get("ASAN_OPTIONS"), "handle_segv=0", "handle_sigbus=0"))
+    )
     result = subprocess.run(
         [sys.executable, __file__, "child", scenario],
         env=env,
