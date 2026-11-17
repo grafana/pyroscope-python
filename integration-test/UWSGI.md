@@ -5,6 +5,12 @@ distribution against the selected Python image. Its compiler and Python build
 dependencies are confined to that test image. The SDK wheel is built separately
 and installed offline, using the existing harness settings.
 
+Standalone uWSGI test runs default to **CPython 3.15**. `PYTHON_VERSION` selects
+an explicit version, including the existing CI matrix. This default is scoped
+to the uWSGI test. On 3.15, py-spy and Stack run in both loading modes; Signal
+uses the existing unsupported-version skip. Set `PYTHON_VERSION=3.14` to run
+all three profiler implementations.
+
 Each profiler runs in two loading modes:
 
 | Subtest | Python loading |
@@ -52,7 +58,7 @@ Run from the repository root:
 ```sh
 make -C integration-test test/TestPythonProfilerUWSGI
 PYTHON_VERSION=3.14 make -C integration-test test/TestPythonProfilerUWSGI PROFILER=signal
-PYTHON_VERSION=3.12 PYTHON_IMAGE_SUFFIX=alpine make -C integration-test test/TestPythonProfilerUWSGI
+PYTHON_IMAGE_SUFFIX=alpine make -C integration-test test/TestPythonProfilerUWSGI
 ```
 
 `PROFILER=all` selects py-spy, Signal ITimer, Signal CTimer and Stack.
@@ -182,6 +188,32 @@ PYTHON_VERSION=3.13 \
 PYTHON_VERSION=3.15 go test -v -count=1 -run '^TestPythonProfilerUWSGI$' . -profiler=signal
 # PASS, 0.004s; all eight leaf subtests skipped without building an image or requiring a wheel
 ```
+
+## CPython 3.15 default validation
+
+With `PYTHON_VERSION` and `PYTHON_IMAGE` unset, server logs confirmed CPython
+3.15.2 on both glibc and musl. py-spy and Stack passed in both loading modes;
+the four Signal subtests skipped on each platform. An explicit 3.14 override
+still ran both Signal timers in both modes. Commands from the repository root:
+
+```sh
+env -u PYTHON_VERSION -u PYTHON_IMAGE -u PYTHON_IMAGE_SUFFIX \
+  PYROSCOPE_TEST_LOG_DIR="$PWD/.cache/uwsgi-validation-315-default/containers-slim" \
+  make -C integration-test test/TestPythonProfilerUWSGI PYROSCOPE_WHEEL_DIR="$PWD/dist"
+# PASS, 82.961s; four passed, four skipped
+env -u PYTHON_VERSION -u PYTHON_IMAGE PYTHON_IMAGE_SUFFIX=alpine \
+  PYROSCOPE_TEST_LOG_DIR="$PWD/.cache/uwsgi-validation-315-default/containers-alpine" \
+  make -C integration-test test/TestPythonProfilerUWSGI PYROSCOPE_WHEEL_DIR="$PWD/dist"
+# PASS, 83.100s; four passed, four skipped
+env -u PYTHON_IMAGE -u PYTHON_IMAGE_SUFFIX PYTHON_VERSION=3.14 \
+  PYROSCOPE_TEST_LOG_DIR="$PWD/.cache/uwsgi-validation-315-default/containers-override-3.14" \
+  make -C integration-test test/TestPythonProfilerUWSGI PYROSCOPE_WHEEL_DIR="$PWD/dist" PROFILER=signal
+# PASS, 82.438s; four passed, four filtered by -profiler
+```
+
+The default is set with `t.Setenv`, which restores the previous environment
+after this test. The rest of the harness keeps its existing defaults. Focused
+profile-shape tests, `go vet ./...`, gofmt and `git diff --check` passed again.
 
 ## Earlier ASAN results (embedded mode)
 

@@ -1,4 +1,4 @@
-ARG PYTHON_IMAGE=python:3.11-slim
+ARG PYTHON_IMAGE=python:3.15-slim
 FROM ${PYTHON_IMAGE}
 
 # Compile against the selected interpreter (including the ASAN runtime), not

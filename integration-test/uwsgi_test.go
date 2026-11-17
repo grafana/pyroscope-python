@@ -14,6 +14,9 @@ import (
 )
 
 func TestPythonProfilerUWSGI(t *testing.T) {
+	// Default local runs to CPython 3.15; CI selects versions explicitly.
+	t.Setenv("PYTHON_VERSION", envOrDefault("PYTHON_VERSION", "3.15"))
+
 	var image string
 	t.Cleanup(func() {
 		if image != "" {
