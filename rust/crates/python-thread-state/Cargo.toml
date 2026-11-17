@@ -1,0 +1,15 @@
+[package]
+name = "pyroscope-python-thread-state"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98.0"
+publish = false
+
+[dependencies]
+pyroscope-python-unwind = { path = "../python-unwind" }
+pyo3.workspace = true
+libc = "0.2"
+log = "0.4"
+
+[build-dependencies]
+pyo3-build-config.workspace = true

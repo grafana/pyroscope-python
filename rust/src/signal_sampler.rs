@@ -14,6 +14,7 @@ use timer::Timer;
 use timer::{Mode, SignalHandler};
 use unwind::{Frame, MAX_FRAMES, SampleMetadata};
 
+use pyroscope_python_thread_state::ThreadState;
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
@@ -25,7 +26,7 @@ extern "C" fn signal_handler(_: libc::c_int, info: *mut libc::siginfo_t, _: *mut
     // SAFETY: SignalHandler installs this callback with SA_SIGINFO, so the kernel
     // supplies a valid siginfo_t for the duration of the callback.
     let count = sample_count(unsafe { &*info });
-    unwind::handler(SampleMetadata { count });
+    unwind::handler::<ThreadState>(SampleMetadata { count });
 }
 
 fn sample_count(info: &libc::siginfo_t) -> usize {
@@ -67,9 +68,9 @@ pub(super) static METRICS_LOCK: Mutex<()> = Mutex::new(());
 
 fn check_version(version: (u8, u8)) -> Result<(), Error> {
     let (major, minor) = version;
-    if !matches!(version, (3, 11..=14)) {
+    if !matches!(version, (3, 11..=15)) {
         return Err(format!(
-            "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
+            "unwinding in the signal handler supports only Python 3.11 to 3.15, found {major}.{minor}"
         ));
     }
     if version != unwind::PY_VERSION {
@@ -187,7 +188,7 @@ pub fn thread_removed(timer: &SharedTimer, tid: timer::pid_t) {
     }
 }
 
-#[cfg(all(test, not(miri), not(Py_3_15)))]
+#[cfg(all(test, not(miri)))]
 #[path = "signal_sampler/tests/cpython.rs"]
 mod cpython_tests;
 
@@ -197,16 +198,16 @@ mod tests {
 
     #[test]
     fn requires_a_supported_version_matching_the_build() {
-        for version in [(3, 10), (3, 15), (4, 0)] {
+        for version in [(3, 10), (3, 16), (4, 0)] {
             let (major, minor) = version;
             assert_eq!(
                 check_version(version),
                 Err(format!(
-                    "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
+                    "unwinding in the signal handler supports only Python 3.11 to 3.15, found {major}.{minor}"
                 ))
             );
         }
-        for minor in 11..=14 {
+        for minor in 11..=15 {
             let version = (3, minor);
             let expected = if version == unwind::PY_VERSION {
                 Ok(())

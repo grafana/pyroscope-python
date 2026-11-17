@@ -12,6 +12,7 @@ pyo3.workspace = true
 pyroscope-pprof = { path = "../pprof" }
 pyroscope-python-resolve = { path = "../python-resolve" }
 pyroscope-python-unwind = { path = "../python-unwind" }
+pyroscope-python-thread-state = { path = "../python-thread-state" }
 prost = "0.14"
 pyroscope = { version = "2.1.5", default-features = false, features = ["backend-pprof-rs"] }
 

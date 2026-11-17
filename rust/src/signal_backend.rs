@@ -174,9 +174,6 @@ fn add_sample(builder: &mut PProfBuilder<PySpyProfile>, frames: &[FFIFrame], cou
     );
 }
 
-/// Feeds the OS thread ids of python threads to a `CTimer` session. The hooks stay installed
-/// for the life of the process and keep the live threads in `LIVE`, so a session that starts
-/// later still learns about the threads that started before it.
 pub mod threads {
     use super::*;
 
@@ -190,7 +187,11 @@ pub mod threads {
     }
 
     #[pyfunction]
-    fn register_thread(id: u64, native_id: u64) {
+    fn register_thread(py: Python<'_>, id: u64, native_id: u64) {
+        // The exit hook clears the slot before CPython destroys the thread state.
+        if !pyroscope_python_thread_state::register_thread(py, id) {
+            return; //todo register preconfigure threads on 3.15
+        }
         let tid = native_id as libc::pid_t;
         let previous = lock(&LIVE).get_or_insert_default().insert(id, tid);
         if let Some(timer) = lock(&TIMER).as_ref() {
@@ -204,7 +205,8 @@ pub mod threads {
     }
 
     #[pyfunction]
-    fn unregister_thread(id: u64) {
+    fn unregister_thread(py: Python<'_>, id: u64) {
+        pyroscope_python_thread_state::unregister_thread(py, id);
         let Some(tid) = lock(&LIVE).get_or_insert_default().remove(&id) else {
             return;
         };
@@ -214,6 +216,8 @@ pub mod threads {
     }
 
     pub fn install(py: Python<'_>) -> PyResult<()> {
+        pyroscope_python_thread_state::register_current_thread(py)
+            .map_err(std::io::Error::from_raw_os_error)?;
         if INSTALLED.get().is_some() {
             if PROCESS_ID.load(Ordering::Relaxed) != std::process::id() {
                 // shutdown-before-fork leaves no active timer, but native thread IDs change.
@@ -294,7 +298,7 @@ pub(crate) mod tests {
     use prost::Message;
     use std::time::{Duration, UNIX_EPOCH};
 
-    #[cfg(all(not(miri), not(Py_3_15)))]
+    #[cfg(not(miri))]
     pub(crate) fn profile_for_resolved_stack(
         frames: &[FFIFrame],
         strings: StringTable,

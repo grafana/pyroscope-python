@@ -1,34 +1,5 @@
 #![no_std]
 
-//! Walks the CPython frame chain of a thread from a signal handler into a caller-provided slice.
-//! No allocation, no locks, no recursion.
-//!
-//! The handler records only code object addresses. Names are resolved later on a normal thread
-//! using kindasafe under its recovery and source-borrow preconditions. An address alone does
-//! not establish lifetime or object identity; deferred reads can observe reused or changing memory.
-//!
-//! Initialize kindasafe recovery, invoke [`handler`] from a `SIGPROF` callback, and drain with [`consumer`].
-//! Each record contains the interrupted thread's frames, innermost first, and its sampling-period count.
-//!
-//! Supports CPython 3.11 to 3.14, default (GIL) build, 64-bit targets. The offsets come from the
-//! checked-in layouts verified against the target CPython headers by `pyroscope-python-offsets`.
-//!
-//! Native reads rely on CPython's current-thread ownership of the active frame chain: the
-//! interrupted thread is paused, active frames retain their code, and other threads must not
-//! mutate that chain. Free-threaded builds and foreign mutation of interpreter internals are
-//! unsupported. This is a runtime assumption, not a proof for every CPython interruption point.
-//! SDK users must ensure no other code changes SIGSEGV/SIGBUS handlers during
-//! initialization or after kindasafe has installed its recovery handlers, including across
-//! profiler stops/restarts. Install other handlers before initialization; chained callbacks
-//! must remain loaded and support direct chaining. Handler ownership is not checked at runtime:
-//! replacing recovery handlers can turn a failed memory read into a process crash.
-//! Callers must successfully initialize recovery before unwinding and ensure SIGSEGV/SIGBUS
-//! are unblocked on the sampled thread throughout the walk, including when sampling interrupts
-//! another signal handler. Initialization and signal masks are not checked while unwinding;
-//! violating these preconditions can turn a failed memory read into a process crash.
-//! Kindasafe reads use direct memory loads without syscalls on the successful memory-load path.
-//! In ASAN builds, a fault recovered during a read is reported to ASAN after recovery.
-
 #[cfg(test)]
 extern crate std;
 
@@ -39,7 +10,11 @@ pub use layout::{OB_TYPE, PY_VERSION};
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-/// Maximum number of frames visited in one stack, including skipped frames.
+pub trait ThreadStateProvider {
+    /// must be signal safe
+    fn current_thread_state() -> usize;
+}
+
 pub const MAX_FRAMES: usize = 256;
 
 const EXECUTABLE_MASK: usize = {
@@ -55,8 +30,6 @@ const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_CSTACK;
 #[cfg(all(Py_3_14, not(Py_3_15)))]
 const SKIP_OWNERS: u8 =
     (1 << layout::FRAME_OWNED_BY_CSTACK) | (1 << layout::FRAME_OWNED_BY_INTERPRETER);
-// CPython 3.15 removed C-stack-owned frames. Keep the crate buildable for the
-// other profilers; Signal startup still rejects 3.15 before installing a timer.
 #[cfg(Py_3_15)]
 const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_INTERPRETER;
 
@@ -99,11 +72,11 @@ pub fn consumer() -> Option<Consumer<'static, Frame, SLOTS, SampleMetadata>> {
 /// and both recovery signals to remain unblocked, as documented by [`unwind`].
 /// `metadata.count` is the number of sampling periods represented by this delivery (including overruns).
 /// Errors and buffer drops retain the same count as a successfully published stack.
-pub fn handler(metadata: SampleMetadata) {
+pub fn handler<T: ThreadStateProvider>(metadata: SampleMetadata) {
     // TODO: consider MaybeUninit for frame storage after measuring the initialization cost.
     let mut frames = [Frame::default(); MAX_FRAMES];
     // Unwind errors are counted by the unwinder. Never publish a partial stack.
-    let Ok(frames) = unwind_thread(current_thread_state(), &mut frames, metadata.count) else {
+    let Ok(frames) = unwind_thread(T::current_thread_state(), &mut frames, metadata.count) else {
         return;
     };
     record_stack(frames, metadata);
@@ -121,13 +94,6 @@ fn record_stack(frames: &[Frame], metadata: SampleMetadata) {
             .buffer_dropped
             .fetch_add(metadata.count, Ordering::Relaxed);
     }
-}
-
-#[inline(always)]
-fn current_thread_state() -> usize {
-    // TODO: PyGILState_GetThisThreadState is not safe on 3.15; find another way to get the tstate.
-    // SAFETY: this queries the calling thread's state without requiring the GIL.
-    unsafe { pyo3_ffi::PyGILState_GetThisThreadState() as usize }
 }
 
 #[derive(Default)]
@@ -178,8 +144,8 @@ impl Metrics {
 /// Writes the calling thread's frames into `frames`, innermost first, and returns that subslice.
 /// On error, the caller must discard the partial stack.
 /// Unwind errors are counted here; publishing the stack is the caller's responsibility.
-pub fn unwind(frames: &mut [Frame]) -> Result<&[Frame], Error> {
-    unwind_thread(current_thread_state(), frames, 1)
+pub fn unwind<T: ThreadStateProvider>(frames: &mut [Frame]) -> Result<&[Frame], Error> {
+    unwind_thread(T::current_thread_state(), frames, 1)
 }
 
 fn unwind_thread(tstate: usize, frames: &mut [Frame], count: usize) -> Result<&[Frame], Error> {
@@ -323,13 +289,28 @@ mod tests {
 
     #[test]
     fn missing_thread_and_invalid_address_have_separate_counts() {
+        struct Missing;
+        impl ThreadStateProvider for Missing {
+            fn current_thread_state() -> usize {
+                0
+            }
+        }
+        struct Unreadable;
+        impl ThreadStateProvider for Unreadable {
+            fn current_thread_state() -> usize {
+                usize::MAX
+            }
+        }
+
         init();
         let _guard = METRICS_LOCK.lock().unwrap();
         let no_thread_before = METRICS.no_thread_state.load(Ordering::Relaxed);
         let read_before = METRICS.read_errors.load(Ordering::Relaxed);
         let mut output = [Frame::default(); 1];
-        assert_eq!(unwind_thread(0, &mut output, 7), Err(Error::NoThreadState));
-        assert_eq!(unwind_thread(usize::MAX, &mut output, 11), Err(Error::Read));
+        assert_eq!(unwind::<Missing>(&mut output), Err(Error::NoThreadState));
+        handler::<Missing>(SampleMetadata { count: 6 });
+        assert_eq!(unwind::<Unreadable>(&mut output), Err(Error::Read));
+        handler::<Unreadable>(SampleMetadata { count: 10 });
         assert_eq!(
             METRICS.no_thread_state.load(Ordering::Relaxed),
             no_thread_before + 7

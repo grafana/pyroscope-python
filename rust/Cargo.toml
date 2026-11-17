@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/python-offsets",
+    "crates/python-thread-state",
     "crates/python-unwind",
     "crates/python-resolve",
     "crates/pprof",
@@ -36,6 +37,7 @@ pyroscope-python-resolve = { path = "crates/python-resolve" }
 anyhow = "1"
 kindasafe_init.workspace = true
 pyroscope-python-unwind = { path = "crates/python-unwind" }
+pyroscope-python-thread-state = { path = "crates/python-thread-state" }
 pyroscope-ringbuffer = { path = "crates/ringbuffer" }
 pyroscope-signal-timer = { path = "crates/signal-timer" }
 py-spy = { path = "../py-spy", default-features = false }

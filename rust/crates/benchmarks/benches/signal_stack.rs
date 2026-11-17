@@ -7,6 +7,7 @@ use std::hint::black_box;
 use criterion::{Criterion, Throughput};
 
 use pyo3::prelude::*;
+use pyroscope_python_thread_state::{self as thread_state, ThreadState};
 use pyroscope_python_unwind::{self as unwind, Frame, MAX_FRAMES};
 
 use pyroscope_pprof::{StringTable, ffi::FFIFrame};
@@ -43,7 +44,7 @@ impl Benchmarks {
         let mut resolver = Resolver::<PYO3Types>::new(Lines::LastInstruction);
         let mut strings = StringTable::new();
         let mut buffer = [Frame::default(); MAX_FRAMES];
-        let captured = unwind::unwind(&mut buffer).expect("preflight unwind failed");
+        let captured = unwind::unwind::<ThreadState>(&mut buffer).expect("preflight unwind failed");
         let resolved = resolver
             .resolve_stack(captured, 1, &mut strings)
             .expect("preflight resolution failed");
@@ -57,7 +58,8 @@ impl Benchmarks {
         group.throughput(Throughput::Elements(1)); // One complete stack per iteration.
         group.bench_function("unwind", |b| {
             b.iter(|| {
-                let frames = unwind::unwind(black_box(&mut buffer)).expect("unwind failed");
+                let frames =
+                    unwind::unwind::<ThreadState>(black_box(&mut buffer)).expect("unwind failed");
                 black_box(frames);
             });
         });
@@ -72,7 +74,8 @@ impl Benchmarks {
         });
         group.bench_function("unwind_resolve", |b| {
             b.iter(|| {
-                let frames = unwind::unwind(black_box(&mut buffer)).expect("unwind failed");
+                let frames =
+                    unwind::unwind::<ThreadState>(black_box(&mut buffer)).expect("unwind failed");
                 black_box(
                     resolver
                         .resolve_stack(black_box(frames), 1, &mut strings)
@@ -124,10 +127,6 @@ fn main() -> PyResult<()> {
     initialize_python();
     Python::attach(|py| {
         let version = py.version_info();
-        assert!(
-            version.major == 3 && (11..=14).contains(&version.minor),
-            "signal stack benchmarks require CPython 3.11–3.14"
-        );
         assert_eq!((version.major, version.minor), unwind::PY_VERSION);
         eprintln!("Benchmarking CPython {}", Python::version_str());
 
@@ -135,6 +134,7 @@ fn main() -> PyResult<()> {
         // installs no competing recovery handlers. Python remains attached on this
         // thread and retains the source objects throughout each loop.
         unsafe { kindasafe_init::init() }.expect("failed to initialize fault recovery");
+        thread_state::register_current_thread(py).expect("failed to register thread state");
 
         let source = CString::new(include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -153,6 +153,7 @@ fn main() -> PyResult<()> {
         let bench = bench.borrow(py);
         assert!(bench.completed, "Python must call Rust exactly once");
         bench.criterion.final_summary();
+        thread_state::unregister_current_thread(py).expect("failed to clear thread state");
         Ok(())
     })
 }
