@@ -110,8 +110,12 @@ def recovery_handlers_preserved():
     previous = handlers()
     assert configure()
     installed = handlers()
-    assert all(installed)
-    assert all(ours != earlier for ours, earlier in zip(installed, previous))
+    if hasattr(libc, "__asan_init"):
+        # ASAN builds of kindasafe install no recovery handlers.
+        assert installed == previous
+    else:
+        assert all(installed)
+        assert all(ours != earlier for ours, earlier in zip(installed, previous))
     signal.raise_signal(signal.SIGPROF)
     assert pyroscope.shutdown()
     assert handlers() == installed
