@@ -5,7 +5,7 @@
 [submodule "kindasafe"]
 	path = kindasafe
 	url = git@github.com:grafana/pyroscope-kinda-safe.git
-	branch = kk/signal-sampler-fixes
+	branch = main
 [submodule "py-spy"]
 	path = py-spy
 	url = git@github.com:grafana/pyroscope-py-spy.git

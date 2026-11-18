@@ -50,11 +50,12 @@ Set `PYROSCOPE_TEST_LOG_DIR` to an output directory to save container logs local
 
 ## ASAN_OPTIONS
 
-The image sets `detect_leaks=0:handle_segv=0:handle_sigbus=0`.
+The image sets `detect_leaks=0`.
 
-- `handle_segv=0:handle_sigbus=0`: the profiler installs and chains its own SIGSEGV/SIGBUS handlers, and the signal handler tests assert on them. Instrumented loads and explicit read checks still report poisoned memory.
+- ASAN's SIGSEGV/SIGBUS handlers stay on (`handle_segv=1:handle_sigbus=1`, the defaults). kindasafe installs no recovery handlers in ASAN builds, so these handlers are what reports a Signal profiler read of an unmapped address. Without them the process dies from the signal with no report. The Stack profiler installs its own handlers on top and chains faults it does not recover to ASAN's.
+- `TestPythonSignalHandlerSuites` runs its child processes with `handle_segv=0:handle_sigbus=0`, because its scenarios assert which handler owns SIGSEGV/SIGBUS and expect deaths by signal.
 - Stack-use-after-return detection stays on (the default). It catches reads of returned C stack frames such as `_PyEval_EvalFrameDefault`'s `entry` frame.
-- Add `halt_on_error=0` to keep running after a report.
+- Add `halt_on_error=0` to keep running after a report. For the Signal profiler, a report from the `SIGPROF` handler then runs ASAN's reporter to completion inside the handler, which is not async-signal-safe and can deadlock.
 - Add `suppress_equal_pcs=0` too. With `halt_on_error=0`, ASAN reports each faulting pc once, and every stack profiler read goes through the single `memcpy` in `safe_memcpy`. So the first report, usually the short-string over-read in `pyunicode_to_utf8`, hides every later bad read from any caller, including freed frames and wrong code objects. The same applies to the py-spy wrapper, whose reports all come from one call site.
 
 ## py-spy reads
@@ -74,18 +75,19 @@ If that checkout changes dependencies, update `rust/Cargo.lock` to match before 
 
 ## kindasafe reads
 
-The Signal unwinder and deferred resolver read through `kindasafe`. Its naked
-assembly bypasses compiler instrumentation, so ASAN builds check every successful
-`u64` and `slice` read with `__asan_region_is_poisoned` and report the first poisoned
-byte through `__asan_report_load_n_noabort`. Faulting reads use signal recovery,
-then report the attempted read through `__asan_report_load_n_noabort`; an unmapped
-address generally appears as an ASAN `unknown-crash` report.
+The Signal unwinder and deferred resolver read through `kindasafe`. In ASAN
+builds kindasafe replaces its naked assembly with compiler-instrumented volatile
+loads and installs no recovery handlers, so `recovery_handlers_preserved` expects
+the handlers to stay unchanged. Instrumentation reports a poisoned read, and
+ASAN's SIGSEGV/SIGBUS handlers report a read of an unmapped address as `SEGV` or
+`BUS`. Either report is fatal with the default `halt_on_error=1`, whether it comes
+from the `SIGPROF` handler or the deferred resolver.
 Normal builds have no additional checks.
 
 The ASAN wheel build runs kindasafe's tests, including subprocess regressions for
-poisoned aligned/unaligned words, a poisoned region inside a slice, a read from
-a `SIGPROF` handler, and faulting words and slices. Valid and empty reads must
-not emit reports.
+poisoned `u8` reads and aligned/unaligned `u32` and `u64` reads, a poisoned region inside a
+slice, a read from a `SIGPROF` handler, faulting and unused reads of an unmapped
+page, and a read through a null base. Valid and empty reads must not emit reports.
 
 ## Blind spots
 

@@ -33,8 +33,6 @@ RUN git clone --depth 1 --branch ${PYTHON_REF} https://github.com/python/cpython
     && cd / \
     && rm -rf /tmp/cpython
 
-ENV ASAN_OPTIONS=detect_leaks=0:handle_segv=0:handle_sigbus=0
-
 FROM runtime AS wheel-build
 ARG RUST_TOOLCHAIN=nightly
 
@@ -62,7 +60,7 @@ RUN --mount=type=cache,target=/opt/cargo/registry \
     CARGO_BUILD_TARGET="$(uname -m)-unknown-linux-gnu" \
     python -m pip wheel --no-deps --wheel-dir /dist .
 
-# Exercise kindasafe's naked-load ASAN checks.
+# Run kindasafe's ASAN read and reporting tests.
 RUN --mount=type=cache,target=/opt/cargo/registry \
     CARGO_TARGET_DIR=/pyroscope-python/rust/target \
     cargo test --manifest-path kindasafe/Cargo.toml --locked --release \
