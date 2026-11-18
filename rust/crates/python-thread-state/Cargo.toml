@@ -1,0 +1,18 @@
+[package]
+name = "pyroscope-python-thread-state"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98.0"
+publish = false
+
+[dependencies]
+pyroscope-python-offsets = { path = "../python-offsets" }
+pyo3-ffi.workspace = true
+kindasafe.workspace = true
+libc = "0.2"
+
+[dev-dependencies]
+kindasafe_init.workspace = true
+
+[build-dependencies]
+pyo3-build-config.workspace = true

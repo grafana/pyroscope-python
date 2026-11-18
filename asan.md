@@ -27,7 +27,7 @@ Tested with CPython 3.11 to 3.15. 3.11 still finds system libraries through `set
 Accepted values are `all`, `py-spy`, `signal`, and `stack`; `dd-trace-py`
 is an alias for `stack`. A selected implementation skips unrelated CPU tests.
 Memory-only tests run in every suite, so each ASAN job covers the memory profiler. Lifecycle tests run with their existing implementation.
-Signal supports CPython 3.11–3.14 and is skipped on other versions.
+Signal supports CPython 3.11–3.15 and is skipped on other versions.
 
 `TestPythonProfilerCallbacks` runs a 20-second C-to-Python callback loop for
 py-spy, both Signal timers, and Stack (both its default sampler and explicit wall

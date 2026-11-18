@@ -125,8 +125,8 @@ fn main() -> PyResult<()> {
     Python::attach(|py| {
         let version = py.version_info();
         assert!(
-            version.major == 3 && (11..=14).contains(&version.minor),
-            "signal stack benchmarks require CPython 3.11–3.14"
+            version.major == 3 && (11..=15).contains(&version.minor),
+            "signal stack benchmarks require CPython 3.11–3.15"
         );
         assert_eq!((version.major, version.minor), unwind::PY_VERSION);
         eprintln!("Benchmarking CPython {}", Python::version_str());
@@ -135,6 +135,10 @@ fn main() -> PyResult<()> {
         // installs no competing recovery handlers. Python remains attached on this
         // thread and retains the source objects throughout each loop.
         unsafe { kindasafe_init::init() }.expect("failed to initialize fault recovery");
+        // SAFETY: the interpreter and recovery are initialized.
+        let access =
+            unsafe { pyroscope_python_thread_state::init() }.expect("no thread state access");
+        eprintln!("Thread state access: {access:?}");
 
         let source = CString::new(include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),

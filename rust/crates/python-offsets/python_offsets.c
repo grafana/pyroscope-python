@@ -59,6 +59,9 @@ static void write_layouts(void) {
 #else
     print_usize("THREAD_FRAME", offsetof(PyThreadState, current_frame));
 #endif
+#if PY_VERSION_HEX >= 0x030f0000
+    print_usize("THREAD_ID", offsetof(PyThreadState, thread_id));
+#endif
 #if PY_VERSION_HEX < 0x030d0000
     print_usize("EXECUTABLE", offsetof(_PyInterpreterFrame, f_code));
 #else

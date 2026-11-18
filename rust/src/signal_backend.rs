@@ -294,7 +294,7 @@ pub(crate) mod tests {
     use prost::Message;
     use std::time::{Duration, UNIX_EPOCH};
 
-    #[cfg(all(not(miri), not(Py_3_15)))]
+    #[cfg(not(miri))]
     pub(crate) fn profile_for_resolved_stack(
         frames: &[FFIFrame],
         strings: StringTable,
