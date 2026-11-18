@@ -18,7 +18,8 @@
 //! The interrupted thread's state comes from [`thread_state::current`], which on CPython 3.15
 //! finds none until `pyroscope_python_thread_state::init` has succeeded. On glibc it reads
 //! CPython's thread-local variable with direct loads through [`thread_state::glibc`],
-//! never through the dynamic loader.
+//! never through the dynamic loader. On macOS it loads the variable from the block of
+//! CPython's pthread key through `thread_state::macos`, never through dyld's accessor.
 //!
 //! Native reads rely on CPython's current-thread ownership of the active frame chain: the
 //! interrupted thread is paused, active frames retain their code, and other threads must not
