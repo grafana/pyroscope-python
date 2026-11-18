@@ -1,5 +1,8 @@
 # uWSGI integration test
 
+The HTTP driver, workload and per-worker profile checks are now shared with
+the [Gunicorn and Uvicorn tests](HTTP_SERVERS.md).
+
 `TestPythonProfilerUWSGI` builds uWSGI 2.0.31 from its checksum-pinned source
 distribution against the selected Python image. Its compiler and Python build
 dependencies are confined to that test image. The SDK wheel is built separately
@@ -271,9 +274,12 @@ PYTHON_IMAGE=pyroscope-python-uwsgi-asan:3.12 PYTHON_VERSION=3.12 \
 # FAIL, 7.992s; AddressSanitizer: heap-buffer-overflow
 ```
 
-The new test retains the failure. Fixing the C++ string reader and investigating
-the existing kindasafe probes remain separate SDK work. Local ARM64 execution
-and other ASAN Python versions were not tested.
+The new test retains the failure. The kindasafe probe stall was subsequently
+addressed by upstream [#286](https://github.com/grafana/pyroscope-python/pull/286),
+which was merged into this branch before adding Gunicorn and Uvicorn coverage.
+ASAN was not rerun for that expansion; the report above records the earlier
+Stack string-reader failure. Local ARM64 execution and other ASAN Python
+versions were not tested.
 
 Formatting and focused checks passed:
 
