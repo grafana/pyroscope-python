@@ -1641,6 +1641,7 @@ dependencies = [
  "kindasafe",
  "kindasafe_init",
  "libc",
+ "pyo3",
  "pyo3-build-config",
  "pyo3-ffi",
  "pyroscope-python-unwind",

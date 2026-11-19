@@ -35,8 +35,8 @@ pub struct Signal {
 }
 
 impl Signal {
-    pub fn new(config: Config) -> Result<Self> {
-        let mut session = SignalHandlerSession::start(&config.sampler)
+    pub fn new(py: Python<'_>, config: Config) -> Result<Self> {
+        let mut session = SignalHandlerSession::start(py, &config.sampler)
             .map_err(|e| PyroscopeError::new(&format!("Signal: {e}")))?;
         if config.sampler.signal_timer == SignalTimer::CTimer {
             threads::attach(session.timer())?;

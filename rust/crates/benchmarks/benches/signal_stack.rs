@@ -135,8 +135,8 @@ fn main() -> PyResult<()> {
         // installs no competing recovery handlers. Python remains attached on this
         // thread and retains the source objects throughout each loop.
         unsafe { kindasafe_init::init() }.expect("failed to initialize fault recovery");
-        // SAFETY: the interpreter and recovery are initialized.
-        unsafe { pyroscope_python_thread_state::init() }
+        // SAFETY: recovery is initialized.
+        unsafe { pyroscope_python_thread_state::init(py) }
             .expect("failed to locate the Python thread state");
 
         let source = CString::new(include_str!(concat!(

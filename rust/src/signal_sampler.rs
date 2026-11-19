@@ -14,6 +14,7 @@ use timer::Timer;
 use timer::{Mode, SignalHandler};
 use unwind::{Frame, MAX_FRAMES, SampleMetadata};
 
+use pyo3::Python;
 use pyroscope_python_thread_state as thread_state;
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
@@ -96,7 +97,7 @@ pub struct SignalHandlerSession {
 }
 
 impl SignalHandlerSession {
-    pub fn start(config: &Config) -> Result<SignalHandlerSession, Error> {
+    pub fn start(py: Python<'_>, config: &Config) -> Result<SignalHandlerSession, Error> {
         check_version(config.python_version)?;
         if config.sampling_rate == 0 {
             return Err("the sampling rate must be greater than zero".to_string());
@@ -107,8 +108,8 @@ impl SignalHandlerSession {
         // callbacks compatible and loaded, as documented in README.md and the unwinder.
         unsafe { kindasafe_init::init() }
             .map_err(|error| format!("failed to install memory fault handlers: {error:?}"))?;
-        // SAFETY: the interpreter is running and recovery was installed above.
-        unsafe { thread_state::init() }
+        // SAFETY: recovery was installed above.
+        unsafe { thread_state::init(py) }
             .map_err(|error| format!("failed to locate the Python thread state: {error:?}"))?;
         let resolver = resolve::Resolver::new(config.lines);
 

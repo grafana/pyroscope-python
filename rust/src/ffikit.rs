@@ -62,7 +62,7 @@ pub fn run(py: Python<'_>, agent: PyroscopeAgentBuilder) -> Result<()> {
         // busy agent doesn't build (and, on macOS, spawn a thread for) a client
         // that would just be thrown away.
         let http_client = create_http_client()?;
-        agent.build(http_client)?.start()
+        agent.build(py, http_client)?.start()
     })();
 
     match started {

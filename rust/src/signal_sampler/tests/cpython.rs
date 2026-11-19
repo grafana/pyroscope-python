@@ -164,8 +164,11 @@ fn init() {
     Python::initialize();
     // SAFETY: these tests preserve recovery handlers throughout all walks.
     unsafe { kindasafe_init::init() }.unwrap();
-    // SAFETY: the interpreter and recovery are initialized.
-    assert_eq!(unsafe { thread_state::init() }, Ok(()));
+    // SAFETY: recovery is initialized.
+    assert_eq!(
+        Python::attach(|py| unsafe { thread_state::init(py) }),
+        Ok(())
+    );
 }
 
 #[test]

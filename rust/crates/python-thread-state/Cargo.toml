@@ -6,6 +6,7 @@ rust-version = "1.98.0"
 publish = false
 
 [dependencies]
+pyo3.workspace = true
 pyo3-ffi.workspace = true
 kindasafe.workspace = true
 libc = "0.2"

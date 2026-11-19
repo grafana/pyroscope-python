@@ -4,7 +4,7 @@
 //! `PyThreadState` from a signal handler, like `PyGILState_GetThisThreadState` but without the
 //! dynamic loader's TLS access path.
 //!
-//! Call [`init`] once on a normal thread. Nothing in this crate is async-signal-safe: the
+//! Call [`init`] once on a normal thread attached to the interpreter. Nothing in this crate is async-signal-safe: the
 //! signal-time reads live in `pyroscope_python_unwind`.
 //!
 //! CPython 3.15 keeps the thread state in a thread-local variable, and reaching it through
