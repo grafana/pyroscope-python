@@ -26,6 +26,7 @@ use crate::ThreadStateError;
 use core::ffi::{c_char, c_void};
 use core::mem::size_of;
 use core::ptr;
+use pyo3::Python;
 use pyroscope_python_unwind::Error;
 use pyroscope_python_unwind::thread_state::macos::{self as reader, KEYS_END, Location, block};
 
@@ -34,32 +35,29 @@ use pyroscope_python_unwind::thread_state::macos::{self as reader, KEYS_END, Loc
 /// calling into CPython or dyld. Until this succeeds the handler finds no thread state. The
 /// location is cached for the process.
 ///
-/// Briefly releases the GIL, and spawns and joins a short-lived thread while it is released.
+/// Briefly detaches from the interpreter, and spawns and joins a short-lived thread while
+/// detached.
 ///
 /// # Safety
-/// The interpreter must be initialized and kindasafe recovery must be installed.
-pub unsafe fn init() -> Result<(), ThreadStateError> {
+/// kindasafe recovery must be installed.
+pub unsafe fn init(py: Python<'_>) -> Result<(), ThreadStateError> {
     if reader::location().is_some() {
         return Ok(());
     }
     let image = image_of(pyo3_ffi::PyGILState_GetThisThreadState as *const () as usize)
         .ok_or(ThreadStateError::NoTlsSegment)?;
-    // SAFETY: the interpreter is initialized. The thread is detached during the search
-    // because the attached thread state is also cached in a second thread-local variable, and
-    // so that joining the probe thread in `locate` never waits while holding the GIL.
-    let location = unsafe {
-        let gil = pyo3_ffi::PyGILState_Ensure();
-        let tstate = pyo3_ffi::PyGILState_GetThisThreadState() as usize;
-        let saved = pyo3_ffi::PyEval_SaveThread();
-        let location = find_value(image, tstate)
+    // SAFETY: `py` proves the thread is attached, so it has a thread state.
+    let tstate = unsafe { pyo3_ffi::PyGILState_GetThisThreadState() } as usize;
+    // Detached during the search because the attached thread state is also cached in a second
+    // thread-local variable, and so that joining the probe thread in `locate` never waits
+    // while holding the GIL.
+    let location = py.detach(|| {
+        find_value(image, tstate)
             .ok_or(ThreadStateError::VariableNotFound)
             .and_then(|descriptor| {
                 locate(image, descriptor).ok_or(ThreadStateError::UnknownTlsLayout)
-            });
-        pyo3_ffi::PyEval_RestoreThread(saved);
-        pyo3_ffi::PyGILState_Release(gil);
-        location
-    }?;
+            })
+    })?;
     // SAFETY: `locate` verified the location on two threads. A concurrent call may have
     // stored its own verified location first; either one holds.
     unsafe { reader::set_location(location) };
@@ -130,6 +128,12 @@ pub struct Image {
     /// The pthread key of the image's block.
     pub key: u32,
 }
+
+// SAFETY: `header` points at the Mach-O header and load commands of a loaded image, which
+// dyld does not write after loading and which are only read through it, from any thread.
+unsafe impl Send for Image {}
+// SAFETY: as for `Send`.
+unsafe impl Sync for Image {}
 
 fn commands(header: *const Header) -> impl Iterator<Item = *const Command> {
     // SAFETY: `header` is the Mach-O header of a loaded image, which its load commands follow.
