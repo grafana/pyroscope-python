@@ -73,6 +73,9 @@ const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_INTERPRETER;
 pub enum Error {
     /// The calling thread has no Python thread state.
     NoThreadState,
+    /// The thread state has no current frame. From 3.15 this means it is not a live thread
+    /// state; before 3.15 its thread runs no Python code.
+    NullFrame,
     /// Memory on the chain was unreadable.
     Read,
     /// A Python frame's executable was null or was not a code object.
@@ -138,6 +141,7 @@ pub struct Metrics {
     buffer_dropped: AtomicUsize,
     truncated: AtomicUsize,
     no_thread_state: AtomicUsize,
+    null_frame: AtomicUsize,
     invalid_code_type: AtomicUsize,
     read_errors: AtomicUsize,
     /// Stacks dropped because deferred frame resolution failed.
@@ -149,6 +153,7 @@ pub static METRICS: Metrics = Metrics {
     buffer_dropped: AtomicUsize::new(0),
     truncated: AtomicUsize::new(0),
     no_thread_state: AtomicUsize::new(0),
+    null_frame: AtomicUsize::new(0),
     invalid_code_type: AtomicUsize::new(0),
     read_errors: AtomicUsize::new(0),
     resolve_error: AtomicUsize::new(0),
@@ -157,11 +162,12 @@ pub static METRICS: Metrics = Metrics {
 impl Metrics {
     /// Takes lost sampling-period counts since the previous drain, one reason per lost stack.
     /// Concurrent increments remain in this batch or the next one.
-    pub fn take_drop_counts(&self) -> [(&'static str, usize); 7] {
+    pub fn take_drop_counts(&self) -> [(&'static str, usize); 8] {
         [
             ("contentions", &self.contentions),
             ("buffer_dropped", &self.buffer_dropped),
             ("no_thread_state", &self.no_thread_state),
+            ("null_frame", &self.null_frame),
             ("invalid_code_type", &self.invalid_code_type),
             ("read_errors", &self.read_errors),
             ("truncated", &self.truncated),
@@ -194,6 +200,7 @@ fn unwind_thread(tstate: usize, frames: &mut [Frame], count: usize) -> Result<&[
     result.inspect_err(|error| {
         let counter = match error {
             Error::NoThreadState => &METRICS.no_thread_state,
+            Error::NullFrame => &METRICS.null_frame,
             Error::InvalidCodeType => &METRICS.invalid_code_type,
             Error::Read => &METRICS.read_errors,
             Error::Truncated => &METRICS.truncated,
@@ -213,6 +220,13 @@ fn current_frame(tstate: usize) -> Result<usize, Error> {
 fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
     let code_type = (&raw mut pyo3_ffi::PyCode_Type) as usize;
     let mut frame = current_frame(tstate)?;
+    // From 3.15 every thread state's chain starts at a sentinel base frame, so there a null
+    // frame likely means the "thread state" is a stale pointer: libpython reused the TLS
+    // module id of an unloaded ELF, and the thread's DTV entry still points into the old
+    // module's block. Before 3.15 a thread state that runs no Python code has no frame.
+    if frame == 0 {
+        return Err(Error::NullFrame);
+    }
     let mut visited = 0;
     let mut pushed = 0;
     while frame != 0 {
@@ -297,6 +311,7 @@ mod tests {
             (&metrics.contentions, 1),
             (&metrics.buffer_dropped, 2),
             (&metrics.no_thread_state, 3),
+            (&metrics.null_frame, 6),
             (&metrics.invalid_code_type, 4),
             (&metrics.read_errors, 5),
             (&metrics.truncated, 13),
@@ -308,6 +323,7 @@ mod tests {
             ("contentions", 1),
             ("buffer_dropped", 2),
             ("no_thread_state", 3),
+            ("null_frame", 6),
             ("invalid_code_type", 4),
             ("read_errors", 5),
             ("truncated", 13),
@@ -342,6 +358,32 @@ mod tests {
             METRICS.read_errors.load(Ordering::Relaxed),
             read_before + 11
         );
+    }
+
+    #[test]
+    fn thread_state_without_a_frame_fails_and_counts_null_frame() {
+        init();
+        let _guard = METRICS_LOCK.lock().unwrap();
+        let before = METRICS.null_frame.load(Ordering::Relaxed);
+        let read_before = METRICS.read_errors.load(Ordering::Relaxed);
+        #[cfg(not(Py_3_13))]
+        let cframe = [0usize; 4];
+        let tstate = [0usize; 32];
+        #[cfg(not(Py_3_13))]
+        let tstate = {
+            let mut tstate = tstate;
+            set(&mut tstate, layout::THREAD_FRAME, cframe.as_ptr() as usize);
+            tstate
+        };
+        let tstate = tstate.as_ptr() as usize;
+        let mut output = [Frame { code: 1, instr: 2 }; 1];
+        assert_eq!(
+            unwind_thread(tstate, &mut output, 13),
+            Err(Error::NullFrame)
+        );
+        assert_eq!(output, [Frame { code: 1, instr: 2 }]);
+        assert_eq!(METRICS.null_frame.load(Ordering::Relaxed), before + 13);
+        assert_eq!(METRICS.read_errors.load(Ordering::Relaxed), read_before);
     }
 
     #[test]

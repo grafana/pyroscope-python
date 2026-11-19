@@ -366,6 +366,7 @@ pub(crate) mod tests {
             ("contentions", 1),
             ("buffer_dropped", 2),
             ("no_thread_state", 3),
+            ("null_frame", 6),
             ("invalid_code_type", 4),
             ("read_errors", 5),
             ("truncated", 13),
@@ -395,6 +396,7 @@ pub(crate) mod tests {
                 vec![("[dropped: no_thread_state]", "", 0)],
                 vec![30_000_000],
             ),
+            (vec![("[dropped: null_frame]", "", 0)], vec![60_000_000]),
             (
                 vec![("[dropped: invalid_code_type]", "", 0)],
                 vec![40_000_000],
@@ -411,7 +413,7 @@ pub(crate) mod tests {
                 .iter()
                 .map(|sample| sample.value[0])
                 .sum::<i64>(),
-            1_370_000_000,
+            1_430_000_000,
             "{profile:#?}"
         );
     }

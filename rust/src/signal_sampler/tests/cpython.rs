@@ -186,12 +186,19 @@ fn thread_state_is_found_only_on_threads_that_have_one() {
         .unwrap()
     };
     let missing = Err(unwind::Error::NoThreadState);
+    // pyo3's own frames are not Python frames. From 3.15 the chain still has the thread
+    // state's base frame, which is skipped; before, the state has no current frame.
+    let no_frame = if cfg!(Py_3_15) {
+        Ok(0)
+    } else {
+        Err(unwind::Error::NullFrame)
+    };
     assert_eq!(on_thread(false), (missing, missing, missing));
-    // A thread keeps its state while detached; pyo3's own frames are not Python frames.
-    assert_eq!(on_thread(true), (missing, Ok(0), Ok(0)));
+    // A thread keeps its state while detached.
+    assert_eq!(on_thread(true), (missing, no_frame, no_frame));
     assert_eq!(
         Python::attach(|py| (unwind(), py.detach(unwind))),
-        (Ok(0), Ok(0))
+        (no_frame, no_frame)
     );
 }
 
