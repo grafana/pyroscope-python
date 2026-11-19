@@ -128,16 +128,19 @@ fn read(address: usize) -> Result<usize, Error> {
 
 /// The calling thread's block of `module`, allocated as a first access would. Not
 /// async-signal-safe.
-fn block(module: usize) -> usize {
-    let index = TlsIndex { module, offset: 0 };
-    // SAFETY: `module` is the id of a loaded module, from `module_of`.
+fn block(module: Module) -> usize {
+    let index = TlsIndex {
+        module: module.id,
+        offset: 0,
+    };
+    // SAFETY: `module` is a loaded module, from `module_of`.
     unsafe { __tls_get_addr(&index) as usize }
 }
 
 /// The offset in `module`'s block of the only pointer-sized slot of the calling thread that
 /// holds `value`. `None` if no slot or several slots hold it. Not async-signal-safe.
 pub fn find_value(module: Module, value: usize) -> Option<usize> {
-    let block = block(module.id);
+    let block = block(module);
     let mut offsets = (0..=module.size.checked_sub(size_of::<usize>())?)
         .step_by(size_of::<usize>())
         .filter(|offset| read(block + offset) == Ok(value));
@@ -156,20 +159,20 @@ struct Probe {
 }
 
 impl Probe {
-    fn current(module: usize) -> Probe {
+    fn current(module: Module) -> Probe {
         let block = block(module);
         Probe {
             block,
             delta: block.wrapping_sub(thread_pointer()) as isize,
-            in_dtv: dtv_block(module) == Ok(block),
+            in_dtv: dtv_block(module.id) == Ok(block),
         }
     }
 
     /// Probes on a new thread running on a [`Stack`]. Returns the probe and the addresses of
     /// the stack.
-    fn on_new_thread(module: usize) -> Option<(Probe, Range<usize>)> {
+    fn on_new_thread(module: Module) -> Option<(Probe, Range<usize>)> {
         struct Call {
-            module: usize,
+            module: Module,
             probe: Option<Probe>,
         }
         extern "C" fn start(call: *mut c_void) -> *mut c_void {
@@ -301,8 +304,8 @@ impl Drop for Stack {
 /// threads and inside the new thread's stack, which holds its static TLS. `None` if neither
 /// location holds on both threads. Not async-signal-safe.
 pub fn locate(module: Module, offset: usize) -> Option<Location> {
-    let here = Probe::current(module.id);
-    let (there, stack) = Probe::on_new_thread(module.id)?;
+    let here = Probe::current(module);
+    let (there, stack) = Probe::on_new_thread(module)?;
     choose(module.id, offset, here, there, stack)
 }
 
@@ -359,7 +362,7 @@ mod tests {
         let marker = 0x2390_0000_0000_0239;
         SLOT.set(marker);
         let offset = find_value(module, marker).unwrap();
-        assert_eq!(block(module.id) + offset, SLOT.with(Cell::as_ptr) as usize);
+        assert_eq!(block(module) + offset, SLOT.with(Cell::as_ptr) as usize);
         let location = locate(module, offset).unwrap();
         assert!(matches!(location, Location::Fixed { .. }), "{location:?}");
         assert_eq!(location.read(), Ok(marker));
@@ -393,14 +396,14 @@ mod tests {
     fn the_new_thread_runs_on_its_own_stack() {
         init_recovery();
         let module = module_of(init_recovery as fn() as usize).unwrap();
-        let (probe, stack) = Probe::on_new_thread(module.id).unwrap();
+        let (probe, stack) = Probe::on_new_thread(module).unwrap();
         // glibc carves the static TLS of the test binary out of the provided stack.
         assert!(
             stack.contains(&probe.block),
             "{:#x} {stack:x?}",
             probe.block
         );
-        assert!(!stack.contains(&block(module.id)));
+        assert!(!stack.contains(&block(module)));
     }
 
     #[test]
@@ -550,7 +553,7 @@ mod tests {
         let marker = 0x2392_0000_0000_0239;
         library.set(marker);
         let offset = find_value(library.module, marker).unwrap();
-        assert_eq!(block(library.module.id) + offset, library.address());
+        assert_eq!(block(library.module) + offset, library.address());
         let location = locate(library.module, offset).unwrap();
         assert_eq!(location.read(), Ok(marker));
         location
