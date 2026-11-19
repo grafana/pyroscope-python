@@ -12,6 +12,7 @@ use crate::{ThreadStateAccess, ThreadStateError};
 use core::ffi::{c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
+use pyroscope_python_unwind::Error;
 use pyroscope_python_unwind::thread_state::glibc::{
     self as reader, Location, dtv_block, thread_pointer,
 };
@@ -122,12 +123,12 @@ pub fn module_of(address: usize) -> Option<Module> {
 }
 
 #[inline(always)]
-fn read(address: usize) -> Option<usize> {
+fn read(address: usize) -> Result<usize, Error> {
     // SAFETY: a pointer-sized load under kindasafe's recovery preconditions, documented at
     // crate level. No Rust reference to the source memory is created.
     unsafe { kindasafe::u64(address as u64) }
-        .ok()
         .map(|word| word as usize)
+        .map_err(|_| Error::Read)
 }
 
 /// The calling thread's block of `module`, allocated as a first access would. Not
@@ -144,7 +145,7 @@ pub fn find_value(module: Module, value: usize) -> Option<usize> {
     let block = block(module.id);
     let mut offsets = (0..=module.size.checked_sub(size_of::<usize>())?)
         .step_by(size_of::<usize>())
-        .filter(|offset| read(block + offset) == Some(value));
+        .filter(|offset| read(block + offset) == Ok(value));
     let offset = offsets.next()?;
     offsets.next().is_none().then_some(offset)
 }
@@ -162,7 +163,7 @@ impl Probe {
         let block = block(module);
         Probe {
             delta: block.wrapping_sub(thread_pointer()) as isize,
-            in_dtv: dtv_block(module) == Some(block),
+            in_dtv: dtv_block(module) == Ok(block),
         }
     }
 
@@ -246,7 +247,7 @@ mod tests {
         assert_eq!(block(module.id) + offset, SLOT.with(Cell::as_ptr) as usize);
         let location = locate(module, offset).unwrap();
         assert!(matches!(location, Location::Fixed { .. }), "{location:?}");
-        assert_eq!(location.read(), Some(marker));
+        assert_eq!(location.read(), Ok(marker));
         for value in [0, 239] {
             let read = thread::spawn(move || {
                 if value != 0 {
@@ -254,7 +255,7 @@ mod tests {
                 }
                 location.read()
             });
-            assert_eq!(read.join().unwrap(), Some(value));
+            assert_eq!(read.join().unwrap(), Ok(value));
         }
     }
 
@@ -345,13 +346,14 @@ mod tests {
 
     /// A thread that keeps running across the `dlopen` of a library.
     struct Worker {
-        calls: mpsc::Sender<Box<dyn FnOnce() -> Option<usize> + Send>>,
-        results: mpsc::Receiver<Option<usize>>,
+        calls: mpsc::Sender<Box<dyn FnOnce() -> Result<usize, Error> + Send>>,
+        results: mpsc::Receiver<Result<usize, Error>>,
     }
 
     impl Worker {
         fn spawn() -> Worker {
-            let (calls, pending) = mpsc::channel::<Box<dyn FnOnce() -> Option<usize> + Send>>();
+            let (calls, pending) =
+                mpsc::channel::<Box<dyn FnOnce() -> Result<usize, Error> + Send>>();
             let (done, results) = mpsc::channel();
             thread::spawn(move || {
                 for call in pending {
@@ -361,7 +363,10 @@ mod tests {
             Worker { calls, results }
         }
 
-        fn run(&self, call: impl FnOnce() -> Option<usize> + Send + 'static) -> Option<usize> {
+        fn run(
+            &self,
+            call: impl FnOnce() -> Result<usize, Error> + Send + 'static,
+        ) -> Result<usize, Error> {
             self.calls.send(Box::new(call)).unwrap();
             self.results.recv().unwrap()
         }
@@ -373,7 +378,7 @@ mod tests {
         let offset = find_value(library.module, marker).unwrap();
         assert_eq!(block(library.module.id) + offset, library.address());
         let location = locate(library.module, offset).unwrap();
-        assert_eq!(location.read(), Some(marker));
+        assert_eq!(location.read(), Ok(marker));
         location
     }
 
@@ -393,15 +398,24 @@ mod tests {
 
         let module = library.module;
         // Threads that never accessed the variable have no block; reading must not allocate one.
-        assert_eq!(before.run(move || location.read()), None);
-        assert_eq!(before.run(move || dtv_block(module.id)), None);
-        assert_eq!(thread::spawn(move || location.read()).join().unwrap(), None);
+        assert_eq!(
+            before.run(move || location.read()),
+            Err(Error::NoThreadState)
+        );
+        assert_eq!(
+            before.run(move || dtv_block(module.id)),
+            Err(Error::NoThreadState)
+        );
+        assert_eq!(
+            thread::spawn(move || location.read()).join().unwrap(),
+            Err(Error::NoThreadState)
+        );
         for (worker, value) in [(&before, 239), (&Worker::spawn(), 2390)] {
             let read = worker.run(move || {
                 library.set(value);
                 location.read()
             });
-            assert_eq!(read, Some(value));
+            assert_eq!(read, Ok(value));
         }
     }
 
@@ -415,18 +429,21 @@ mod tests {
         assert!(matches!(location, Location::Fixed { .. }), "{location:?}");
 
         let module = library.module;
-        assert_eq!(before.run(move || location.read()), Some(0));
+        assert_eq!(before.run(move || location.read()), Ok(0));
         // The thread that predates the dlopen uses the variable, yet its DTV has no entry.
         let read = before.run(move || {
             library.set(239);
             location.read()
         });
-        assert_eq!(read, Some(239));
-        assert_eq!(before.run(move || dtv_block(module.id)), None);
+        assert_eq!(read, Ok(239));
+        assert_eq!(
+            before.run(move || dtv_block(module.id)),
+            Err(Error::NoThreadState)
+        );
         let read = thread::spawn(move || {
             library.set(2390);
             location.read()
         });
-        assert_eq!(read.join().unwrap(), Some(2390));
+        assert_eq!(read.join().unwrap(), Ok(2390));
     }
 }

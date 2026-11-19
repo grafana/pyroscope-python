@@ -24,6 +24,7 @@
 //!
 //! Reads use kindasafe under the recovery preconditions documented at crate level.
 
+use crate::{Error, read_usize};
 use core::arch::asm;
 use core::sync::atomic::{AtomicIsize, AtomicU8, AtomicUsize, Ordering};
 
@@ -59,45 +60,37 @@ pub fn thread_pointer() -> usize {
     pointer
 }
 
+/// The calling thread's block of `module` as its DTV records it. [`Error::NoThreadState`] if
+/// the DTV has no block for it, [`Error::Read`] if a read failed. Never allocates a block.
+/// Async-signal-safe.
 #[inline(always)]
-fn read(address: usize) -> Option<usize> {
-    // SAFETY: a pointer-sized load under kindasafe's recovery preconditions, documented at
-    // crate level. No Rust reference to the source memory is created.
-    unsafe { kindasafe::u64(address as u64) }
-        .ok()
-        .map(|word| word as usize)
-}
-
-/// The calling thread's block of `module` as its DTV records it, or `None` if the DTV has no
-/// block for it. Never allocates one. Async-signal-safe.
-#[inline(always)]
-pub fn dtv_block(module: usize) -> Option<usize> {
-    let dtv = read(thread_pointer().wrapping_add(TCB_DTV))?;
-    let capacity = read(dtv.wrapping_sub(DTV_ENTRY))?;
+pub fn dtv_block(module: usize) -> Result<usize, Error> {
+    let dtv = read_usize(thread_pointer(), TCB_DTV)?;
+    let capacity = read_usize(dtv, DTV_ENTRY.wrapping_neg())?;
     if module > capacity {
-        return None;
+        return Err(Error::NoThreadState);
     }
     // Never-used entries are zero, unallocated ones are TLS_DTV_UNALLOCATED.
-    match read(dtv.wrapping_add(module.wrapping_mul(DTV_ENTRY)))? {
-        0 | usize::MAX => None,
-        block => Some(block),
+    match read_usize(dtv, module.wrapping_mul(DTV_ENTRY))? {
+        0 | usize::MAX => Err(Error::NoThreadState),
+        block => Ok(block),
     }
 }
 
 impl Location {
-    /// The variable's value in the calling thread. `None` if the thread has no block for the
-    /// module, which means it never accessed the variable, or if a read failed.
-    /// Async-signal-safe.
+    /// The variable's value in the calling thread. [`Error::NoThreadState`] if the thread has
+    /// no block for the module, which means it never accessed the variable, [`Error::Read`] if
+    /// a read failed. Async-signal-safe.
     ///
     /// A DTV entry can outlive its module: glibc refreshes a thread's DTV only on that
     /// thread's next dynamic TLS access. If the module's id was reused from an unloaded
     /// module, a thread that has not accessed the variable can yield a word of the old block,
     /// so validate values read through [`Location::Dtv`].
     #[inline(always)]
-    pub fn read(self) -> Option<usize> {
+    pub fn read(self) -> Result<usize, Error> {
         match self {
-            Location::Fixed { offset } => read(thread_pointer().wrapping_add_signed(offset)),
-            Location::Dtv { module, offset } => read(dtv_block(module)?.wrapping_add(offset)),
+            Location::Fixed { offset } => read_usize(thread_pointer(), offset as usize),
+            Location::Dtv { module, offset } => read_usize(dtv_block(module)?, offset),
         }
     }
 }
@@ -164,19 +157,19 @@ pub fn current() -> usize {
         Some(location @ Location::Fixed { .. }) => location.read().unwrap_or(0),
         // A stale DTV entry yields an arbitrary word: accept only a thread state bound to
         // this thread.
-        Some(location @ Location::Dtv { .. }) => location
-            .read()
-            .filter(|&tstate| tstate != 0 && bound_to_this_thread(tstate))
-            .unwrap_or(0),
+        Some(location @ Location::Dtv { .. }) => match location.read() {
+            Ok(tstate) if tstate != 0 && bound_to_this_thread(tstate) => tstate,
+            _ => 0,
+        },
         None => 0,
     }
 }
 
 #[inline(always)]
 fn bound_to_this_thread(tstate: usize) -> bool {
-    let thread_id = read(tstate.wrapping_add(crate::layout::THREAD_ID));
+    let thread_id = read_usize(tstate, crate::layout::THREAD_ID);
     // SAFETY: pthread_self only reads the thread pointer.
-    thread_id == Some(unsafe { libc::pthread_self() } as usize)
+    thread_id == Ok(unsafe { libc::pthread_self() } as usize)
 }
 
 #[cfg(all(test, not(miri)))]

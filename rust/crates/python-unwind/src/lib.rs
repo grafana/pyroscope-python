@@ -258,7 +258,8 @@ fn read_u8(base: usize, offset: usize) -> Result<u8, Error> {
 fn read_usize(base: usize, offset: usize) -> Result<usize, Error> {
     let addr = base.wrapping_add(offset);
     // SAFETY: these are pointer-sized fields of the interrupted thread's retained frame
-    // chain/code objects, under the runtime ownership assumptions documented at crate level.
+    // chain/code objects, under the runtime ownership assumptions documented at crate level,
+    // or words of its TCB, DTV and TLS blocks, which belong to the interrupted thread.
     // No Rust reference to source memory is created. Recovery initialization, preserved
     // handlers, and unblocked recovery signals are caller preconditions documented at
     // crate level.
