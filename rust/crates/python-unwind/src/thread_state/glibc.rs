@@ -23,6 +23,33 @@
 //! [`Location`] only after checking it on two threads against the loader's own answer.
 //!
 //! Reads use kindasafe under the recovery preconditions documented at crate level.
+//!
+//! # Known unsupported cases
+//!
+//! These are known and accepted. They concern only [`Location::Dtv`], which is used when
+//! libpython was `dlopen`ed into dynamic TLS. [`Location::Fixed`] has none of them.
+//!
+//! - A thread state attached on a thread other than the one that created it is not found.
+//!   CPython sets `thread_id` once, on the creating thread, so [`current`] rejects the state on
+//!   any other thread. `threading`, `PyGILState_Ensure` and a `PyThreadState_New` called on the
+//!   thread that uses the state are unaffected.
+//! - A DTV entry can be stale. glibc trusts an entry only after comparing the thread's DTV
+//!   generation with the loader's, which is private, so the reader cannot do the same. If a
+//!   module with TLS was unloaded before libpython was loaded and libpython got its id, a
+//!   thread that used that module reads a word of the old block until its next dynamic TLS
+//!   access.
+//! - A signal that lands inside glibc's DTV resize or slot update can read a DTV or a block
+//!   that was just freed.
+//!
+//! In the last two cases the read yields an arbitrary word. [`current`] accepts it only if it
+//! points at memory whose `thread_id` slot holds the calling thread's id, so the sample is
+//! normally dropped. A word that passes gives a wrong thread state; the unwinder still
+//! validates every code object, and every read recovers from a fault.
+//!
+//! The DTV generation of the thread that ran the search is not a usable threshold for
+//! rejecting stale entries. It is only an upper bound of the generation libpython was loaded
+//! at, and glibc 2.35 advances a thread only as far as the module it accesses, so threads that
+//! use nothing newer than libpython would be rejected for good.
 
 use crate::{Error, read_usize};
 use core::arch::asm;
