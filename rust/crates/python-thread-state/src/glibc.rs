@@ -3,14 +3,17 @@
 //! memory loads, without entering the dynamic loader. Nothing here is async-signal-safe.
 //!
 //! The TCB and DTV layouts are private to glibc. [`locate`] accepts a location only after
-//! checking it on two threads against the loader's own answer.
+//! checking it on two threads against the loader's own answer. The second thread runs on a
+//! stack mapped here: glibc carves the TCB and static TLS of a thread out of a stack the caller
+//! provides, so a variable in static TLS must lie inside that stack.
 //!
 //! The module is compiled for every CPython version, so that the search is tested on all of
 //! them, but [`init`] is used only on 3.15.
 
 use crate::ThreadStateError;
 use core::ffi::{c_int, c_void};
-use core::mem::size_of;
+use core::mem::{MaybeUninit, size_of};
+use core::ops::Range;
 use core::ptr;
 use pyroscope_python_unwind::Error;
 use pyroscope_python_unwind::thread_state::glibc::{
@@ -145,6 +148,8 @@ pub fn find_value(module: Module, value: usize) -> Option<usize> {
 
 #[derive(Clone, Copy)]
 struct Probe {
+    /// The block the loader returned.
+    block: usize,
     /// Block address relative to the thread pointer.
     delta: isize,
     /// Whether the DTV records the block the loader returned.
@@ -155,12 +160,15 @@ impl Probe {
     fn current(module: usize) -> Probe {
         let block = block(module);
         Probe {
+            block,
             delta: block.wrapping_sub(thread_pointer()) as isize,
             in_dtv: dtv_block(module) == Ok(block),
         }
     }
 
-    fn on_new_thread(module: usize) -> Option<Probe> {
+    /// Probes on a new thread running on a [`Stack`]. Returns the probe and the addresses of
+    /// the stack.
+    fn on_new_thread(module: usize) -> Option<(Probe, Range<usize>)> {
         struct Call {
             module: usize,
             probe: Option<Probe>,
@@ -171,39 +179,154 @@ impl Probe {
             call.probe = Some(Probe::current(call.module));
             ptr::null_mut()
         }
+        let stack = Stack::map()?;
         let mut call = Call {
             module,
             probe: None,
         };
+        let mut attr = Attr::new()?;
+        // SAFETY: `stack` is a readable and writable mapping that outlives the joined thread.
+        if unsafe {
+            libc::pthread_attr_setstack(&mut attr.0, stack.base as *mut c_void, stack.size)
+        } != 0
+        {
+            return None;
+        }
         // SAFETY: `start` only uses `call`, which outlives the joined thread.
         unsafe {
             let mut thread: libc::pthread_t = 0;
-            if libc::pthread_create(&mut thread, ptr::null(), start, (&raw mut call).cast()) != 0 {
+            if libc::pthread_create(&mut thread, &attr.0, start, (&raw mut call).cast()) != 0 {
                 return None;
             }
+            // The thread may still use the stack if the join fails: never unmap it then.
             if libc::pthread_join(thread, ptr::null_mut()) != 0 {
+                core::mem::forget(stack);
                 return None;
             }
         }
-        call.probe
+        Some((call.probe?, stack.base..stack.base + stack.size))
+    }
+}
+
+/// Initialized `pthread_attr_t`, destroyed on drop.
+struct Attr(libc::pthread_attr_t);
+
+impl Attr {
+    fn new() -> Option<Attr> {
+        let mut attr = MaybeUninit::uninit();
+        // SAFETY: initializes `attr`.
+        if unsafe { libc::pthread_attr_init(attr.as_mut_ptr()) } != 0 {
+            return None;
+        }
+        // SAFETY: pthread_attr_init succeeded.
+        Some(Attr(unsafe { attr.assume_init() }))
+    }
+}
+
+impl Drop for Attr {
+    fn drop(&mut self) {
+        // SAFETY: `self.0` was initialized by pthread_attr_init.
+        unsafe { libc::pthread_attr_destroy(&mut self.0) };
+    }
+}
+
+/// A thread stack of the default size with a `PROT_NONE` guard page on each side, because
+/// glibc adds no guard to a stack the caller provides. Unmapped on drop.
+struct Stack {
+    /// Lowest address of the usable stack, one page above the mapping.
+    base: usize,
+    size: usize,
+    page: usize,
+}
+
+impl Stack {
+    fn map() -> Option<Stack> {
+        // SAFETY: sysconf has no preconditions.
+        let page = usize::try_from(unsafe { libc::sysconf(libc::_SC_PAGESIZE) }).ok()?;
+        // The default size leaves the room glibc needs for the TCB and static TLS.
+        let mut size = 0;
+        // SAFETY: `attr` is initialized and `size` is writable.
+        if unsafe { libc::pthread_attr_getstacksize(&Attr::new()?.0, &mut size) } != 0 {
+            return None;
+        }
+        let size = size
+            .max(libc::PTHREAD_STACK_MIN)
+            .checked_next_multiple_of(page)?;
+        let len = size.checked_add(2 * page)?;
+        // SAFETY: a new anonymous mapping, inaccessible until the stack pages are opened.
+        let mapping = unsafe {
+            libc::mmap(
+                ptr::null_mut(),
+                len,
+                libc::PROT_NONE,
+                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_STACK,
+                -1,
+                0,
+            )
+        };
+        if mapping == libc::MAP_FAILED {
+            return None;
+        }
+        let stack = Stack {
+            base: mapping as usize + page,
+            size,
+            page,
+        };
+        // SAFETY: opens the pages between the two guard pages of the mapping above.
+        let opened = unsafe {
+            libc::mprotect(
+                stack.base as *mut c_void,
+                size,
+                libc::PROT_READ | libc::PROT_WRITE,
+            )
+        };
+        (opened == 0).then_some(stack)
+    }
+}
+
+impl Drop for Stack {
+    fn drop(&mut self) {
+        // SAFETY: unmaps the whole mapping, guard pages included; no thread runs on it.
+        unsafe {
+            libc::munmap(
+                (self.base - self.page) as *mut c_void,
+                self.size + 2 * self.page,
+            )
+        };
     }
 }
 
 /// Finds where the variable at `offset` in `module`'s block lives in every thread. Spawns a
-/// short-lived thread to compare with the calling one. `None` if neither location holds on
-/// both threads. Not async-signal-safe.
+/// short-lived thread on its own stack to compare with the calling one. A fixed offset is
+/// accepted only if the variable is at the same offset from the thread pointer on both
+/// threads and inside the new thread's stack, which holds its static TLS. `None` if neither
+/// location holds on both threads. Not async-signal-safe.
 pub fn locate(module: Module, offset: usize) -> Option<Location> {
     let here = Probe::current(module.id);
-    let there = Probe::on_new_thread(module.id)?;
-    if here.delta == there.delta {
+    let (there, stack) = Probe::on_new_thread(module.id)?;
+    choose(module.id, offset, here, there, stack)
+}
+
+/// The location that holds for the variable at `offset` on both probes. `there` ran on
+/// `stack`.
+fn choose(
+    module: usize,
+    offset: usize,
+    here: Probe,
+    there: Probe,
+    stack: Range<usize>,
+) -> Option<Location> {
+    let variable = there.block.wrapping_add(offset);
+    let in_stack = variable >= stack.start
+        && variable
+            .checked_add(size_of::<usize>())
+            .is_some_and(|end| end <= stack.end);
+    if here.delta == there.delta && in_stack {
         Some(Location::Fixed {
             offset: here.delta.wrapping_add_unsigned(offset),
         })
     } else if here.in_dtv && there.in_dtv {
-        Some(Location::Dtv {
-            module: module.id,
-            offset,
-        })
+        Some(Location::Dtv { module, offset })
     } else {
         None
     }
@@ -249,6 +372,65 @@ mod tests {
                 location.read()
             });
             assert_eq!(read.join().unwrap(), Ok(value));
+        }
+    }
+
+    #[test]
+    fn probe_stack_is_between_guard_pages() {
+        init_recovery();
+        let stack = Stack::map().unwrap();
+        let (base, end) = (stack.base, stack.base + stack.size);
+        assert_eq!(base % stack.page, 0);
+        assert!(stack.size >= libc::PTHREAD_STACK_MIN);
+        // SAFETY: kindasafe reads; the guard pages fault and are recovered.
+        let readable = |address: usize| unsafe { kindasafe::u8(address as u64) }.is_ok();
+        assert_eq!(
+            [base - 1, base, end - 1, end].map(readable),
+            [false, true, true, false]
+        );
+    }
+
+    #[test]
+    fn the_new_thread_runs_on_its_own_stack() {
+        init_recovery();
+        let module = module_of(init_recovery as fn() as usize).unwrap();
+        let (probe, stack) = Probe::on_new_thread(module.id).unwrap();
+        // glibc carves the static TLS of the test binary out of the provided stack.
+        assert!(
+            stack.contains(&probe.block),
+            "{:#x} {stack:x?}",
+            probe.block
+        );
+        assert!(!stack.contains(&block(module.id)));
+    }
+
+    #[test]
+    fn a_fixed_offset_needs_the_variable_inside_the_new_thread_stack() {
+        let stack = 0x10_0000..0x20_0000;
+        let probe = |block: usize, in_dtv| Probe {
+            block,
+            delta: -0x100,
+            in_dtv,
+        };
+        let (module, offset) = (7, 0x18);
+        // Static TLS: same offset from the thread pointer, inside the stack.
+        let fixed = Some(Location::Fixed { offset: -0xe8 });
+        let inside = probe(0x1f_ff00, false);
+        assert_eq!(choose(module, offset, inside, inside, stack.clone()), fixed);
+        let last = probe(stack.end - offset - size_of::<usize>(), false);
+        assert_eq!(choose(module, offset, last, last, stack.clone()), fixed);
+        // The same offset by coincidence, outside the stack: only the DTV may hold.
+        for block in [stack.start - offset - 1, stack.end - offset - 1, 0x40_0000] {
+            let outside = probe(block, false);
+            assert_eq!(
+                choose(module, offset, outside, outside, stack.clone()),
+                None
+            );
+            let outside = probe(block, true);
+            assert_eq!(
+                choose(module, offset, outside, outside, stack.clone()),
+                Some(Location::Dtv { module, offset })
+            );
         }
     }
 
