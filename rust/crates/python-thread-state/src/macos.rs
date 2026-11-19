@@ -23,7 +23,7 @@
 //! them, but [`init`] is used only on 3.15.
 
 use crate::ThreadStateError;
-use core::ffi::{CStr, c_char, c_void};
+use core::ffi::{c_char, c_void};
 use core::mem::size_of;
 use core::ptr;
 use pyroscope_python_unwind::Error;
@@ -68,6 +68,9 @@ const SECTION_TYPE: u32 = 0xff;
 
 const MH_MAGIC_64: u32 = 0xfeed_facf;
 const LC_SEGMENT_64: u32 = 0x19;
+
+/// `segname` of the `__TEXT` segment: a fixed 16-byte field, NUL-padded.
+const TEXT_SEGMENT: [u8; 16] = *b"__TEXT\0\0\0\0\0\0\0\0\0\0";
 
 /// `struct mach_header_64`.
 #[repr(C)]
@@ -144,8 +147,8 @@ fn segments(header: *const Header) -> impl Iterator<Item = *const Segment> {
 
 fn descriptors(header: *const Header) -> impl Iterator<Item = *const Descriptor> {
     let slide = segments(header)
-        // SAFETY: `segname` is NUL-padded and "__TEXT" is shorter than the field.
-        .find(|&segment| unsafe { CStr::from_ptr((*segment).segname.as_ptr()) } == c"__TEXT")
+        // SAFETY: `segments` yields the image's segment commands.
+        .find(|&segment| unsafe { (*segment).segname }.map(|c| c as u8) == TEXT_SEGMENT)
         // SAFETY: `segments` yields the image's segment commands.
         .map(|segment| (header as usize).wrapping_sub(unsafe { (*segment).vmaddr } as usize));
     segments(header)
