@@ -25,7 +25,7 @@ use pyroscope_python_unwind::thread_state::glibc::{
 /// calling into CPython or the dynamic loader. Until this succeeds the handler finds no thread
 /// state. The location is cached for the process.
 ///
-/// Briefly releases the GIL and spawns a short-lived thread.
+/// Briefly releases the GIL, and spawns and joins a short-lived thread while it is released.
 ///
 /// # Safety
 /// The interpreter must be initialized and kindasafe recovery must be installed.
@@ -36,18 +36,19 @@ pub unsafe fn init() -> Result<(), ThreadStateError> {
     let module = module_of(pyo3_ffi::PyGILState_GetThisThreadState as *const () as usize)
         .ok_or(ThreadStateError::NoTlsSegment)?;
     // SAFETY: the interpreter is initialized. The thread is detached during the search
-    // because the attached thread state is also cached in a second thread-local variable.
-    let offset = unsafe {
+    // because the attached thread state is also cached in a second thread-local variable, and
+    // so that joining the probe thread in `locate` never waits while holding the GIL.
+    let location = unsafe {
         let gil = pyo3_ffi::PyGILState_Ensure();
         let tstate = pyo3_ffi::PyGILState_GetThisThreadState() as usize;
         let saved = pyo3_ffi::PyEval_SaveThread();
-        let offset = find_value(module, tstate);
+        let location = find_value(module, tstate)
+            .ok_or(ThreadStateError::VariableNotFound)
+            .and_then(|offset| locate(module, offset).ok_or(ThreadStateError::UnknownTlsLayout));
         pyo3_ffi::PyEval_RestoreThread(saved);
         pyo3_ffi::PyGILState_Release(gil);
-        offset
-    }
-    .ok_or(ThreadStateError::VariableNotFound)?;
-    let location = locate(module, offset).ok_or(ThreadStateError::UnknownTlsLayout)?;
+        location
+    }?;
     // SAFETY: `locate` verified the location on two threads. A concurrent call may have
     // stored its own verified location first; either one holds.
     unsafe { reader::set_location(location) };
