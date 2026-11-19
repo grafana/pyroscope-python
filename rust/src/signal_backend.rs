@@ -367,6 +367,7 @@ pub(crate) mod tests {
             ("buffer_dropped", 2),
             ("no_thread_state", 3),
             ("invalid_code_type", 4),
+            ("invalid_frame_owner", 17),
             ("read_errors", 5),
             ("truncated", 13),
             ("resolve_error", 9),
@@ -399,6 +400,10 @@ pub(crate) mod tests {
                 vec![("[dropped: invalid_code_type]", "", 0)],
                 vec![40_000_000],
             ),
+            (
+                vec![("[dropped: invalid_frame_owner]", "", 0)],
+                vec![170_000_000],
+            ),
             (vec![("[dropped: read_errors]", "", 0)], vec![50_000_000]),
             (vec![("[dropped: truncated]", "", 0)], vec![130_000_000]),
             (vec![("[dropped: resolve_error]", "", 0)], vec![90_000_000]),
@@ -411,7 +416,7 @@ pub(crate) mod tests {
                 .iter()
                 .map(|sample| sample.value[0])
                 .sum::<i64>(),
-            1_370_000_000,
+            1_540_000_000,
             "{profile:#?}"
         );
     }

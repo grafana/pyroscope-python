@@ -61,6 +61,12 @@ const SKIP_OWNERS: u8 =
 #[cfg(Py_3_15)]
 const SKIP_OWNERS: u8 = 1 << layout::FRAME_OWNED_BY_INTERPRETER;
 
+// CPython owner values are consecutive from zero through the final sentinel.
+#[cfg(all(Py_3_12, not(Py_3_15)))]
+const MAX_OWNER: u8 = layout::FRAME_OWNED_BY_CSTACK;
+#[cfg(Py_3_15)]
+const MAX_OWNER: u8 = layout::FRAME_OWNED_BY_INTERPRETER;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
     /// The calling thread has no Python thread state.
@@ -69,6 +75,8 @@ pub enum Error {
     Read,
     /// A Python frame's executable was null or was not a code object.
     InvalidCodeType,
+    /// A Python frame's owner was not defined by the target CPython version.
+    InvalidFrameOwner,
     /// The output slice has no room, or the chain exceeds [`MAX_FRAMES`] (including loops).
     Truncated,
 }
@@ -138,6 +146,7 @@ pub struct Metrics {
     truncated: AtomicUsize,
     no_thread_state: AtomicUsize,
     invalid_code_type: AtomicUsize,
+    invalid_frame_owner: AtomicUsize,
     read_errors: AtomicUsize,
     /// Stacks dropped because deferred frame resolution failed.
     pub resolve_error: AtomicUsize,
@@ -149,6 +158,7 @@ pub static METRICS: Metrics = Metrics {
     truncated: AtomicUsize::new(0),
     no_thread_state: AtomicUsize::new(0),
     invalid_code_type: AtomicUsize::new(0),
+    invalid_frame_owner: AtomicUsize::new(0),
     read_errors: AtomicUsize::new(0),
     resolve_error: AtomicUsize::new(0),
 };
@@ -156,12 +166,13 @@ pub static METRICS: Metrics = Metrics {
 impl Metrics {
     /// Takes lost sampling-period counts since the previous drain, one reason per lost stack.
     /// Concurrent increments remain in this batch or the next one.
-    pub fn take_drop_counts(&self) -> [(&'static str, usize); 7] {
+    pub fn take_drop_counts(&self) -> [(&'static str, usize); 8] {
         [
             ("contentions", &self.contentions),
             ("buffer_dropped", &self.buffer_dropped),
             ("no_thread_state", &self.no_thread_state),
             ("invalid_code_type", &self.invalid_code_type),
+            ("invalid_frame_owner", &self.invalid_frame_owner),
             ("read_errors", &self.read_errors),
             ("truncated", &self.truncated),
             ("resolve_error", &self.resolve_error),
@@ -174,7 +185,7 @@ impl Metrics {
 /// throughout the walk. These caller preconditions are not checked at runtime; a failed
 /// memory read can crash the process if they are violated.
 ///
-/// An executable whose type is not `PyCode_Type` fails the entire stack.
+/// An invalid frame owner or an executable whose type is not `PyCode_Type` fails the entire stack.
 /// [`MAX_FRAMES`] bounds the walk, skipped frames included.
 /// Writes the calling thread's frames into `frames`, innermost first, and returns that subslice.
 /// On error, the caller must discard the partial stack.
@@ -193,6 +204,7 @@ fn unwind_thread(tstate: usize, frames: &mut [Frame], count: usize) -> Result<&[
         let counter = match error {
             Error::NoThreadState => &METRICS.no_thread_state,
             Error::InvalidCodeType => &METRICS.invalid_code_type,
+            Error::InvalidFrameOwner => &METRICS.invalid_frame_owner,
             Error::Read => &METRICS.read_errors,
             Error::Truncated => &METRICS.truncated,
         };
@@ -222,8 +234,11 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
         #[cfg(Py_3_12)]
         {
             let owner = read_u8(frame, layout::OWNER)?;
-            // Untrusted owners must not overflow or wrap to a sentinel bit.
-            if owner < 8 && SKIP_OWNERS & (1 << owner) != 0 {
+            // Reject undefined owners before shifting or accessing the executable.
+            if owner > MAX_OWNER {
+                return Err(Error::InvalidFrameOwner);
+            }
+            if SKIP_OWNERS & (1 << owner) != 0 {
                 frame = previous;
                 continue;
             }
@@ -296,6 +311,7 @@ mod tests {
             (&metrics.buffer_dropped, 2),
             (&metrics.no_thread_state, 3),
             (&metrics.invalid_code_type, 4),
+            (&metrics.invalid_frame_owner, 17),
             (&metrics.read_errors, 5),
             (&metrics.truncated, 13),
             (&metrics.resolve_error, 9),
@@ -307,6 +323,7 @@ mod tests {
             ("buffer_dropped", 2),
             ("no_thread_state", 3),
             ("invalid_code_type", 4),
+            ("invalid_frame_owner", 17),
             ("read_errors", 5),
             ("truncated", 13),
             ("resolve_error", 9),
@@ -456,8 +473,10 @@ mod tests {
 
     #[cfg(Py_3_12)]
     #[test]
-    fn frame_owner_bytes_only_skip_known_sentinels() {
+    fn frame_owner_bytes_only_accept_known_owners() {
         init();
+        let _guard = METRICS_LOCK.lock().unwrap();
+        let invalid_owner_before = METRICS.invalid_frame_owner.load(Ordering::Relaxed);
         let mut code = [0usize; 4];
         set(
             &mut code,
@@ -473,7 +492,12 @@ mod tests {
         let mut inner = [0usize; 16];
         set(&mut inner, layout::PREVIOUS, outer.as_ptr() as usize);
         set(&mut inner, layout::INSTR, 11);
-        let frame = inner.as_ptr() as usize;
+        // Validate the owner after a valid frame so rejection must fail a partial stack.
+        let mut leaf = [0usize; 16];
+        set(&mut leaf, layout::EXECUTABLE, code_addr);
+        set(&mut leaf, layout::PREVIOUS, inner.as_ptr() as usize);
+        set(&mut leaf, layout::INSTR, 7);
+        let frame = leaf.as_ptr() as usize;
         #[cfg(not(Py_3_13))]
         let mut cframe = [0usize; 4];
         #[cfg(not(Py_3_13))]
@@ -487,6 +511,10 @@ mod tests {
         let stack = [
             Frame {
                 code: code_addr,
+                instr: 7,
+            },
+            Frame {
+                code: code_addr,
                 instr: 11,
             },
             Frame {
@@ -494,10 +522,14 @@ mod tests {
                 instr: 22,
             },
         ];
-        let mut output = [Frame::default(); 2];
+        let skipped_stack = [stack[0], stack[2]];
+        let mut output = [Frame::default(); 3];
+        let mut invalid_owner_count = 0;
+        const PERIODS: usize = 17;
 
         // Cover every byte, including out-of-range owners that would wrap to a
-        // sentinel bit in release builds. Unknown owners still validate the code.
+        // sentinel bit in release builds and unknown owners below 8. Thread,
+        // generator, and frame-object owners are 0, 1, and 2 respectively.
         for owner in 0..=u8::MAX {
             let skip = match owner {
                 #[cfg(not(Py_3_15))]
@@ -515,22 +547,32 @@ mod tests {
                     .add(layout::OWNER)
                     .write(owner)
             };
-            for executable in [0, wrong_code.as_ptr() as usize, code_addr] {
+            for executable in [code_addr, 0, wrong_code.as_ptr() as usize, 8] {
                 set(&mut inner, layout::EXECUTABLE, executable);
                 let expected = if skip {
-                    Ok(&stack[1..])
+                    Ok(&skipped_stack[..])
+                } else if owner > 2 {
+                    invalid_owner_count += PERIODS;
+                    Err(Error::InvalidFrameOwner)
                 } else if executable == code_addr {
                     Ok(&stack[..])
+                } else if executable == 8 {
+                    // Only valid code-frame owners may read the unmapped null page.
+                    Err(Error::Read)
                 } else {
                     Err(Error::InvalidCodeType)
                 };
                 assert_eq!(
-                    walk(tstate, &mut output),
+                    unwind_thread(tstate, &mut output, PERIODS),
                     expected,
                     "owner={owner}, executable={executable:#x}, Python={PY_VERSION:?}"
                 );
             }
         }
+        assert_eq!(
+            METRICS.invalid_frame_owner.load(Ordering::Relaxed),
+            invalid_owner_before + invalid_owner_count
+        );
     }
 
     #[test]
