@@ -1,6 +1,7 @@
 use pyo3::{exceptions::PyAssertionError, prelude::*, types::PyModule, wrap_pyfunction};
 use pyroscope_pprof::{StringTable, ffi::FFIFrame};
 use pyroscope_python_resolve::{Lines, PYO3Types, Resolver};
+use pyroscope_python_thread_state as thread_state;
 use pyroscope_python_unwind::{self as unwind, Frame, MAX_FRAMES};
 use std::{
     ffi::CString,
@@ -159,12 +160,55 @@ fn module<'py>(py: Python<'py>, source: &str, filename: &str, name: &str) -> Bou
     module
 }
 
-#[test]
-fn resolves_real_cpython_stack_shapes() {
-    let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
+fn init() {
     Python::initialize();
     // SAFETY: these tests preserve recovery handlers throughout all walks.
     unsafe { kindasafe_init::init() }.unwrap();
+    // SAFETY: recovery is initialized.
+    assert_eq!(
+        Python::attach(|py| unsafe { thread_state::init(py) }),
+        Ok(())
+    );
+}
+
+#[test]
+fn thread_state_is_found_only_on_threads_that_have_one() {
+    let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
+    init();
+    let unwind = || unwind::unwind(&mut [Frame::default(); 1]).map(<[Frame]>::len);
+    let on_thread = |attach: bool| {
+        std::thread::spawn(move || {
+            let before = unwind();
+            if !attach {
+                return (before, before, before);
+            }
+            let (attached, detached) = Python::attach(|py| (unwind(), py.detach(unwind)));
+            (before, attached, detached)
+        })
+        .join()
+        .unwrap()
+    };
+    let missing = Err(unwind::Error::NoThreadState);
+    // pyo3's own frames are not Python frames. From 3.15 the chain still has the thread
+    // state's base frame, which is skipped; before, the state has no current frame.
+    let no_frame = if cfg!(Py_3_15) {
+        Ok(0)
+    } else {
+        Err(unwind::Error::NullFrame)
+    };
+    assert_eq!(on_thread(false), (missing, missing, missing));
+    // A thread keeps its state while detached.
+    assert_eq!(on_thread(true), (missing, no_frame, no_frame));
+    assert_eq!(
+        Python::attach(|py| (unwind(), py.detach(unwind))),
+        (no_frame, no_frame)
+    );
+}
+
+#[test]
+fn resolves_real_cpython_stack_shapes() {
+    let _guard = crate::signal_sampler::METRICS_LOCK.lock().unwrap();
+    init();
     Python::attach(|py| {
         let foreign = module(py, FOREIGN_SOURCE, FOREIGN_FILENAME, "resolver_foreign");
         for (index, filename) in ["frames.py", "frames_é.py", "frames_中.py", "frames_🐍.py"]

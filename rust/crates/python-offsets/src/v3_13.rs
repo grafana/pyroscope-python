@@ -3,6 +3,7 @@
 pub const PY_VERSION: (u8, u8) = (3, 13);
 pub const OB_TYPE: usize = 8;
 pub const THREAD_FRAME: usize = 72;
+pub const THREAD_ID: usize = 152;
 pub const EXECUTABLE: usize = 0;
 pub const PREVIOUS: usize = 8;
 pub const INSTR: usize = 56;

@@ -14,6 +14,8 @@ use timer::Timer;
 use timer::{Mode, SignalHandler};
 use unwind::{Frame, MAX_FRAMES, SampleMetadata};
 
+use pyo3::Python;
+use pyroscope_python_thread_state as thread_state;
 use pyroscope_python_unwind as unwind;
 use pyroscope_ringbuffer as ringbuffer;
 use pyroscope_signal_timer as timer;
@@ -67,9 +69,9 @@ pub(super) static METRICS_LOCK: Mutex<()> = Mutex::new(());
 
 fn check_version(version: (u8, u8)) -> Result<(), Error> {
     let (major, minor) = version;
-    if !matches!(version, (3, 11..=14)) {
+    if !matches!(version, (3, 11..=15)) {
         return Err(format!(
-            "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
+            "unwinding in the signal handler supports only Python 3.11 to 3.15, found {major}.{minor}"
         ));
     }
     if version != unwind::PY_VERSION {
@@ -95,7 +97,7 @@ pub struct SignalHandlerSession {
 }
 
 impl SignalHandlerSession {
-    pub fn start(config: &Config) -> Result<SignalHandlerSession, Error> {
+    pub fn start(py: Python<'_>, config: &Config) -> Result<SignalHandlerSession, Error> {
         check_version(config.python_version)?;
         if config.sampling_rate == 0 {
             return Err("the sampling rate must be greater than zero".to_string());
@@ -106,6 +108,9 @@ impl SignalHandlerSession {
         // callbacks compatible and loaded, as documented in README.md and the unwinder.
         unsafe { kindasafe_init::init() }
             .map_err(|error| format!("failed to install memory fault handlers: {error:?}"))?;
+        // SAFETY: recovery was installed above.
+        unsafe { thread_state::init(py) }
+            .map_err(|error| format!("failed to locate the Python thread state: {error:?}"))?;
         let resolver = resolve::Resolver::new(config.lines);
 
         // Discard what a previous session left behind.
@@ -187,7 +192,7 @@ pub fn thread_removed(timer: &SharedTimer, tid: timer::pid_t) {
     }
 }
 
-#[cfg(all(test, not(miri), not(Py_3_15)))]
+#[cfg(all(test, not(miri)))]
 #[path = "signal_sampler/tests/cpython.rs"]
 mod cpython_tests;
 
@@ -197,16 +202,16 @@ mod tests {
 
     #[test]
     fn requires_a_supported_version_matching_the_build() {
-        for version in [(3, 10), (3, 15), (4, 0)] {
+        for version in [(3, 10), (3, 16), (4, 0)] {
             let (major, minor) = version;
             assert_eq!(
                 check_version(version),
                 Err(format!(
-                    "unwinding in the signal handler supports only Python 3.11 to 3.14, found {major}.{minor}"
+                    "unwinding in the signal handler supports only Python 3.11 to 3.15, found {major}.{minor}"
                 ))
             );
         }
-        for minor in 11..=14 {
+        for minor in 11..=15 {
             let version = (3, minor);
             let expected = if version == unwind::PY_VERSION {
                 Ok(())
