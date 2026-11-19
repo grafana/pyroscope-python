@@ -222,7 +222,8 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
         #[cfg(Py_3_12)]
         {
             let owner = read_u8(frame, layout::OWNER)?;
-            if SKIP_OWNERS & (1 << owner) != 0 {
+            // Untrusted owners must not overflow or wrap to a sentinel bit.
+            if owner < 8 && SKIP_OWNERS & (1 << owner) != 0 {
                 frame = previous;
                 continue;
             }
@@ -451,6 +452,85 @@ mod tests {
             METRICS.read_errors.load(Ordering::Relaxed),
             read_errors_before + 1
         );
+    }
+
+    #[cfg(Py_3_12)]
+    #[test]
+    fn frame_owner_bytes_only_skip_known_sentinels() {
+        init();
+        let mut code = [0usize; 4];
+        set(
+            &mut code,
+            OB_TYPE,
+            (&raw mut pyo3_ffi::PyCode_Type) as usize,
+        );
+        let code_addr = code.as_ptr() as usize;
+        let wrong_code = [0usize; 4];
+
+        let mut outer = [0usize; 16];
+        set(&mut outer, layout::EXECUTABLE, code_addr);
+        set(&mut outer, layout::INSTR, 22);
+        let mut inner = [0usize; 16];
+        set(&mut inner, layout::PREVIOUS, outer.as_ptr() as usize);
+        set(&mut inner, layout::INSTR, 11);
+        let frame = inner.as_ptr() as usize;
+        #[cfg(not(Py_3_13))]
+        let mut cframe = [0usize; 4];
+        #[cfg(not(Py_3_13))]
+        let frame = {
+            set(&mut cframe, layout::CFRAME_FRAME, frame);
+            cframe.as_ptr() as usize
+        };
+        let mut tstate = [0usize; 16];
+        set(&mut tstate, layout::THREAD_FRAME, frame);
+        let tstate = tstate.as_ptr() as usize;
+        let stack = [
+            Frame {
+                code: code_addr,
+                instr: 11,
+            },
+            Frame {
+                code: code_addr,
+                instr: 22,
+            },
+        ];
+        let mut output = [Frame::default(); 2];
+
+        // Cover every byte, including out-of-range owners that would wrap to a
+        // sentinel bit in release builds. Unknown owners still validate the code.
+        for owner in 0..=u8::MAX {
+            let skip = match owner {
+                #[cfg(not(Py_3_15))]
+                layout::FRAME_OWNED_BY_CSTACK => true,
+                #[cfg(Py_3_14)]
+                layout::FRAME_OWNED_BY_INTERPRETER => true,
+                _ => false,
+            };
+            // SAFETY: OWNER is a byte offset within the synthetic frame array,
+            // and no frame reads are in progress while it is being updated.
+            unsafe {
+                inner
+                    .as_mut_ptr()
+                    .cast::<u8>()
+                    .add(layout::OWNER)
+                    .write(owner)
+            };
+            for executable in [0, wrong_code.as_ptr() as usize, code_addr] {
+                set(&mut inner, layout::EXECUTABLE, executable);
+                let expected = if skip {
+                    Ok(&stack[1..])
+                } else if executable == code_addr {
+                    Ok(&stack[..])
+                } else {
+                    Err(Error::InvalidCodeType)
+                };
+                assert_eq!(
+                    walk(tstate, &mut output),
+                    expected,
+                    "owner={owner}, executable={executable:#x}, Python={PY_VERSION:?}"
+                );
+            }
+        }
     }
 
     #[test]
