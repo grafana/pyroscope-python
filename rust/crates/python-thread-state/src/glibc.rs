@@ -1,25 +1,61 @@
-//! Locates a thread-local variable of another module so that a signal handler can read it
-//! with plain memory loads, without entering the dynamic loader.
-//!
-//! Compiled code reaches such a variable through `__tls_get_addr` or a TLS descriptor. For a
-//! module in dynamic TLS, glibc allocates the thread's block on first access and may resize the
-//! thread's DTV, so that path can call `malloc` and take loader locks.
-//!
-//! glibc keeps a module's block in one of two places:
-//! - static TLS, at the same offset from the thread pointer in every thread: all modules
-//!   loaded at startup, and `dlopen`ed ones that fit the static surplus;
-//! - dynamic TLS, a separate allocation per thread, recorded in the thread's DTV.
-//!
-//! The DTV cannot serve both: a thread that existed before a module was placed in the static
-//! surplus never gets a DTV entry for it, because static accesses do not go through the DTV.
+//! 3.15 keeps the thread state in a thread-local variable that is not exported. [`init`]
+//! locates it so that `pyroscope_python_unwind::thread_state::glibc` reads it with plain
+//! memory loads, without entering the dynamic loader. Nothing here is async-signal-safe.
 //!
 //! The TCB and DTV layouts are private to glibc. [`locate`] accepts a location only after
 //! checking it on two threads against the loader's own answer.
+//!
+//! The module is compiled for every CPython version, so that the search is tested on all of
+//! them, but [`init`] is used only on 3.15.
 
-use core::arch::asm;
+use crate::{ThreadStateAccess, ThreadStateError};
 use core::ffi::{c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
+use pyroscope_python_unwind::thread_state::glibc::{
+    self as reader, Location, dtv_block, thread_pointer,
+};
+
+fn access(location: Location) -> ThreadStateAccess {
+    match location {
+        Location::Fixed { .. } => ThreadStateAccess::FixedOffset,
+        Location::Dtv { .. } => ThreadStateAccess::Dtv,
+    }
+}
+
+/// Locates CPython's thread-local thread state and stores it in
+/// `pyroscope_python_unwind::thread_state::glibc`, so that the handler reads it without
+/// calling into CPython or the dynamic loader. Until this succeeds the handler finds no thread
+/// state. The location is cached for the process.
+///
+/// Briefly releases the GIL and spawns a short-lived thread.
+///
+/// # Safety
+/// The interpreter must be initialized and kindasafe recovery must be installed.
+pub unsafe fn init() -> Result<ThreadStateAccess, ThreadStateError> {
+    if let Some(location) = reader::location() {
+        return Ok(access(location));
+    }
+    let module = module_of(pyo3_ffi::PyGILState_GetThisThreadState as *const () as usize)
+        .ok_or(ThreadStateError::NoTlsSegment)?;
+    // SAFETY: the interpreter is initialized. The thread is detached during the search
+    // because the attached thread state is also cached in a second thread-local variable.
+    let offset = unsafe {
+        let gil = pyo3_ffi::PyGILState_Ensure();
+        let tstate = pyo3_ffi::PyGILState_GetThisThreadState() as usize;
+        let saved = pyo3_ffi::PyEval_SaveThread();
+        let offset = find_value(module, tstate);
+        pyo3_ffi::PyEval_RestoreThread(saved);
+        pyo3_ffi::PyGILState_Release(gil);
+        offset
+    }
+    .ok_or(ThreadStateError::VariableNotFound)?;
+    let location = locate(module, offset).ok_or(ThreadStateError::UnknownTlsLayout)?;
+    // SAFETY: `locate` verified the location on two threads. A concurrent call may have
+    // stored its own verified location first; either one holds.
+    unsafe { reader::set_location(location) };
+    Ok(access(location))
+}
 
 #[repr(C)]
 struct TlsIndex {
@@ -31,30 +67,12 @@ unsafe extern "C" {
     fn __tls_get_addr(index: *const TlsIndex) -> *mut c_void;
 }
 
-/// `tcbhead_t::dtv`.
-#[cfg(target_arch = "x86_64")]
-const TCB_DTV: usize = 8;
-#[cfg(target_arch = "aarch64")]
-const TCB_DTV: usize = 0;
-
-/// `sizeof(dtv_t)`. `dtv[-1]` holds the capacity and `dtv[module]` starts with the block address.
-const DTV_ENTRY: usize = 16;
-
 /// A loaded module with a TLS segment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Module {
     pub id: usize,
     /// Size of the module's TLS block.
     pub size: usize,
-}
-
-/// Where a thread-local variable lives in every thread.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Location {
-    /// At `offset` from the thread pointer.
-    Fixed { offset: isize },
-    /// At `offset` in the block the thread's DTV records for `module`.
-    Dtv { module: usize, offset: usize },
 }
 
 struct Search {
@@ -104,19 +122,6 @@ pub fn module_of(address: usize) -> Option<Module> {
 }
 
 #[inline(always)]
-fn thread_pointer() -> usize {
-    let pointer: usize;
-    // SAFETY: reads the thread pointer; x86-64 keeps a copy of it in the first TCB word.
-    unsafe {
-        #[cfg(target_arch = "x86_64")]
-        asm!("mov {}, fs:[0]", out(reg) pointer, options(nostack, readonly, preserves_flags));
-        #[cfg(target_arch = "aarch64")]
-        asm!("mrs {}, tpidr_el0", out(reg) pointer, options(nomem, nostack, preserves_flags));
-    }
-    pointer
-}
-
-#[inline(always)]
 fn read(address: usize) -> Option<usize> {
     // SAFETY: a pointer-sized load under kindasafe's recovery preconditions, documented at
     // crate level. No Rust reference to the source memory is created.
@@ -131,40 +136,6 @@ fn block(module: usize) -> usize {
     let index = TlsIndex { module, offset: 0 };
     // SAFETY: `module` is the id of a loaded module, from `module_of`.
     unsafe { __tls_get_addr(&index) as usize }
-}
-
-/// The calling thread's block of `module` as its DTV records it, or `None` if the DTV has no
-/// block for it. Async-signal-safe.
-#[inline(always)]
-fn dtv_block(module: usize) -> Option<usize> {
-    let dtv = read(thread_pointer().wrapping_add(TCB_DTV))?;
-    let capacity = read(dtv.wrapping_sub(DTV_ENTRY))?;
-    if module > capacity {
-        return None;
-    }
-    // Never-used entries are zero, unallocated ones are TLS_DTV_UNALLOCATED.
-    match read(dtv.wrapping_add(module.wrapping_mul(DTV_ENTRY)))? {
-        0 | usize::MAX => None,
-        block => Some(block),
-    }
-}
-
-impl Location {
-    /// The variable's value in the calling thread. `None` if the thread has no block for the
-    /// module, which means it never accessed the variable, or if a read failed.
-    /// Async-signal-safe.
-    ///
-    /// A DTV entry can outlive its module: glibc refreshes a thread's DTV only on that
-    /// thread's next dynamic TLS access. If the module's id was reused from an unloaded
-    /// module, a thread that has not accessed the variable can yield a word of the old block,
-    /// so validate values read through [`Location::Dtv`].
-    #[inline(always)]
-    pub fn read(self) -> Option<usize> {
-        match self {
-            Location::Fixed { offset } => read(thread_pointer().wrapping_add_signed(offset)),
-            Location::Dtv { module, offset } => read(dtv_block(module)?.wrapping_add(offset)),
-        }
-    }
 }
 
 /// The offset in `module`'s block of the only pointer-sized slot of the calling thread that
@@ -256,7 +227,7 @@ mod tests {
     use std::thread;
     use std::thread_local;
 
-    fn init() {
+    fn init_recovery() {
         // SAFETY: tests preserve kindasafe's handlers and do not install other handlers.
         unsafe { kindasafe_init::init() }.unwrap();
     }
@@ -267,8 +238,8 @@ mod tests {
 
     #[test]
     fn startup_module_variable_is_at_a_fixed_offset() {
-        init();
-        let module = module_of(init as fn() as usize).unwrap();
+        init_recovery();
+        let module = module_of(init_recovery as fn() as usize).unwrap();
         let marker = 0x2390_0000_0000_0239;
         SLOT.set(marker);
         let offset = find_value(module, marker).unwrap();
@@ -290,7 +261,7 @@ mod tests {
     #[test]
     fn unmapped_addresses_and_short_blocks_are_rejected() {
         assert_eq!(module_of(0), None);
-        let module = module_of(init as fn() as usize).unwrap();
+        let module = module_of(init_recovery as fn() as usize).unwrap();
         for size in [0, 7] {
             assert_eq!(find_value(Module { size, ..module }, 0), None);
         }
@@ -298,11 +269,11 @@ mod tests {
 
     #[test]
     fn duplicated_and_missing_values_are_not_located() {
-        init();
+        init_recovery();
         thread_local! {
             static PAIR: Cell<[usize; 2]> = const { Cell::new([0; 2]) };
         }
-        let module = module_of(init as fn() as usize).unwrap();
+        let module = module_of(init_recovery as fn() as usize).unwrap();
         let marker = 0x2391_0000_0000_0239;
         assert_eq!(find_value(module, marker), None);
         PAIR.set([marker, 0]);
@@ -413,7 +384,7 @@ mod tests {
 
     #[test]
     fn dlopened_module_in_dynamic_tls_is_read_through_the_dtv() {
-        init();
+        init_recovery();
         let before = Worker::spawn();
         // `__tls_get_addr` accesses keep the module in dynamic TLS.
         let library = Library::load("dynamic", DIALECTS.0);
@@ -436,7 +407,7 @@ mod tests {
 
     #[test]
     fn dlopened_module_in_the_static_surplus_is_read_at_a_fixed_offset() {
-        init();
+        init_recovery();
         let before = Worker::spawn();
         // glibc places a small TLS-descriptor module in the static surplus.
         let library = Library::load("surplus", DIALECTS.1);

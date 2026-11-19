@@ -6,10 +6,13 @@ rust-version = "1.98.0"
 publish = false
 
 [dependencies]
-pyroscope-python-offsets = { path = "../python-offsets" }
 pyo3-ffi.workspace = true
 kindasafe.workspace = true
 libc = "0.2"
+
+# The signal-time reader that `init` configures exists only on these targets.
+[target.'cfg(all(target_os = "linux", target_env = "gnu", any(target_arch = "x86_64", target_arch = "aarch64")))'.dependencies]
+pyroscope-python-unwind = { path = "../python-unwind" }
 
 [dev-dependencies]
 kindasafe_init.workspace = true

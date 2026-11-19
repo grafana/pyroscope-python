@@ -1643,7 +1643,7 @@ dependencies = [
  "libc",
  "pyo3-build-config",
  "pyo3-ffi",
- "pyroscope-python-offsets",
+ "pyroscope-python-unwind",
 ]
 
 [[package]]
@@ -1652,10 +1652,10 @@ version = "0.1.0"
 dependencies = [
  "kindasafe",
  "kindasafe_init",
+ "libc",
  "pyo3-build-config",
  "pyo3-ffi",
  "pyroscope-python-offsets",
- "pyroscope-python-thread-state",
  "pyroscope-ringbuffer",
 ]
 

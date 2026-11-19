@@ -8,14 +8,17 @@
 //! not establish lifetime or object identity; deferred reads can observe reused or changing memory.
 //!
 //! Initialize kindasafe recovery and `pyroscope_python_thread_state`, invoke [`handler`] from a
-//! `SIGPROF` callback, and drain with [`consumer`].
+//! `SIGPROF` callback, and drain with [`consumer`]. Everything the handler runs lives in this
+//! crate; `pyroscope_python_thread_state` holds only the init-time search.
 //! Each record contains the interrupted thread's frames, innermost first, and its sampling-period count.
 //!
 //! Supports CPython 3.11 to 3.15, default (GIL) build, 64-bit targets. The offsets come from the
 //! checked-in layouts verified against the target CPython headers by `pyroscope-python-offsets`.
 //!
-//! The interrupted thread's state comes from `pyroscope_python_thread_state`, which on
-//! CPython 3.15 finds none until its `init` has succeeded.
+//! The interrupted thread's state comes from [`thread_state::current`], which on CPython 3.15
+//! finds none until `pyroscope_python_thread_state::init` has succeeded. On glibc it reads
+//! CPython's thread-local variable with direct loads through [`thread_state::glibc`],
+//! never through the dynamic loader.
 //!
 //! Native reads rely on CPython's current-thread ownership of the active frame chain: the
 //! interrupted thread is paused, active frames retain their code, and other threads must not
@@ -37,8 +40,9 @@
 #[cfg(test)]
 extern crate std;
 
+pub mod thread_state;
+
 use pyroscope_python_offsets as layout;
-use pyroscope_python_thread_state as thread_state;
 use pyroscope_ringbuffer::{Consumer, RingBuffer};
 
 pub use layout::{OB_TYPE, PY_VERSION};

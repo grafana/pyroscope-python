@@ -7,10 +7,10 @@ publish = false
 
 [dependencies]
 pyroscope-python-offsets = { path = "../python-offsets" }
-pyroscope-python-thread-state = { path = "../python-thread-state" }
 pyroscope-ringbuffer = { path = "../ringbuffer" }
 pyo3-ffi.workspace = true
 kindasafe.workspace = true
+libc = "0.2"
 
 [dev-dependencies]
 kindasafe_init.workspace = true
