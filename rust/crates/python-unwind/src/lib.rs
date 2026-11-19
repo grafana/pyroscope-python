@@ -234,7 +234,6 @@ fn walk(tstate: usize, frames: &mut [Frame]) -> Result<&[Frame], Error> {
         #[cfg(Py_3_12)]
         {
             let owner = read_u8(frame, layout::OWNER)?;
-            // Reject undefined owners before shifting or accessing the executable.
             if owner > MAX_OWNER {
                 return Err(Error::InvalidFrameOwner);
             }
