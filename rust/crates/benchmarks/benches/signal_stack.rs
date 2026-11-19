@@ -136,9 +136,8 @@ fn main() -> PyResult<()> {
         // thread and retains the source objects throughout each loop.
         unsafe { kindasafe_init::init() }.expect("failed to initialize fault recovery");
         // SAFETY: the interpreter and recovery are initialized.
-        let access =
-            unsafe { pyroscope_python_thread_state::init() }.expect("no thread state access");
-        eprintln!("Thread state access: {access:?}");
+        unsafe { pyroscope_python_thread_state::init() }
+            .expect("failed to locate the Python thread state");
 
         let source = CString::new(include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),

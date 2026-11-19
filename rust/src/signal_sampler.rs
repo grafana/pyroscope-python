@@ -108,9 +108,8 @@ impl SignalHandlerSession {
         unsafe { kindasafe_init::init() }
             .map_err(|error| format!("failed to install memory fault handlers: {error:?}"))?;
         // SAFETY: the interpreter is running and recovery was installed above.
-        let access = unsafe { thread_state::init() }
+        unsafe { thread_state::init() }
             .map_err(|error| format!("failed to locate the Python thread state: {error:?}"))?;
-        log::debug!(target: "Pyroscope::Signal", "thread state access: {access:?}");
         let resolver = resolve::Resolver::new(config.lines);
 
         // Discard what a previous session left behind.

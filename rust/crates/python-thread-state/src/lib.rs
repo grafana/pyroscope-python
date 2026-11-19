@@ -21,17 +21,6 @@
 #[cfg(test)]
 extern crate std;
 
-/// How the signal handler finds the thread state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ThreadStateAccess {
-    /// `PyGILState_GetThisThreadState`.
-    Api,
-    /// CPython's thread-local variable, at a fixed offset from the thread pointer.
-    FixedOffset,
-    /// CPython's thread-local variable, in the block recorded in the thread's DTV.
-    Dtv,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThreadStateError {
     /// No async-signal-safe way to find the thread state is implemented for this platform.

@@ -1,7 +1,7 @@
 use pyo3::{exceptions::PyAssertionError, prelude::*, types::PyModule, wrap_pyfunction};
 use pyroscope_pprof::{StringTable, ffi::FFIFrame};
 use pyroscope_python_resolve::{Lines, PYO3Types, Resolver};
-use pyroscope_python_thread_state::{self as thread_state, ThreadStateAccess};
+use pyroscope_python_thread_state as thread_state;
 use pyroscope_python_unwind::{self as unwind, Frame, MAX_FRAMES};
 use std::{
     ffi::CString,
@@ -164,14 +164,8 @@ fn init() {
     Python::initialize();
     // SAFETY: these tests preserve recovery handlers throughout all walks.
     unsafe { kindasafe_init::init() }.unwrap();
-    // The test binary links libpython, so its TLS block is in static TLS.
-    let expected = if cfg!(all(Py_3_15, target_os = "linux", target_env = "gnu")) {
-        ThreadStateAccess::FixedOffset
-    } else {
-        ThreadStateAccess::Api
-    };
     // SAFETY: the interpreter and recovery are initialized.
-    assert_eq!(unsafe { thread_state::init() }, Ok(expected));
+    assert_eq!(unsafe { thread_state::init() }, Ok(()));
 }
 
 #[test]

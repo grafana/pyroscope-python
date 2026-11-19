@@ -8,7 +8,7 @@
 //! The module is compiled for every CPython version, so that the search is tested on all of
 //! them, but [`init`] is used only on 3.15.
 
-use crate::{ThreadStateAccess, ThreadStateError};
+use crate::ThreadStateError;
 use core::ffi::{c_int, c_void};
 use core::mem::size_of;
 use core::ptr;
@@ -16,13 +16,6 @@ use pyroscope_python_unwind::Error;
 use pyroscope_python_unwind::thread_state::glibc::{
     self as reader, Location, dtv_block, thread_pointer,
 };
-
-fn access(location: Location) -> ThreadStateAccess {
-    match location {
-        Location::Fixed { .. } => ThreadStateAccess::FixedOffset,
-        Location::Dtv { .. } => ThreadStateAccess::Dtv,
-    }
-}
 
 /// Locates CPython's thread-local thread state and stores it in
 /// `pyroscope_python_unwind::thread_state::glibc`, so that the handler reads it without
@@ -33,9 +26,9 @@ fn access(location: Location) -> ThreadStateAccess {
 ///
 /// # Safety
 /// The interpreter must be initialized and kindasafe recovery must be installed.
-pub unsafe fn init() -> Result<ThreadStateAccess, ThreadStateError> {
-    if let Some(location) = reader::location() {
-        return Ok(access(location));
+pub unsafe fn init() -> Result<(), ThreadStateError> {
+    if reader::location().is_some() {
+        return Ok(());
     }
     let module = module_of(pyo3_ffi::PyGILState_GetThisThreadState as *const () as usize)
         .ok_or(ThreadStateError::NoTlsSegment)?;
@@ -55,7 +48,7 @@ pub unsafe fn init() -> Result<ThreadStateAccess, ThreadStateError> {
     // SAFETY: `locate` verified the location on two threads. A concurrent call may have
     // stored its own verified location first; either one holds.
     unsafe { reader::set_location(location) };
-    Ok(access(location))
+    Ok(())
 }
 
 #[repr(C)]
