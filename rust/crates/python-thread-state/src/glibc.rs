@@ -3,9 +3,9 @@
 //! memory loads, without entering the dynamic loader. Nothing here is async-signal-safe.
 //!
 //! The TCB and DTV layouts are private to glibc. [`locate`] accepts a location only after
-//! checking it on two threads against the loader's own answer. The second thread runs on a
-//! stack mapped here: glibc carves the TCB and static TLS of a thread out of a stack the caller
-//! provides, so a variable in static TLS must lie inside that stack.
+//! checking it on two threads against the loader's own answer. glibc allocates the TCB and
+//! static TLS of a new thread inside its stack block and dynamic TLS separately, so a variable
+//! in static TLS must lie inside the stack glibc records for the second thread.
 //!
 //! The module is compiled for every CPython version, so that the search is tested on all of
 //! them, but [`init`] is used only on 3.15.
@@ -168,140 +168,41 @@ impl Probe {
         }
     }
 
-    /// Probes on a new thread running on a [`Stack`]. Returns the probe and the addresses of
-    /// the stack.
+    /// Probes on a new thread. Returns the probe and the new thread's stack as glibc records
+    /// it.
     fn on_new_thread(module: Module) -> Option<(Probe, Range<usize>)> {
-        struct Call {
-            module: Module,
-            probe: Option<Probe>,
-        }
-        extern "C" fn start(call: *mut c_void) -> *mut c_void {
-            // SAFETY: the spawning thread keeps `Call` alive until it has joined this one.
-            let call = unsafe { &mut *(call as *mut Call) };
-            call.probe = Some(Probe::current(call.module));
-            ptr::null_mut()
-        }
-        let stack = Stack::map()?;
-        let mut call = Call {
-            module,
-            probe: None,
-        };
-        let mut attr = Attr::new()?;
-        // SAFETY: `stack` is a readable and writable mapping that outlives the joined thread.
-        if unsafe {
-            libc::pthread_attr_setstack(&mut attr.0, stack.base as *mut c_void, stack.size)
-        } != 0
-        {
-            return None;
-        }
-        // SAFETY: `start` only uses `call`, which outlives the joined thread.
-        unsafe {
-            let mut thread: libc::pthread_t = 0;
-            if libc::pthread_create(&mut thread, &attr.0, start, (&raw mut call).cast()) != 0 {
-                return None;
-            }
-            // The thread may still use the stack if the join fails: never unmap it then.
-            if libc::pthread_join(thread, ptr::null_mut()) != 0 {
-                core::mem::forget(stack);
-                return None;
-            }
-        }
-        Some((call.probe?, stack.base..stack.base + stack.size))
+        std::thread::Builder::new()
+            .name("pyroscope-tls-probe".into())
+            .spawn(move || Some((Probe::current(module), current_stack()?)))
+            .ok()?
+            .join()
+            .ok()?
     }
 }
 
-/// Initialized `pthread_attr_t`, destroyed on drop.
-struct Attr(libc::pthread_attr_t);
-
-impl Attr {
-    fn new() -> Option<Attr> {
-        let mut attr = MaybeUninit::uninit();
-        // SAFETY: initializes `attr`.
-        if unsafe { libc::pthread_attr_init(attr.as_mut_ptr()) } != 0 {
-            return None;
-        }
-        // SAFETY: pthread_attr_init succeeded.
-        Some(Attr(unsafe { attr.assume_init() }))
+/// The calling thread's stack, as glibc records it. For a thread glibc started, the range is
+/// the stack block without its guard, which also holds the TCB and the static TLS.
+fn current_stack() -> Option<Range<usize>> {
+    let mut attr = MaybeUninit::uninit();
+    // SAFETY: initializes `attr` with the calling thread's attributes.
+    if unsafe { libc::pthread_getattr_np(libc::pthread_self(), attr.as_mut_ptr()) } != 0 {
+        return None;
     }
-}
-
-impl Drop for Attr {
-    fn drop(&mut self) {
-        // SAFETY: `self.0` was initialized by pthread_attr_init.
-        unsafe { libc::pthread_attr_destroy(&mut self.0) };
-    }
-}
-
-/// A thread stack of the default size with a `PROT_NONE` guard page on each side, because
-/// glibc adds no guard to a stack the caller provides. Unmapped on drop.
-struct Stack {
-    /// Lowest address of the usable stack, one page above the mapping.
-    base: usize,
-    size: usize,
-    page: usize,
-}
-
-impl Stack {
-    fn map() -> Option<Stack> {
-        // SAFETY: sysconf has no preconditions.
-        let page = usize::try_from(unsafe { libc::sysconf(libc::_SC_PAGESIZE) }).ok()?;
-        // The default size leaves the room glibc needs for the TCB and static TLS.
-        let mut size = 0;
-        // SAFETY: `attr` is initialized and `size` is writable.
-        if unsafe { libc::pthread_attr_getstacksize(&Attr::new()?.0, &mut size) } != 0 {
-            return None;
-        }
-        let size = size
-            .max(libc::PTHREAD_STACK_MIN)
-            .checked_next_multiple_of(page)?;
-        let len = size.checked_add(2 * page)?;
-        // SAFETY: a new anonymous mapping, inaccessible until the stack pages are opened.
-        let mapping = unsafe {
-            libc::mmap(
-                ptr::null_mut(),
-                len,
-                libc::PROT_NONE,
-                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_STACK,
-                -1,
-                0,
-            )
-        };
-        if mapping == libc::MAP_FAILED {
-            return None;
-        }
-        let stack = Stack {
-            base: mapping as usize + page,
-            size,
-            page,
-        };
-        // SAFETY: opens the pages between the two guard pages of the mapping above.
-        let opened = unsafe {
-            libc::mprotect(
-                stack.base as *mut c_void,
-                size,
-                libc::PROT_READ | libc::PROT_WRITE,
-            )
-        };
-        (opened == 0).then_some(stack)
-    }
-}
-
-impl Drop for Stack {
-    fn drop(&mut self) {
-        // SAFETY: unmaps the whole mapping, guard pages included; no thread runs on it.
-        unsafe {
-            libc::munmap(
-                (self.base - self.page) as *mut c_void,
-                self.size + 2 * self.page,
-            )
-        };
-    }
+    // SAFETY: pthread_getattr_np succeeded.
+    let mut attr = unsafe { attr.assume_init() };
+    let (mut address, mut size) = (ptr::null_mut(), 0);
+    // SAFETY: `attr` is initialized; the outputs are writable.
+    let found = unsafe { libc::pthread_attr_getstack(&attr, &mut address, &mut size) } == 0;
+    // SAFETY: `attr` is initialized and not used afterwards.
+    unsafe { libc::pthread_attr_destroy(&mut attr) };
+    let start = address as usize;
+    found.then(|| start.checked_add(size).map(|end| start..end))?
 }
 
 /// Finds where the variable at `offset` in `module`'s block lives in every thread. Spawns a
-/// short-lived thread on its own stack to compare with the calling one. A fixed offset is
-/// accepted only if the variable is at the same offset from the thread pointer on both
-/// threads and inside the new thread's stack, which holds its static TLS. `None` if neither
+/// short-lived thread to compare with the calling one. A fixed offset is accepted only if the
+/// variable is at the same offset from the thread pointer on both threads and inside the new
+/// thread's stack, which holds its static TLS. `None` if neither
 /// location holds on both threads. Not async-signal-safe.
 pub fn locate(module: Module, offset: usize) -> Option<Location> {
     let here = Probe::current(module);
@@ -337,14 +238,11 @@ fn choose(
 #[cfg(all(test, not(miri)))]
 mod tests {
     use super::*;
-    use std::boxed::Box;
     use std::cell::Cell;
     use std::ffi::CString;
-    use std::format;
     use std::process::Command;
     use std::sync::mpsc;
     use std::thread;
-    use std::thread_local;
 
     fn init_recovery() {
         // SAFETY: tests preserve kindasafe's handlers and do not install other handlers.
@@ -378,18 +276,14 @@ mod tests {
     }
 
     #[test]
-    fn probe_stack_is_between_guard_pages() {
-        init_recovery();
-        let stack = Stack::map().unwrap();
-        let (base, end) = (stack.base, stack.base + stack.size);
-        assert_eq!(base % stack.page, 0);
-        assert!(stack.size >= libc::PTHREAD_STACK_MIN);
-        // SAFETY: kindasafe reads; the guard pages fault and are recovered.
-        let readable = |address: usize| unsafe { kindasafe::u8(address as u64) }.is_ok();
-        assert_eq!(
-            [base - 1, base, end - 1, end].map(readable),
-            [false, true, true, false]
-        );
+    fn the_stack_range_holds_the_thread_pointer_and_locals() {
+        let check = || {
+            let stack = current_stack().unwrap();
+            let local = 0u8;
+            assert!(stack.contains(&(&raw const local as usize)), "{stack:x?}");
+            assert!(stack.contains(&thread_pointer()), "{stack:x?}");
+        };
+        thread::spawn(check).join().unwrap();
     }
 
     #[test]

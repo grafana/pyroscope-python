@@ -1,11 +1,9 @@
-#![no_std]
-
 //! Prepares `pyroscope_python_unwind::thread_state::current` to find the calling thread's
 //! `PyThreadState` from a signal handler, like `PyGILState_GetThisThreadState` but without the
 //! dynamic loader's TLS access path.
 //!
-//! Call [`init`] once on a normal thread attached to the interpreter. Nothing in this crate is async-signal-safe: the
-//! signal-time reads live in `pyroscope_python_unwind`.
+//! Call [`init`] once on a normal thread attached to the interpreter. Nothing in this crate is
+//! async-signal-safe: the signal-time reads live in `pyroscope_python_unwind`.
 //!
 //! CPython 3.15 keeps the thread state in a thread-local variable, and reaching it through
 //! `PyGILState_GetThisThreadState` can allocate and lock inside glibc's dynamic loader. On
@@ -17,9 +15,6 @@
 //!
 //! The search uses kindasafe: recovery must be installed and its signals unblocked on the
 //! calling thread.
-
-#[cfg(test)]
-extern crate std;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThreadStateError {
