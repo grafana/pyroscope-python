@@ -4,6 +4,7 @@ pub const PY_VERSION: (u8, u8) = (3, 11);
 pub const OB_TYPE: usize = 8;
 pub const THREAD_FRAME: usize = 56;
 pub const CFRAME_FRAME: usize = 8;
+pub const THREAD_ID: usize = 152;
 pub const EXECUTABLE: usize = 32;
 pub const PREVIOUS: usize = 48;
 pub const INSTR: usize = 56;

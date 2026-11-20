@@ -12,6 +12,16 @@
 - Use the same OpenSSL version in all Pyroscope SDK repos: pyroscope-python, pyroscope-ruby, pyroscope-dotnet.
 - `renovate.json` allows only patch updates for `openssl/openssl`. Move to a new branch only when a newer LTS has a longer support period.
 
+## Thread state in the signal handler
+
+- CPython 3.15 keeps the thread state in a thread-local variable. Do not call `PyGILState_GetThisThreadState` or any other TLS accessor of another module from the signal handler on glibc: the access can allocate and lock in the dynamic loader.
+- The handler reads the variable with direct loads: at a fixed offset from the thread pointer, or through the thread's DTV when libpython is in dynamic TLS. Keep both; the DTV has no entry for threads that predate a `dlopen` into the static TLS surplus.
+- Both depend on glibc's private TCB and DTV layouts. Keep the init-time verification against the loader on two threads, and fail Signal startup when it does not hold.
+- Through the DTV, two cases are known and unsupported. A thread state attached on a thread other than its creator is not sampled. A stale or just-freed DTV entry yields an arbitrary word: glibc does not update other threads' DTVs when a module is unloaded and its id reused, and a signal can land inside a DTV resize.
+- Keep the `thread_id` check on values read through the DTV. It is the only defence against the arbitrary word and the reason for the first case.
+- Do not reject threads by comparing their DTV generation with the generation of the thread that ran the search. That is only an upper bound of libpython's, and it drops genuine threads, for good on glibc 2.35.
+- Keep these cases documented in the `thread_state::glibc` module docs of `python-unwind`.
+
 ## Fault recovery signal handlers
 
 - The purpose of kindasafe reads is to read memory directly without syscalls on the successful memory-load path. Preserve this design goal: do not replace them with syscall-based memory reads or add per-read syscalls.

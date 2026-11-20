@@ -1606,6 +1606,7 @@ dependencies = [
  "pyroscope",
  "pyroscope-pprof",
  "pyroscope-python-resolve",
+ "pyroscope-python-thread-state",
  "pyroscope-python-unwind",
 ]
 
@@ -1634,11 +1635,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pyroscope-python-thread-state"
+version = "0.1.0"
+dependencies = [
+ "kindasafe",
+ "kindasafe_init",
+ "libc",
+ "pyo3",
+ "pyo3-build-config",
+ "pyo3-ffi",
+ "pyroscope-python-unwind",
+]
+
+[[package]]
 name = "pyroscope-python-unwind"
 version = "0.1.0"
 dependencies = [
  "kindasafe",
  "kindasafe_init",
+ "libc",
  "pyo3-build-config",
  "pyo3-ffi",
  "pyroscope-python-offsets",
@@ -1677,6 +1692,7 @@ dependencies = [
  "pyo3-build-config",
  "pyroscope-pprof",
  "pyroscope-python-resolve",
+ "pyroscope-python-thread-state",
  "pyroscope-python-unwind",
  "pyroscope-ringbuffer",
  "pyroscope-signal-timer",

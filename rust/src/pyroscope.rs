@@ -17,6 +17,7 @@ use std::time::{Duration, SystemTime};
 use crate::pyspy_backend::{Pyspy, Reporter};
 use crate::signal_backend::Signal;
 use crate::utils::TimeRange;
+use pyo3::Python;
 const LOG_TAG: &str = "Pyroscope::Agent";
 const DEFAULT_UPLOAD_INTERVAL: Duration = Duration::from_secs(10);
 #[derive(Clone)]
@@ -183,7 +184,11 @@ impl PyroscopeAgentBuilder {
         }
     }
 
-    pub fn build(self, http_client: reqwest::blocking::Client) -> Result<PyroscopeAgent> {
+    pub fn build(
+        self,
+        py: Python<'_>,
+        http_client: reqwest::blocking::Client,
+    ) -> Result<PyroscopeAgent> {
         let config = self.config;
 
         // Set Global Tags
@@ -198,7 +203,7 @@ impl PyroscopeAgentBuilder {
                     Pyspy::new(config, self.backend_config, self.ruleset.clone())
                         .map(Backend::PySpy)
                 }
-                CpuConfig::Signal(config) => Signal::new(config).map(Backend::Signal),
+                CpuConfig::Signal(config) => Signal::new(py, config).map(Backend::Signal),
             })
             .transpose()?;
         if backend.is_some() {

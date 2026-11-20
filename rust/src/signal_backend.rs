@@ -35,8 +35,8 @@ pub struct Signal {
 }
 
 impl Signal {
-    pub fn new(config: Config) -> Result<Self> {
-        let mut session = SignalHandlerSession::start(&config.sampler)
+    pub fn new(py: Python<'_>, config: Config) -> Result<Self> {
+        let mut session = SignalHandlerSession::start(py, &config.sampler)
             .map_err(|e| PyroscopeError::new(&format!("Signal: {e}")))?;
         if config.sampler.signal_timer == SignalTimer::CTimer {
             threads::attach(session.timer())?;
@@ -294,7 +294,7 @@ pub(crate) mod tests {
     use prost::Message;
     use std::time::{Duration, UNIX_EPOCH};
 
-    #[cfg(all(not(miri), not(Py_3_15)))]
+    #[cfg(not(miri))]
     pub(crate) fn profile_for_resolved_stack(
         frames: &[FFIFrame],
         strings: StringTable,
@@ -366,6 +366,7 @@ pub(crate) mod tests {
             ("contentions", 1),
             ("buffer_dropped", 2),
             ("no_thread_state", 3),
+            ("null_frame", 6),
             ("invalid_code_type", 4),
             ("invalid_frame_owner", 17),
             ("read_errors", 5),
@@ -396,6 +397,7 @@ pub(crate) mod tests {
                 vec![("[dropped: no_thread_state]", "", 0)],
                 vec![30_000_000],
             ),
+            (vec![("[dropped: null_frame]", "", 0)], vec![60_000_000]),
             (
                 vec![("[dropped: invalid_code_type]", "", 0)],
                 vec![40_000_000],
@@ -416,7 +418,7 @@ pub(crate) mod tests {
                 .iter()
                 .map(|sample| sample.value[0])
                 .sum::<i64>(),
-            1_540_000_000,
+            1_600_000_000,
             "{profile:#?}"
         );
     }

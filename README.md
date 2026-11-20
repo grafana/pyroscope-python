@@ -7,7 +7,7 @@ Uses [py-spy](https://github.com/benfred/py-spy) for stack sampling and the [pyr
 ## Installation
 
 Requires CPython 3.11–3.15 with the GIL enabled. The experimental Signal profiler
-supports CPython 3.11–3.14.
+supports CPython 3.11–3.14 everywhere and CPython 3.15 on Linux (glibc on x86-64 and aarch64, musl).
 
 ```bash
 pip install pyroscope-io
