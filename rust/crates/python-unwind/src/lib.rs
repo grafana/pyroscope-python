@@ -172,7 +172,7 @@ pub static METRICS: Metrics = Metrics {
 impl Metrics {
     /// Takes lost sampling-period counts since the previous drain, one reason per lost stack.
     /// Concurrent increments remain in this batch or the next one.
-    pub fn take_drop_counts(&self) -> [(&'static str, usize); 8] {
+    pub fn take_drop_counts(&self) -> [(&'static str, usize); 9] {
         [
             ("contentions", &self.contentions),
             ("buffer_dropped", &self.buffer_dropped),
